@@ -102,7 +102,7 @@ export default function Landing() {
                 { name: 'Balcony', dim: '10×5' },
                 { name: 'Parking', dim: '12×10' }
               ].map((room, i) => (
-                <div key={i} style={{ background: 'rgba(138,255,196,0.06)', border: '1px solid rgba(138,255,196,0.15)', borderRadius: '8px', padding: '1.5rem', textAlign: 'center' }}>
+                <div key={i} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '1.5rem', textAlign: 'center', boxShadow: 'var(--glass-shadow)' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>{room.name}</div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{room.dim} ft</div>
                 </div>

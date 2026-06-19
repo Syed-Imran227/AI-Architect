@@ -381,14 +381,14 @@ export default function Editor() {
 
               <div className="detail-panels" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem', alignItems: 'start' }}>
                 {/* Concept Image */}
-                <div className="panel-card" style={{ height: '100%' }}>
-                  <p className="panel-label">Concept Sketch</p>
-                  <div className="concept-img-wrapper" style={{ height: '400px', borderRadius: '12px', overflow: 'hidden', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)' }}>
+                <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '480px' }}>
+                  <p className="panel-label" style={{ marginBottom: '1rem' }}>Concept Sketch</p>
+                  <div className="concept-img-wrapper" style={{ flex: 1, minHeight: '400px', borderRadius: '12px', overflow: 'hidden', background: '#fff', border: '1px solid var(--glass-border)' }}>
                     <img
                       src={floors[activeFloorIndex]?.imageUrl || activePlan.imageUrl}
                       alt="AI-generated architectural concept sketch"
                       className="concept-img"
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
