@@ -1,0 +1,247 @@
+"""
+floor_renderer.py
+Renders a JSON room layout as a professional 2D floor plan PNG using Pillow.
+Derived from the SAME JSON as the SVG blueprint → perfect match guaranteed.
+"""
+
+import io
+from PIL import Image, ImageDraw, ImageFont
+
+# ── Visual constants ──────────────────────────────────────────────────────────
+SCALE       = 30        # pixels per foot
+PADDING     = 80        # canvas margin in px
+WALL_PX     = 4         # interior wall thickness
+OUTER_PX    = 7         # outer building wall thickness
+TARGET_W    = 960       # target canvas width (height adapts)
+
+BG          = (251, 252, 253)
+GRID_MINOR  = (230, 237, 243)
+GRID_MAJOR  = (205, 216, 228)
+WALL_CLR    = (18, 22, 32)
+OUTER_CLR   = (8,  10, 18)
+DIM_CLR     = (85, 105, 130)
+TEXT_CLR    = (18, 22, 32)
+SUB_CLR     = (90, 108, 128)
+DOOR_CLR    = (55, 90, 140)
+WIN_CLR     = (70, 130, 200)
+
+ROOM_FILLS = {
+    "master":   (210, 228, 252),
+    "bedroom":  (220, 234, 252),
+    "bathroom": (204, 240, 246),
+    "toilet":   (204, 240, 246),
+    "wc":       (204, 240, 246),
+    "kitchen":  (255, 237, 208),
+    "living":   (232, 222, 252),
+    "lounge":   (232, 222, 252),
+    "dining":   (252, 218, 236),
+    "balcony":  (208, 248, 226),
+    "terrace":  (208, 248, 226),
+    "hall":     (252, 244, 210),
+    "lobby":    (252, 244, 210),
+    "entrance": (252, 244, 210),
+    "foyer":    (252, 244, 210),
+    "parking":  (230, 230, 234),
+    "garage":   (230, 230, 234),
+    "store":    (236, 236, 240),
+    "utility":  (236, 236, 240),
+    "default":  (240, 242, 246),
+}
+
+def _room_fill(name: str) -> tuple:
+    n = name.lower()
+    for key, clr in ROOM_FILLS.items():
+        if key in n:
+            return clr
+    return ROOM_FILLS["default"]
+
+def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    """Load Arial from Windows Fonts; fall back to Pillow default."""
+    paths = [
+        (r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf"),
+        (r"C:\Windows\Fonts\Arial Bold.ttf" if bold else r"C:\Windows\Fonts\Arial.ttf"),
+    ]
+    for p in paths:
+        try:
+            return ImageFont.truetype(p, size)
+        except Exception:
+            pass
+    try:
+        return ImageFont.load_default(size=size)
+    except Exception:
+        return ImageFont.load_default()
+
+def _center_text(draw, text, cx, cy, font, color):
+    try:
+        bb = draw.textbbox((0, 0), text, font=font)
+        w, h = bb[2] - bb[0], bb[3] - bb[1]
+        draw.text((cx - w // 2, cy - h // 2), text, fill=color, font=font)
+    except Exception:
+        draw.text((cx, cy), text, fill=color, font=font)
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
+    """
+    Render rooms (each with x, y, width, height in feet) to a PNG.
+    Returns raw PNG bytes.
+    """
+    if not rooms:
+        raise ValueError("No rooms to render")
+
+    # Bounding box
+    xs = [r["x"] for r in rooms] + [r["x"] + r["width"]  for r in rooms]
+    ys = [r["y"] for r in rooms] + [r["y"] + r["height"] for r in rooms]
+    min_x, min_y = min(xs), min(ys)
+    max_x, max_y = max(xs), max(ys)
+    plan_w, plan_h = max_x - min_x, max_y - min_y
+
+    # Auto-scale to fit TARGET_W
+    scale = min(SCALE, (TARGET_W - 2 * PADDING) / max(plan_w, plan_h, 1))
+    scale = max(scale, 14)
+
+    cw = int(plan_w * scale) + 2 * PADDING
+    ch = int(plan_h * scale) + 2 * PADDING + 70   # +70 for title block
+
+    # Coordinate helpers (Y flipped so Y=0 is at bottom like architectural drawings)
+    def px(x_ft): return int((x_ft - min_x) * scale) + PADDING
+    def py(y_ft): return int((y_ft - min_y) * scale) + PADDING   # NO flip — matches SVG
+    def pl(l_ft): return max(1, int(l_ft * scale))
+
+    img  = Image.new("RGB", (cw, ch), BG)
+    draw = ImageDraw.Draw(img)
+
+    # ── Grid ──────────────────────────────────────────────────────────────────
+    for gx in range(int(min_x), int(max_x) + 2):
+        c = GRID_MAJOR if gx % 5 == 0 else GRID_MINOR
+        draw.line([(px(gx), PADDING), (px(gx), ch - PADDING - 70)], fill=c, width=1)
+    for gy in range(int(min_y), int(max_y) + 2):
+        c = GRID_MAJOR if gy % 5 == 0 else GRID_MINOR
+        draw.line([(PADDING, py(gy)), (cw - PADDING, py(gy))], fill=c, width=1)
+
+    # ── Outer building wall ───────────────────────────────────────────────────
+    bx0, by0 = px(min_x), py(min_y)   # top-left
+    bx1, by1 = px(max_x), py(max_y)   # bottom-right
+    draw.rectangle([bx0 - 3, by0 - 3, bx1 + 3, by1 + 3],
+                   outline=OUTER_CLR, width=OUTER_PX)
+
+    # ── Rooms ─────────────────────────────────────────────────────────────────
+    for room in rooms:
+        rx0 = px(room["x"])
+        ry0 = py(room["y"])                    # top of room in pixels (no flip)
+        rx1 = px(room["x"] + room["width"])
+        ry1 = py(room["y"] + room["height"])   # bottom of room in pixels
+        rw, rh = rx1 - rx0, ry1 - ry0
+        cx_px, cy_px = (rx0 + rx1) // 2, (ry0 + ry1) // 2
+
+        fill = _room_fill(room["name"])
+
+        # Fill + wall outline
+        draw.rectangle([rx0, ry0, rx1, ry1], fill=fill)
+        draw.rectangle([rx0, ry0, rx1, ry1], outline=WALL_CLR, width=WALL_PX)
+
+        # ── Door arc (bottom wall) ─────────────────────────────────────────
+        door_w = min(int(rw * 0.28), pl(3.5))
+        if door_w > pl(2) and rw > pl(5):
+            dx = rx0 + int(rw * 0.12)
+            dy = ry1
+            # Erase wall gap
+            draw.line([(dx, dy), (dx + door_w, dy)], fill=fill, width=WALL_PX + 2)
+            # Swing arc
+            draw.arc([dx, dy - door_w, dx + door_w, dy],
+                     start=180, end=270, fill=DOOR_CLR, width=1)
+            # Door panel line
+            draw.line([(dx, dy), (dx, dy - door_w)], fill=DOOR_CLR, width=1)
+
+        # ── Window marks (top wall) ────────────────────────────────────────
+        if rw > pl(5):
+            ww = min(int(rw * 0.35), pl(4))
+            wx0 = cx_px - ww // 2
+            wy  = ry0
+            draw.line([(wx0, wy), (wx0 + ww, wy)], fill=WIN_CLR, width=2)
+            for tx in [wx0, wx0 + ww // 2, wx0 + ww]:
+                draw.line([(tx, wy - 4), (tx, wy + 4)], fill=WIN_CLR, width=1)
+
+        # ── Labels ────────────────────────────────────────────────────────
+        nf_size = max(11, min(int(min(rw, rh) * 0.14), 17))
+        df_size = max(8,  nf_size - 3)
+        sqft    = round(room["width"] * room["height"])
+        dim_str = f"{room['width']}' \u00d7 {room['height']}' ({sqft} sqft)"
+
+        nf = _font(nf_size, bold=True)
+        df = _font(df_size)
+        _center_text(draw, room["name"], cx_px, cy_px - nf_size,     nf, TEXT_CLR)
+        _center_text(draw, dim_str,      cx_px, cy_px + df_size // 2, df, SUB_CLR)
+
+        # ── Furniture ─────────────────────────────────────────────────────
+        for furn in room.get("furniture", []):
+            try:
+                fx0 = rx0 + int(furn["x"] * scale)
+                fy0 = ry0 + int(furn["y"] * scale)
+                fx1 = rx0 + int((furn["x"] + furn["width"]) * scale)
+                fy1 = ry0 + int((furn["y"] + furn["height"]) * scale)
+                # clamp to room bounds
+                fx0, fy0 = max(fx0, rx0 + 2), max(fy0, ry0 + 2)
+                fx1, fy1 = min(fx1, rx1 - 2), min(fy1, ry1 - 2)
+                if fx1 <= fx0 or fy1 <= fy0:
+                    continue
+                # semi-transparent fill using a blended colour
+                f_fill = tuple(int(c * 0.82 + 255 * 0.18) for c in fill)
+                draw.rectangle([fx0, fy0, fx1, fy1], fill=f_fill, outline=(140, 160, 185), width=1)
+                # tiny label
+                fcx, fcy = (fx0 + fx1) // 2, (fy0 + fy1) // 2
+                fw_px, fh_px = fx1 - fx0, fy1 - fy0
+                if fw_px > pl(2) and fh_px > pl(1.5):
+                    fname = furn.get("name", "")
+                    ff = _font(max(7, min(int(min(fw_px, fh_px) * 0.18), 10)))
+                    _center_text(draw, fname, fcx, fcy, ff, (80, 100, 130))
+            except Exception:
+                pass
+
+        # ── Width dimension line ───────────────────────────────────────────
+        if rw > pl(6):
+            dim_y = ry0 - 18
+            draw.line([(rx0, dim_y), (rx1, dim_y)], fill=DIM_CLR, width=1)
+            draw.line([(rx0, dim_y - 5), (rx0, dim_y + 5)], fill=DIM_CLR, width=1)
+            draw.line([(rx1, dim_y - 5), (rx1, dim_y + 5)], fill=DIM_CLR, width=1)
+            _center_text(draw, f"{room['width']} ft",
+                         cx_px, dim_y - 10, _font(8), DIM_CLR)
+
+    # ── Scale bar ─────────────────────────────────────────────────────────────
+    sb_x, sb_y = PADDING, ch - PADDING + 18
+    sb_len = pl(10)
+    draw.line([(sb_x, sb_y), (sb_x + sb_len, sb_y)], fill=DIM_CLR, width=2)
+    for tx in [sb_x, sb_x + sb_len // 2, sb_x + sb_len]:
+        draw.line([(tx, sb_y - 5), (tx, sb_y + 5)], fill=DIM_CLR, width=1)
+    _center_text(draw, "0", sb_x, sb_y + 12, _font(9), DIM_CLR)
+    _center_text(draw, "5 ft", sb_x + sb_len // 2, sb_y + 12, _font(9), DIM_CLR)
+    _center_text(draw, "10 ft", sb_x + sb_len, sb_y + 12, _font(9), DIM_CLR)
+
+    # ── North arrow ───────────────────────────────────────────────────────────
+    na_cx, na_cy, r = cw - PADDING + 30, PADDING - 20, 18
+    draw.ellipse([na_cx - r, na_cy - r, na_cx + r, na_cy + r],
+                 outline=DIM_CLR, width=1, fill=(245, 246, 248))
+    # Filled north half
+    draw.polygon([(na_cx, na_cy - r + 2), (na_cx - 6, na_cy + 4), (na_cx + 6, na_cy + 4)],
+                 fill=WALL_CLR)
+    # Open south half
+    draw.polygon([(na_cx, na_cy + r - 2), (na_cx - 6, na_cy - 4), (na_cx + 6, na_cy - 4)],
+                 fill=(200, 205, 215))
+    _center_text(draw, "N", na_cx, na_cy - r - 10, _font(11, bold=True), WALL_CLR)
+
+    # ── Title block ───────────────────────────────────────────────────────────
+    tb_y = ch - 65
+    draw.line([(PADDING, tb_y), (cw - PADDING, tb_y)], fill=DIM_CLR, width=1)
+    draw.line([(PADDING, tb_y + 40), (cw - PADDING, tb_y + 40)], fill=DIM_CLR, width=1)
+    draw.text((PADDING, tb_y + 6), "AI ARCHITECT",
+              fill=WALL_CLR, font=_font(14, bold=True))
+    draw.text((PADDING + 130, tb_y + 9), "GENERATED FLOOR PLAN",
+              fill=DIM_CLR, font=_font(10))
+    draw.text((PADDING, tb_y + 24),
+              f"{unit_label}  |  {len(rooms)} rooms  |  Scale 1:50  |  All dims in feet",
+              fill=DIM_CLR, font=_font(9))
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", dpi=(150, 150))
+    buf.seek(0)
+    return buf.read()

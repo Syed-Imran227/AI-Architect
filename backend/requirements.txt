@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pydantic
+ezdxf
+huggingface-hub
+python-dotenv
+Pillow
+motor
+passlib
+bcrypt
+python-jose
+cryptography
