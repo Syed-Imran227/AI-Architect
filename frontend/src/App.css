@@ -245,6 +245,14 @@ input:focus, select:focus {
   font-size: 0.9rem;
   color: var(--text-secondary);
   cursor: pointer;
+  --button-width: 3.5em;
+  --button-height: 2em;
+  --toggle-diameter: 1.5em;
+  --button-toggle-offset: calc((var(--button-height) - var(--toggle-diameter)) / 2);
+  --toggle-shadow-offset: 10px;
+  --toggle-wider: 2.5em;
+  --color-grey: var(--toggle-off-bg);
+  --color-green: var(--accent-color);
 }
 
 .toggle-label input {
@@ -252,41 +260,52 @@ input:focus, select:focus {
 }
 
 .toggle-track {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
+  width: var(--button-width);
+  height: var(--button-height);
+  background-color: var(--color-grey);
+  border-radius: calc(var(--button-height) / 2);
   position: relative;
-  width: 50px;
-  height: 30px;
-  background-color: var(--toggle-off-bg);
-  border-radius: 20px;
+  transition: 0.2s all ease-in-out;
+  font-size: 11px;
   margin-right: 10px;
-  transition-duration: .2s;
 }
 
 .toggle-thumb {
+  display: none;
+}
+
+.toggle-track::after {
+  content: "";
+  display: inline-block;
+  width: var(--toggle-diameter);
+  height: var(--toggle-diameter);
+  background-color: #fff;
+  border-radius: calc(var(--toggle-diameter) / 2);
   position: absolute;
-  height: 10px;
-  width: 10px;
-  left: 5px;
-  top: 5px;
-  background-color: transparent;
-  border-radius: 50%;
-  transition-duration: .2s;
-  box-shadow: 5px 2px 7px rgba(8, 8, 8, 0.26);
-  border: 5px solid white;
-  box-sizing: content-box;
+  top: var(--button-toggle-offset);
+  left: 0;
+  transform: translateX(var(--button-toggle-offset));
+  box-shadow: var(--toggle-shadow-offset) 0 calc(var(--toggle-shadow-offset) * 4) rgba(0, 0, 0, 0.1);
+  transition: 0.2s all ease-in-out;
 }
 
 .toggle-label input:checked + .toggle-track {
-  background-color: var(--accent-color);
-  transition-duration: .2s;
+  background-color: var(--color-green);
 }
 
-.toggle-label input:checked + .toggle-track .toggle-thumb {
-  transform: translateX(100%);
-  transition-duration: .2s;
-  background-color: white;
+.toggle-label input:checked + .toggle-track::after {
+  transform: translateX(calc(var(--button-width) - var(--toggle-diameter) - var(--button-toggle-offset)));
+  box-shadow: calc(var(--toggle-shadow-offset) * -1) 0 calc(var(--toggle-shadow-offset) * 4) rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+}
+
+.toggle-label input:active + .toggle-track::after {
+  width: var(--toggle-wider);
+}
+
+.toggle-label input:checked:active + .toggle-track::after {
+  transform: translateX(calc(var(--button-width) - var(--toggle-wider) - var(--button-toggle-offset)));
 }
 
 /* ── Blueprint & Gallery ── */
