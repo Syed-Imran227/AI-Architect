@@ -1,7 +1,12 @@
 /* ── Animations ── */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Layout ── */
@@ -42,7 +47,8 @@ header {
 }
 
 /* ── UI Components (Glassmorphism) ── */
-.card, .panel-card {
+.card,
+.panel-card {
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
@@ -74,12 +80,17 @@ button {
   align-items: center;
   gap: 0.45rem;
 }
+
 .btn-primary:hover:not(:disabled) {
   opacity: 0.88;
   transform: translateY(-1px);
   box-shadow: 0 6px 24px rgba(0, 112, 243, 0.4);
 }
-.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* Ghost glass button — secondary nav actions */
 .btn-ghost {
@@ -96,13 +107,18 @@ button {
   gap: 0.45rem;
   backdrop-filter: blur(8px);
 }
+
 .btn-ghost:hover:not(:disabled) {
   background: var(--glass-hover);
   color: var(--text-primary);
-  border-color: rgba(255,255,255,0.18);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
 }
-.btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* Danger button — delete, destructive */
 .btn-danger {
@@ -118,6 +134,7 @@ button {
   align-items: center;
   gap: 0.35rem;
 }
+
 .btn-danger:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.18);
   transform: translateY(-1px);
@@ -139,6 +156,7 @@ button {
   backdrop-filter: blur(8px);
   text-decoration: none;
 }
+
 .back-btn:hover {
   background: var(--glass-hover);
   color: var(--text-primary);
@@ -161,18 +179,25 @@ button {
   backdrop-filter: blur(8px);
   white-space: nowrap;
 }
+
 .action-btn:hover:not(:disabled) {
   background: var(--glass-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
-.action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .action-btn.success {
-  border-color: rgba(76,175,80,0.35);
+  border-color: rgba(76, 175, 80, 0.35);
   color: #4caf50;
 }
+
 .action-btn.success:hover:not(:disabled) {
-  background: rgba(76,175,80,0.08);
+  background: rgba(76, 175, 80, 0.08);
 }
 
 /* Legacy alias */
@@ -188,8 +213,16 @@ button {
   width: 100%;
   box-shadow: var(--accent-glow);
 }
-.primary-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-.primary-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.primary-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.primary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 
 /* ── Forms ── */
@@ -220,7 +253,8 @@ select {
   transition: border-color 0.2s;
 }
 
-input:focus, select:focus {
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--accent-color);
 }
@@ -290,21 +324,21 @@ input:focus, select:focus {
   transition: 0.2s all ease-in-out;
 }
 
-.toggle-label input:checked + .toggle-track {
+.toggle-label input:checked+.toggle-track {
   background-color: var(--color-green);
 }
 
-.toggle-label input:checked + .toggle-track::after {
+.toggle-label input:checked+.toggle-track::after {
   transform: translateX(calc(var(--button-width) - var(--toggle-diameter) - var(--button-toggle-offset)));
   box-shadow: calc(var(--toggle-shadow-offset) * -1) 0 calc(var(--toggle-shadow-offset) * 4) rgba(0, 0, 0, 0.1);
   background-color: #fff;
 }
 
-.toggle-label input:active + .toggle-track::after {
+.toggle-label input:active+.toggle-track::after {
   width: var(--toggle-wider);
 }
 
-.toggle-label input:checked:active + .toggle-track::after {
+.toggle-label input:checked:active+.toggle-track::after {
   transform: translateX(calc(var(--button-width) - var(--toggle-wider) - var(--button-toggle-offset)));
 }
 
@@ -366,7 +400,7 @@ input:focus, select:focus {
   align-items: center;
   height: 100vh;
   background-color: var(--bg-primary);
-  background-image: 
+  background-image:
     radial-gradient(circle at 15% 50%, rgba(138, 255, 196, 0.05), transparent 25%),
     radial-gradient(circle at 85% 30%, rgba(34, 211, 238, 0.05), transparent 25%);
 }
@@ -385,10 +419,11 @@ input:focus, select:focus {
 }
 
 .auth-card input {
-  background: rgba(0,0,0,0.2) !important;
+  background: rgba(0, 0, 0, 0.2) !important;
   border: 1px solid var(--glass-border) !important;
   color: white !important;
 }
+
 .auth-card input::placeholder {
   color: var(--text-secondary);
 }
@@ -402,6 +437,7 @@ input:focus, select:focus {
   padding: 1rem;
   box-shadow: var(--glass-shadow);
 }
+
 .section-label {
   font-size: 0.85rem;
   font-weight: 700;
@@ -410,6 +446,7 @@ input:focus, select:focus {
   color: var(--text-secondary);
   margin-top: 0;
 }
+
 .history-item {
   display: block;
   width: 100%;
@@ -425,10 +462,12 @@ input:focus, select:focus {
   margin-bottom: 0.5rem;
   transition: all 0.2s;
 }
+
 .history-item:hover {
   background: var(--glass-hover);
   border-color: var(--glass-border);
 }
+
 .history-item.active {
   background: var(--accent-gradient);
   color: #fff;
@@ -453,10 +492,19 @@ input:focus, select:focus {
   color: var(--text-primary);
   animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 @keyframes slideIn {
-  from { transform: translateX(20px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
+
 .room-editor-header {
   display: flex;
   justify-content: space-between;
@@ -465,27 +513,32 @@ input:focus, select:focus {
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--glass-border);
 }
+
 .room-editor-title {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
+
 .room-editor-title h3 {
   margin: 0 0 0.2rem 0;
   font-size: 1.1rem;
   font-weight: 700;
 }
+
 .room-color-dot {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
 }
+
 .room-orig-dims {
   font-size: 0.8rem;
   color: var(--text-muted);
   font-family: monospace;
 }
+
 .close-btn {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid var(--glass-border);
@@ -500,27 +553,32 @@ input:focus, select:focus {
   cursor: pointer;
   transition: all 0.2s;
 }
+
 .close-btn:hover {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.3);
   transform: rotate(90deg);
 }
+
 .room-editor-section {
   margin-bottom: 1.5rem;
 }
+
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
+
 .mini-form-group label {
   display: block;
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin-bottom: 0.25rem;
 }
+
 .mini-form-group input {
   width: 100%;
   padding: 0.5rem;
@@ -530,21 +588,25 @@ input:focus, select:focus {
   border-radius: 6px;
   color: var(--text-primary);
 }
+
 .editor-btn-row {
   display: flex;
   gap: 0.5rem;
 }
+
 .nl-section {
   background: rgba(0, 0, 0, 0.05);
   border: 1px solid var(--glass-border);
   padding: 1rem;
   border-radius: 12px;
 }
+
 .nl-input-row {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
+
 .nl-input {
   flex: 1;
   padding: 0.6rem;
@@ -554,6 +616,7 @@ input:focus, select:focus {
   color: var(--text-primary);
   font-size: 0.85rem;
 }
+
 .ai-btn {
   background: var(--accent-gradient);
   color: white;
@@ -563,15 +626,18 @@ input:focus, select:focus {
   font-weight: 700;
   cursor: pointer;
 }
+
 .ai-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .nl-error {
   color: #ef4444;
   font-size: 0.75rem;
   margin: 0 0 0.5rem 0;
 }
+
 .nl-hint {
   color: var(--text-muted);
   font-size: 0.7rem;
