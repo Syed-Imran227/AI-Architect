@@ -2,6 +2,7 @@ import os
 import json
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
+from layout_validator import validate_and_fix_layout
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -146,8 +147,8 @@ Every floor must partition the {length}×{width} plot with ≥ 90% coverage."""
             end   = content.rfind("}")
             if start != -1 and end != -1:
                 layout = json.loads(content[start : end + 1])
-                # Validate & clamp coordinates
-                layout = _validate_rooms(layout, length, width)
+                # ── Step 4: Full deterministic geometry validation & fix ──
+                layout = _run_validator(layout, length, width)
                 return layout
             return {"error": "Model returned no valid JSON"}
 
@@ -156,64 +157,51 @@ Every floor must partition the {length}×{width} plot with ≥ 90% coverage."""
             return {"error": str(e)}
 
 
-# ── Validation helper ─────────────────────────────────────────────────────────
+# ── Validation helpers ───────────────────────────────────────────────────────
 
-def _validate_rooms(layout: dict, max_x: float, max_y: float) -> dict:
+def _run_validator(layout: dict, plot_w: float, plot_h: float) -> dict:
     """
-    Light post-processing:
-    - Ensures all coordinates are numeric
-    - Clamps rooms to plot boundary
-    - Removes zero-area rooms
+    Runs the full deterministic layout validator over every floor.
+    Re-validated after EVERY LLM round-trip (initial generation + Vastu fixes).
     """
     floors = layout.get("floors", [])
-    # Fallback to single rooms array if model forgot to use 'floors' wrapper
+    # Fallback: if model forgot the 'floors' wrapper
     if not floors and "rooms" in layout:
         floors = [{"level": "Ground Floor", "rooms": layout.get("rooms", [])}]
 
-    cleaned_floors = []
+    validated_floors = []
     for floor in floors:
-        cleaned_rooms = []
-        for r in floor.get("rooms", []):
-            try:
-                room = {
-                    "name":   str(r.get("name", "Room")),
-                    "x":      max(0, int(r.get("x", 0))),
-                    "y":      max(0, int(r.get("y", 0))),
-                    "width":  max(1, int(r.get("width",  10))),
-                    "height": max(1, int(r.get("height", 10))),
-                }
-                # Clamp to boundary
-                room["width"]  = min(room["width"],  int(max_x) - room["x"])
-                room["height"] = min(room["height"], int(max_y) - room["y"])
-                if room["width"] > 0 and room["height"] > 0:
-                    # Validate and clamp furniture
-                    furniture = []
-                    for f in r.get("furniture", []):
-                        try:
-                            fi = {
-                                "name":   str(f.get("name", "Furniture")),
-                                "x":      max(0, int(f.get("x", 0))),
-                                "y":      max(0, int(f.get("y", 0))),
-                                "width":  max(1, int(f.get("width",  2))),
-                                "height": max(1, int(f.get("height", 2))),
-                            }
-                            # Clamp to room interior
-                            fi["width"]  = min(fi["width"],  room["width"]  - fi["x"])
-                            fi["height"] = min(fi["height"], room["height"] - fi["y"])
-                            if fi["width"] > 0 and fi["height"] > 0:
-                                furniture.append(fi)
-                        except Exception:
-                            pass
-                    if furniture:
-                        room["furniture"] = furniture
-                    cleaned_rooms.append(room)
-            except Exception:
-                pass
-        
-        if cleaned_rooms:
-            cleaned_floors.append({
-                "level": str(floor.get("level", "Floor")),
-                "rooms": cleaned_rooms
-            })
-            
-    return {"floors": cleaned_floors}
+        rooms = floor.get("rooms", [])
+        if not rooms:
+            continue
+
+        result = validate_and_fix_layout(
+            rooms=rooms,
+            plot_width=plot_w,
+            plot_height=plot_h,
+            entrance_point=(0.0, 0.0),
+        )
+
+        # Log any fixes applied for debugging
+        if result["validation_report"]:
+            print(f"[layout_validator] {floor.get('level', 'Floor')}:")
+            for entry in result["validation_report"]:
+                print(f"  • {entry}")
+
+        if result["status"] == "unresolved":
+            print(f"[layout_validator] WARNING: Layout unresolved for {floor.get('level')}")
+
+        validated_floors.append({
+            "level": str(floor.get("level", "Floor")),
+            "rooms": result["rooms"],
+        })
+
+    return {"floors": validated_floors}
+
+
+def _validate_rooms(layout: dict, max_x: float, max_y: float) -> dict:
+    """
+    Legacy alias — now delegates to the full validator.
+    Kept for any existing call-sites in main.py or vastu_engine.py.
+    """
+    return _run_validator(layout, max_x, max_y)

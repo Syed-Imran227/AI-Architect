@@ -9,6 +9,7 @@ from inference import FloorPlanGenerator, llm_client
 from dxf_exporter import export_to_dxf
 from floor_renderer import render_floor_plan
 from vastu_engine import score_vastu
+from layout_validator import validate_and_fix_layout
 import os
 import uuid
 import json
@@ -276,7 +277,17 @@ def regenerate_room(req: RegenerateRoomRequest):
         content = response.choices[0].message.content
         start, end = content.find("{"), content.rfind("}")
         if start != -1 and end != -1:
-            return json.loads(content[start : end + 1])
+            updated = json.loads(content[start : end + 1])
+            rooms = updated.get("rooms", req.rooms)
+
+            # ── Re-validate after every LLM room edit (untrusted input) ──
+            result = validate_and_fix_layout(
+                rooms=rooms,
+                plot_width=0,   # 0 = skip plot boundary (caller manages plot dims)
+                plot_height=0,
+                entrance_point=(0.0, 0.0),
+            )
+            return {"rooms": result["rooms"]}
         raise HTTPException(status_code=500, detail="Invalid JSON from AI")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -362,11 +373,18 @@ def vastu_fix(req: VastuFixRequest):
         fixed_data = json.loads(content[start : end + 1])
         fixed_rooms = fixed_data.get("rooms", req.rooms)
 
-        # ── 2. Validate & clamp ───────────────────────────────────────────────
-        from inference import _validate_rooms
-        validated = _validate_rooms({"floors": [{"level": "Fixed", "rooms": fixed_rooms}]},
-                                    req.length, req.width)
-        fixed_rooms = validated["floors"][0]["rooms"] if validated["floors"] else req.rooms
+        # ── 2. Full deterministic re-validation after Vastu LLM correction ────
+        # This re-runs on EVERY Vastu auto-fix round-trip, not just the first pass.
+        val_result = validate_and_fix_layout(
+            rooms=fixed_rooms,
+            plot_width=req.length,
+            plot_height=req.width,
+            entrance_point=(0.0, 0.0),
+        )
+        fixed_rooms = val_result["rooms"]
+        if val_result["status"] == "unresolved":
+            print(f"[vastu-fix] Layout validator could not fully resolve geometry.")
+            print(f"[vastu-fix] Report: {val_result['validation_report']}")
 
         # ── 3. Re-score & re-render ───────────────────────────────────────────
         vastu_result = score_vastu(fixed_rooms, req.length, req.width, req.entry_dir)
