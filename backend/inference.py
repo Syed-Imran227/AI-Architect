@@ -1,21 +1,27 @@
 import os
 import json
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
+from openai import OpenAI
 from layout_validator import validate_and_fix_layout
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-HF_TOKEN = os.getenv("HF_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-if not HF_TOKEN:
-    raise ValueError("HF_TOKEN is missing. Please add it to backend/.env")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is missing. Please add it to backend/.env")
 
-llm_client   = InferenceClient("meta-llama/Meta-Llama-3-70B-Instruct", token=HF_TOKEN)
+llm_client = OpenAI(
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1",
+)
+
+MODEL = "openai/gpt-oss-120b"
 
 
 class FloorPlanGenerator:
     def __init__(self):
         self.llm_client = llm_client
+        self.model = MODEL
 
     # ──────────────────────────────────────────────────────────────────────────
     def generate_floorplan_json(
@@ -132,13 +138,14 @@ Now generate the FULL floor plan with ALL required rooms and furniture for ALL {
 Every floor must partition the {length}×{width} plot with ≥ 90% coverage."""
 
         try:
-            response = self.llm_client.chat_completion(
+            response = self.llm_client.chat.completions.create(
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user",   "content": user_msg},
                 ],
                 max_tokens=2500,
-                temperature=0.05,   # near-deterministic for layout precision
+                temperature=0.05,
             )
             content = response.choices[0].message.content.strip()
 

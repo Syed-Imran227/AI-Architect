@@ -5,7 +5,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Any
 
-from inference import FloorPlanGenerator, llm_client
+from inference import FloorPlanGenerator, llm_client, MODEL
 from dxf_exporter import export_to_dxf
 from floor_renderer import render_floor_plan
 from vastu_engine import score_vastu
@@ -271,8 +271,11 @@ def regenerate_room(req: RegenerateRoomRequest):
         },
     ]
     try:
-        response = llm_client.chat_completion(
-            messages=messages, max_tokens=1500, temperature=0.05
+        response = llm_client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            max_tokens=1500,
+            temperature=0.05,
         )
         content = response.choices[0].message.content
         start, end = content.find("{"), content.rfind("}")
@@ -364,7 +367,12 @@ def vastu_fix(req: VastuFixRequest):
     ]
 
     try:
-        response = llm_client.chat_completion(messages=messages, max_tokens=2000, temperature=0.02)
+        response = llm_client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            max_tokens=2000,
+            temperature=0.02,
+        )
         content  = response.choices[0].message.content
         start, end = content.find("{"), content.rfind("}")
         if start == -1 or end == -1:
