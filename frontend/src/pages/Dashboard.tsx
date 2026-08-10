@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getProjects, deleteProject } from '../services/api';
+import { getProjects, deleteProject, Room } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, Trash2, FolderOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,8 +13,8 @@ interface ProjectData {
   name: string;
   created_at: string;
   layout_data: { 
-    rooms?: any[];
-    floors?: { rooms?: any[] }[];
+    rooms?: Room[];
+    floors?: { rooms?: Room[] }[];
   };
   image_url: string;
 }

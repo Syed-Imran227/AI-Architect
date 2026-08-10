@@ -200,54 +200,65 @@ function DoorArcs({ room }: { room: Room }) {
   return (
     <g>
       {room.doors.map((door, idx) => {
-        const rawDw = door.width || 3;
-        const pos = door.position || 0;
+        const getDoorGeometry = () => {
+          const rawDw = door.width || 3;
+          const pos = door.position || 0;
 
-        let hx = 0, hy = 0;
-        let gapX1 = 0, gapY1 = 0, gapX2 = 0, gapY2 = 0;
-        let leafX = 0, leafY = 0;  // far end of door leaf
-        let arcEndX = 0, arcEndY = 0;
-        let sweepFlag = 0;
-        let dw = rawDw;
-
-        if (door.wall === 'top') {
-          // Top wall of room (y = room.y) — swing DOWNWARD into room
-          dw = Math.min(rawDw, room.width - pos, room.height * 0.75);
-          hx = room.x + pos; hy = room.y;
-          gapX1 = hx; gapY1 = hy; gapX2 = hx + dw; gapY2 = hy;
-          leafX = hx; leafY = hy + dw;  // door opens down
-          arcEndX = hx + dw; arcEndY = hy;
-          sweepFlag = 1;
-        } else if (door.wall === 'bottom') {
-          // Bottom wall of room (y = room.y+height) — swing UPWARD into room
-          dw = Math.min(rawDw, room.width - pos, room.height * 0.75);
-          hx = room.x + pos; hy = room.y + room.height;
-          gapX1 = hx; gapY1 = hy; gapX2 = hx + dw; gapY2 = hy;
-          leafX = hx; leafY = hy - dw;  // door opens up
-          arcEndX = hx + dw; arcEndY = hy;
-          sweepFlag = 0;
-        } else if (door.wall === 'left') {
-          // Left wall of room (x = room.x) — swing RIGHTWARD into room
-          dw = Math.min(rawDw, room.height - pos, room.width * 0.75);
-          hx = room.x; hy = room.y + pos;
-          gapX1 = hx; gapY1 = hy; gapX2 = hx; gapY2 = hy + dw;
-          leafX = hx + dw; leafY = hy;  // door opens right
-          arcEndX = hx; arcEndY = hy + dw;
-          sweepFlag = 1;
-        } else if (door.wall === 'right') {
-          // Right wall of room (x = room.x+width) — swing LEFTWARD into room
-          dw = Math.min(rawDw, room.height - pos, room.width * 0.75);
-          hx = room.x + room.width; hy = room.y + pos;
-          gapX1 = hx; gapY1 = hy; gapX2 = hx; gapY2 = hy + dw;
-          leafX = hx - dw; leafY = hy;  // door opens left
-          arcEndX = hx; arcEndY = hy + dw;
-          sweepFlag = 0;
-        } else {
+          if (door.wall === 'top') {
+            const dw = Math.min(rawDw, room.width - pos, room.height * 0.75);
+            const hx = room.x + pos;
+            const hy = room.y;
+            return {
+              dw, hx, hy,
+              gapX1: hx, gapY1: hy, gapX2: hx + dw, gapY2: hy,
+              leafX: hx, leafY: hy + dw,
+              arcEndX: hx + dw, arcEndY: hy,
+              sweepFlag: 1
+            };
+          }
+          if (door.wall === 'bottom') {
+            const dw = Math.min(rawDw, room.width - pos, room.height * 0.75);
+            const hx = room.x + pos;
+            const hy = room.y + room.height;
+            return {
+              dw, hx, hy,
+              gapX1: hx, gapY1: hy, gapX2: hx + dw, gapY2: hy,
+              leafX: hx, leafY: hy - dw,
+              arcEndX: hx + dw, arcEndY: hy,
+              sweepFlag: 0
+            };
+          }
+          if (door.wall === 'left') {
+            const dw = Math.min(rawDw, room.height - pos, room.width * 0.75);
+            const hx = room.x;
+            const hy = room.y + pos;
+            return {
+              dw, hx, hy,
+              gapX1: hx, gapY1: hy, gapX2: hx, gapY2: hy + dw,
+              leafX: hx + dw, leafY: hy,
+              arcEndX: hx, arcEndY: hy + dw,
+              sweepFlag: 1
+            };
+          }
+          if (door.wall === 'right') {
+            const dw = Math.min(rawDw, room.height - pos, room.width * 0.75);
+            const hx = room.x + room.width;
+            const hy = room.y + pos;
+            return {
+              dw, hx, hy,
+              gapX1: hx, gapY1: hy, gapX2: hx, gapY2: hy + dw,
+              leafX: hx - dw, leafY: hy,
+              arcEndX: hx, arcEndY: hy + dw,
+              sweepFlag: 0
+            };
+          }
           return null;
-        }
+        };
 
-        if (dw <= 0) return null;
+        const geom = getDoorGeometry();
+        if (!geom || geom.dw <= 0) return null;
 
+        const { hx, hy, leafX, leafY, dw, sweepFlag, arcEndX, arcEndY, gapX1, gapY1, gapX2, gapY2 } = geom;
         const path = `M ${hx} ${hy} L ${leafX} ${leafY} A ${dw} ${dw} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}`;
 
         return (
