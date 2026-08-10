@@ -40,23 +40,53 @@ header {
 
 .content-grid {
   display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 2rem;
-  padding: 2rem;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
   flex: 1;
+  height: calc(100vh - 80px);
+  overflow: hidden;
 }
 
-/* ── UI Components (Glassmorphism) ── */
+/* When viewing a plan, use a 3-column professional layout */
+.content-grid.active-plan-view {
+  grid-template-columns: 320px 1fr 360px;
+}
+
+/* ── UI Components (Glassmorphism & Neumorphism blend) ── */
 .card,
-.panel-card {
+.panel-card,
+.form-pane,
+.results-pane {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
+/* Scrollable areas inside panels */
+.panel-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  margin-right: -0.5rem;
+}
+.panel-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+.panel-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panel-scroll-area::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 10px;
+}
 
 /* ── Buttons — unified system ── */
 button {
@@ -138,6 +168,23 @@ button {
 .btn-danger:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.18);
   transform: translateY(-1px);
+}
+
+/* ── Form Inputs ── */
+.input-field {
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: var(--font-primary);
+}
+.input-field:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 /* Back / breadcrumb button */
@@ -476,22 +523,93 @@ select:focus {
   box-shadow: var(--accent-glow);
 }
 
+/* ── Vastu Analysis Panel — theme-aware ── */
+.vastu-panel {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.vastu-panel-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-family: var(--font-primary);
+}
+
+.vastu-panel-toggle:hover {
+  background: var(--glass-hover);
+}
+
+.vastu-panel-body {
+  padding: 0 1rem 1rem;
+}
+
+.vastu-rule-card {
+  background: var(--glass-bg);
+  border-radius: 6px;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Score pill colours */
+.vastu-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+}
+
+.vastu-pill--high {
+  background: rgba(76, 175, 80, 0.18);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.vastu-pill--med {
+  background: rgba(255, 167, 38, 0.18);
+  color: #ffa726;
+  border: 1px solid rgba(255, 167, 38, 0.4);
+}
+
+.vastu-pill--low {
+  background: rgba(239, 83, 80, 0.18);
+  color: #ef5350;
+  border: 1px solid rgba(239, 83, 80, 0.4);
+}
+
 /* ── Room Editor Overlay ── */
 .room-editor {
-  position: absolute;
-  top: 2rem;
-  right: 2rem;
-  width: 340px;
+  width: 100%;
   background: var(--glass-bg);
   backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  box-shadow: var(--glass-shadow);
-  padding: 1.5rem;
-  z-index: 200;
+  border-radius: 12px;
+  padding: 1.25rem;
   color: var(--text-primary);
-  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 
 @keyframes slideIn {
   from {

@@ -1,25 +1,14 @@
 """
 layout_validator.py
 ===================
-Deterministic geometry fixer for AI Architect floor plan layouts.
+Phase 3 — Demoted to safety net.
 
-Replaces the previous clamp-only Step 4 with a full validation pipeline:
-  1. Per-type minimum dimension enforcement
-  2. AABB overlap detection & resolution (min-translation-vector push-apart)
-  3. Wall-thickness gap enforcement between adjacent rooms
-  4. Boundary clamping (runs LAST so resolution can't push rooms back out)
-  5. Circulation reachability check + corridor strip insertion
+boundary_check_only() is the new primary entry point used by inference.py.
+It only clamps rooms to the plot boundary; it does NOT push rooms apart.
+If it fires, it means the Drafter produced an out-of-bounds room — log loudly.
 
-Must be called:
-  - After every LLM round-trip (initial generation AND each Vastu auto-fix pass)
-  - Before any output reaches Pillow, Stable Diffusion, or ezdxf
-
-Usage:
-    from layout_validator import validate_and_fix_layout
-    result = validate_and_fix_layout(rooms, plot_w, plot_h, entrance_point)
-    if result["status"] == "unresolved":
-        raise ValueError(result["validation_report"][-1])
-    rooms = result["rooms"]
+validate_and_fix_layout() is kept for use by /vastu-fix and /regenerate-room,
+which still work with LLM-edited geometry that may need collision resolution.
 """
 
 from __future__ import annotations
@@ -56,8 +45,44 @@ ROOM_MIN_DIMENSIONS: dict[str, tuple[float, float]] = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public entry point
+# Phase 3: Primary safety-net entry point (boundary clamp ONLY, no push-apart)
 # ─────────────────────────────────────────────────────────────────────────────
+
+def boundary_check_only(
+    rooms: list[dict[str, Any]],
+    plot_width: float,
+    plot_height: float,
+) -> tuple[list[dict], list[str]]:
+    """
+    Clamps rooms to plot boundary. Does NOT resolve overlaps or push rooms apart.
+    Used by inference.py after the Drafter — if a room is clamped here it is a
+    Drafter bug; the caller should log loudly.
+
+    Returns (rooms, clamped_names) where clamped_names lists any rooms that were
+    out of bounds (should be empty if the Drafter is working correctly).
+    """
+    clamped = []
+    if not plot_width or not plot_height:
+        return rooms, clamped  # Skip if plot dimensions unknown
+
+    for room in rooms:
+        orig_x, orig_y = room["x"], room["y"]
+        room["x"] = max(0.0, min(room["x"], plot_width  - room["width"]))
+        room["y"] = max(0.0, min(room["y"], plot_height - room["height"]))
+        # Clamp width/height if somehow larger than plot
+        room["width"]  = min(room["width"],  plot_width)
+        room["height"] = min(room["height"], plot_height)
+        if room["x"] != orig_x or room["y"] != orig_y:
+            clamped.append(room["name"])
+
+    return rooms, clamped
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Legacy full validation pipeline (kept for /vastu-fix and /regenerate-room)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Public entry point
 
 def validate_and_fix_layout(
     rooms: list[dict[str, Any]],
@@ -160,7 +185,7 @@ def _enforce_minimum_dimensions(
             if room["x"] + room["width"] > plot_w:
                 room["x"] = max(0.0, plot_w - room["width"])
             report.append(
-                f"Min-dim: '{room['name']}' width {old:.1f}→{min_w:.1f} ft"
+                f"Min-dim: '{room['name']}' width {old:.1f}->{min_w:.1f} ft"
             )
             changed = True
 
@@ -170,7 +195,7 @@ def _enforce_minimum_dimensions(
             if room["y"] + room["height"] > plot_h:
                 room["y"] = max(0.0, plot_h - room["height"])
             report.append(
-                f"Min-dim: '{room['name']}' height {old:.1f}→{min_h:.1f} ft"
+                f"Min-dim: '{room['name']}' height {old:.1f}->{min_h:.1f} ft"
             )
             changed = True
 

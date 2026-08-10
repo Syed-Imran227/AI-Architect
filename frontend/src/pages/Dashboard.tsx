@@ -12,7 +12,10 @@ interface ProjectData {
   id: string;
   name: string;
   created_at: string;
-  layout_data: { rooms?: { length: number } };
+  layout_data: { 
+    rooms?: any[];
+    floors?: { rooms?: any[] }[];
+  };
   image_url: string;
 }
 
@@ -56,7 +59,17 @@ export default function Dashboard() {
     }
   };
 
-  const totalRooms = projects.reduce((acc, curr) => acc + (curr.layout_data?.rooms?.length || 0), 0);
+  const totalRooms = projects.reduce((acc, curr) => {
+    let count = 0;
+    if (curr.layout_data?.floors) {
+      curr.layout_data.floors.forEach(f => {
+        count += (f.rooms?.length || 0);
+      });
+    } else if (curr.layout_data?.rooms) {
+      count += (curr.layout_data.rooms.length || 0);
+    }
+    return acc + count;
+  }, 0);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative', overflow: 'hidden' }}>

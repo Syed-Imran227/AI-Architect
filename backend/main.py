@@ -261,7 +261,7 @@ class RegenerateRoomRequest(BaseModel):
 
 
 @app.post("/regenerate-room")
-def regenerate_room(req: RegenerateRoomRequest):
+def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get_current_user)):
     """Edits a specific room (or the whole plan) via natural language."""
     messages = [
         {
@@ -320,7 +320,7 @@ class VastuFixRequest(BaseModel):
 
 
 @app.post("/vastu-fix")
-def vastu_fix(req: VastuFixRequest):
+def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_user)):
     """
     Re-positions specific rooms to achieve a near-perfect Vastu score.
     Only fixes rooms that are in the wrong zone; preserves everything else.

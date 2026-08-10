@@ -57,30 +57,25 @@ export default function Login() {
             <input
               type="email"
               placeholder="Email address"
+              className="input-field"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              style={inputStyle}
-              onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent-color)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(138,255,196,0.15)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'var(--input-border)'; e.currentTarget.style.boxShadow = 'none'; }}
             />
             <input
               type="password"
               placeholder="Password"
+              className="input-field"
               required
               value={password}
               onChange={e => setPassword(e.target.value)}
-              style={inputStyle}
-              onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent-color)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(138,255,196,0.15)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'var(--input-border)'; e.currentTarget.style.boxShadow = 'none'; }}
             />
-            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0 }}>⚠ {error}</p>}
+            {error && <p style={{ color: 'var(--error)', fontSize: '0.85rem', margin: 0 }}>⚠ {error}</p>}
             <button
               type="submit"
               disabled={loading}
-              style={btnStyle}
-              onMouseEnter={e => !loading && ((e.currentTarget as HTMLButtonElement).style.opacity = '0.9')}
-              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.opacity = '1')}
+              className="btn-primary"
+              style={{ padding: '0.9rem', fontSize: '1rem', width: '100%', justifyContent: 'center' }}
             >
               {loading ? 'Signing in…' : 'Log In →'}
             </button>
@@ -95,29 +90,3 @@ export default function Login() {
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: '0.85rem 1rem',
-  borderRadius: '10px',
-  border: '1px solid var(--glass-border)',
-  background: 'var(--glass-bg)',
-  color: 'var(--text-primary)',
-  fontSize: '0.95rem',
-  outline: 'none',
-  transition: 'border-color 0.2s, box-shadow 0.2s',
-  fontFamily: 'var(--font-primary)',
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: '0.9rem',
-  borderRadius: '10px',
-  border: 'none',
-  background: 'var(--accent-gradient)',
-  color: 'var(--text-primary)',
-  fontSize: '1rem',
-  fontWeight: 700,
-  cursor: 'pointer',
-  transition: 'opacity 0.2s',
-  fontFamily: 'var(--font-primary)',
-  boxShadow: 'var(--accent-glow)',
-};

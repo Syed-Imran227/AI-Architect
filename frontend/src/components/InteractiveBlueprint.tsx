@@ -200,55 +200,77 @@ function DoorArcs({ room }: { room: Room }) {
   return (
     <g>
       {room.doors.map((door, idx) => {
-        const dw = door.width || 3;
+        const rawDw = door.width || 3;
         const pos = door.position || 0;
-        let dx = 0, dy = 0;
-        let path = '';
-        let gapLine = null;
 
-        // Remember: SVG coords (y goes down).
-        // Backend maps: 'bottom' = y, 'top' = y+h, 'left' = x, 'right' = x+w
-        if (door.wall === 'bottom') {
-          // Top edge visually (y)
-          dx = room.x + pos;
-          dy = room.y;
-          // Gap in wall
-          gapLine = <line x1={dx} y1={dy} x2={dx + dw} y2={dy} stroke="#f8f9fb" strokeWidth={0.6} />;
-          // Swing up and right (into the room above, or out if exterior)
-          path = `M ${dx} ${dy} L ${dx} ${dy - dw} A ${dw} ${dw} 0 0 1 ${dx + dw} ${dy}`;
-        } else if (door.wall === 'top') {
-          // Bottom edge visually (y+h)
-          dx = room.x + pos;
-          dy = room.y + room.height;
-          gapLine = <line x1={dx} y1={dy} x2={dx + dw} y2={dy} stroke="#f8f9fb" strokeWidth={0.6} />;
-          // Swing down and right
-          path = `M ${dx} ${dy} L ${dx} ${dy + dw} A ${dw} ${dw} 0 0 0 ${dx + dw} ${dy}`;
+        let hx = 0, hy = 0;
+        let gapX1 = 0, gapY1 = 0, gapX2 = 0, gapY2 = 0;
+        let leafX = 0, leafY = 0;  // far end of door leaf
+        let arcEndX = 0, arcEndY = 0;
+        let sweepFlag = 0;
+        let dw = rawDw;
+
+        if (door.wall === 'top') {
+          // Top wall of room (y = room.y) — swing DOWNWARD into room
+          dw = Math.min(rawDw, room.width - pos, room.height * 0.75);
+          hx = room.x + pos; hy = room.y;
+          gapX1 = hx; gapY1 = hy; gapX2 = hx + dw; gapY2 = hy;
+          leafX = hx; leafY = hy + dw;  // door opens down
+          arcEndX = hx + dw; arcEndY = hy;
+          sweepFlag = 1;
+        } else if (door.wall === 'bottom') {
+          // Bottom wall of room (y = room.y+height) — swing UPWARD into room
+          dw = Math.min(rawDw, room.width - pos, room.height * 0.75);
+          hx = room.x + pos; hy = room.y + room.height;
+          gapX1 = hx; gapY1 = hy; gapX2 = hx + dw; gapY2 = hy;
+          leafX = hx; leafY = hy - dw;  // door opens up
+          arcEndX = hx + dw; arcEndY = hy;
+          sweepFlag = 0;
         } else if (door.wall === 'left') {
-          // Left edge visually (x)
-          dx = room.x;
-          dy = room.y + pos;
-          gapLine = <line x1={dx} y1={dy} x2={dx} y2={dy + dw} stroke="#f8f9fb" strokeWidth={0.6} />;
-          // Swing left and down
-          path = `M ${dx} ${dy} L ${dx - dw} ${dy} A ${dw} ${dw} 0 0 0 ${dx} ${dy + dw}`;
+          // Left wall of room (x = room.x) — swing RIGHTWARD into room
+          dw = Math.min(rawDw, room.height - pos, room.width * 0.75);
+          hx = room.x; hy = room.y + pos;
+          gapX1 = hx; gapY1 = hy; gapX2 = hx; gapY2 = hy + dw;
+          leafX = hx + dw; leafY = hy;  // door opens right
+          arcEndX = hx; arcEndY = hy + dw;
+          sweepFlag = 1;
         } else if (door.wall === 'right') {
-          // Right edge visually (x+w)
-          dx = room.x + room.width;
-          dy = room.y + pos;
-          gapLine = <line x1={dx} y1={dy} x2={dx} y2={dy + dw} stroke="#f8f9fb" strokeWidth={0.6} />;
-          // Swing right and down
-          path = `M ${dx} ${dy} L ${dx + dw} ${dy} A ${dw} ${dw} 0 0 1 ${dx} ${dy + dw}`;
+          // Right wall of room (x = room.x+width) — swing LEFTWARD into room
+          dw = Math.min(rawDw, room.height - pos, room.width * 0.75);
+          hx = room.x + room.width; hy = room.y + pos;
+          gapX1 = hx; gapY1 = hy; gapX2 = hx; gapY2 = hy + dw;
+          leafX = hx - dw; leafY = hy;  // door opens left
+          arcEndX = hx; arcEndY = hy + dw;
+          sweepFlag = 0;
+        } else {
+          return null;
         }
+
+        if (dw <= 0) return null;
+
+        const path = `M ${hx} ${hy} L ${leafX} ${leafY} A ${dw} ${dw} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}`;
 
         return (
           <g key={`${room.name}-door-${idx}`}>
-            {gapLine}
-            <path d={path} fill="rgba(180,200,240,0.3)" stroke="#64748b" strokeWidth={0.12} strokeDasharray="0.4 0.2" />
+            {/* White gap in wall = door opening */}
+            <line x1={gapX1} y1={gapY1} x2={gapX2} y2={gapY2}
+              stroke="#fafbfc" strokeWidth={0.65} />
+            {/* Door swing area (filled arc) */}
+            <path d={path}
+              fill="rgba(100,116,139,0.12)"
+              stroke="#64748b"
+              strokeWidth={0.12}
+              strokeDasharray="0.4 0.2" />
+            {/* Solid door leaf */}
+            <line x1={hx} y1={hy} x2={leafX} y2={leafY}
+              stroke="#475569" strokeWidth={0.24} />
           </g>
         );
       })}
     </g>
   );
 }
+
 
 // Window marks on exterior walls
 function WindowMarks({ room }: { room: Room }) {

@@ -274,9 +274,9 @@ export default function Editor() {
         </span>
       </header>
 
-      <div className="content-grid">
+      <div className={`content-grid ${activePlan ? 'active-plan-view' : ''}`}>
         {/* ── Sidebar Form ── */}
-        <aside className="card sidebar">
+        <aside className="form-pane panel-scroll-area">
           <h2 className="sidebar-title">Requirements</h2>
 
           <div className="form-group">
@@ -374,200 +374,105 @@ export default function Editor() {
           )}
         </aside>
 
-        {/* ── Main Area ── */}
-        <main>
-          {activePlan ? (
-            <div className="detail-view">
-              <div className="detail-header">
-                <button className="back-btn" onClick={() => setActivePlan(null)}>← All Plans</button>
-                <span className="plan-id-badge">{activePlan.id}</span>
-                <div className={`vastu-score ${activePlan.vastuScore >= 90 ? 'high' : 'medium'}`}>
+        {/* ── Main Workspace & Analytics (or Gallery) ── */}
+        {activePlan ? (
+          <>
+            {/* Center Panel: Interactive Blueprint & Concept Sketch */}
+            <section className="workspace-pane card panel-scroll-area" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <p className="panel-label" style={{ margin: 0, fontWeight: 700 }}>Interactive Blueprint</p>
+                  <span className="plan-id-badge" style={{ fontSize: '0.7rem' }}>{activePlan.id}</span>
+                </div>
+                
+                {floors.length > 1 && (
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {floors.map((f, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { setActiveFloorIndex(i); setSelectedRoom(null); }}
+                        style={{
+                          padding: '0.35rem 0.9rem',
+                          borderRadius: '6px',
+                          border: `1px solid ${i === activeFloorIndex ? 'var(--accent-color)' : 'var(--glass-border)'}`,
+                          background: i === activeFloorIndex ? 'var(--accent-gradient)' : 'transparent',
+                          color: i === activeFloorIndex ? '#000' : 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {f.level}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="blueprint-wrapper" style={{ minHeight: '60vh', flexShrink: 0, position: 'relative', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+                {currentRooms.length > 0
+                  ? <InteractiveBlueprint rooms={currentRooms} selectedRoom={selectedRoom} onRoomSelect={handleRoomSelect} onRoomDrop={handleLayoutUpdate} />
+                  : <div className="blueprint-empty"><p>No layout data for this floor.</p></div>
+                }
+              </div>
+
+              {/* Large Concept Sketch */}
+              <div style={{ padding: '1.5rem', borderTop: '1px solid var(--glass-border)' }}>
+                <p className="panel-label" style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>Concept Sketch</p>
+                <div className="concept-img-wrapper" style={{ width: '100%', height: '70vh', minHeight: '500px', borderRadius: '12px', overflow: 'hidden', background: '#000', border: '1px solid var(--glass-border)' }}>
+                  <img
+                    src={floors[activeFloorIndex]?.imageUrl || activePlan.imageUrl}
+                    alt="Concept sketch"
+                    className="concept-img"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Right Panel: Analytics & Actions */}
+            <aside className="analytics-pane card panel-scroll-area" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem' }}>
+
+              {/* Header: close + score */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button className="btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setActivePlan(null)}>← Close Plan</button>
+                <div className={`vastu-score ${activePlan.vastuScore >= 90 ? 'high' : 'medium'}`} style={{ padding: '0.3rem 0.7rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, border: '1px solid currentColor' }}>
                   Vastu {activePlan.vastuScore}/100
                 </div>
               </div>
 
-              <div className="detail-panels" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem', alignItems: 'start' }}>
-                {/* Concept Image */}
-                <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '480px' }}>
-                  <p className="panel-label" style={{ marginBottom: '1rem' }}>Concept Sketch</p>
-                  <div className="concept-img-wrapper" style={{ flex: 1, minHeight: '400px', borderRadius: '12px', overflow: 'hidden', background: '#fff', border: '1px solid var(--glass-border)' }}>
-                    <img
-                      src={floors[activeFloorIndex]?.imageUrl || activePlan.imageUrl}
-                      alt="AI-generated architectural concept sketch"
-                      className="concept-img"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                </div>
-
-                {/* Interactive Blueprint */}
-                <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '480px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <p className="panel-label" style={{ margin: 0 }}>Interactive Blueprint <span className="panel-hint">— click a room to edit</span></p>
-                    
-                    {floors.length > 1 && (
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {floors.map((f, i) => (
-                          <button
-                            key={i}
-                            onClick={() => { setActiveFloorIndex(i); setSelectedRoom(null); }}
-                            style={{
-                              padding: '0.3rem 0.8rem',
-                              borderRadius: '6px',
-                              border: `1px solid ${i === activeFloorIndex ? 'var(--accent-color)' : 'var(--glass-border)'}`,
-                              background: i === activeFloorIndex ? 'var(--accent-gradient)' : 'var(--glass-bg)',
-                              color: i === activeFloorIndex ? '#fff' : 'var(--text-primary)',
-                              cursor: 'pointer',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            {f.level}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="blueprint-wrapper" style={{ flex: 1, minHeight: '400px' }}>
-                    {/* ── Circulation Warning (from API) ───────────────────── */}
-                    {(activePlan.circulationWarnings?.length ?? 0) > 0 && (
-                      <div style={{
-                        display: 'flex', alignItems: 'flex-start', gap: '0.6rem',
-                        background: 'rgba(234,179,8,0.12)',
-                        border: '1px solid rgba(234,179,8,0.45)',
-                        borderRadius: '8px', padding: '0.6rem 0.9rem',
-                        marginBottom: '0.75rem', fontSize: '0.78rem',
-                        color: 'var(--text-primary)',
-                      }}>
-                        <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
-                        <span>
-                          <strong>Structural Draft — Circulation Not Fully Validated.</strong>{' '}
-                          {activePlan.circulationWarnings!.length} room(s) may lack accessible paths.
-                          This plan is suitable for review but not construction without architect sign-off.
-                          <details style={{ marginTop: '0.3rem', cursor: 'pointer' }}>
-                            <summary style={{ fontSize: '0.74rem', opacity: 0.7 }}>Show details</summary>
-                            <ul style={{ margin: '0.3rem 0 0 1rem', padding: 0 }}>
-                              {activePlan.circulationWarnings!.map((w, i) => (
-                                <li key={i} style={{ marginBottom: '0.15rem' }}>{w}</li>
-                              ))}
-                            </ul>
-                          </details>
-                        </span>
-                      </div>
-                    )}
-
-                    {currentRooms.length > 0
-                      ? <InteractiveBlueprint rooms={currentRooms} selectedRoom={selectedRoom} onRoomSelect={handleRoomSelect} onRoomDrop={handleLayoutUpdate} />
-                      : <div className="blueprint-empty"><p>AI did not return layout data for this floor.</p></div>
-                    }
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Validation Report Panel ────────────── */}
-              {(activePlan.validationReport?.length ?? 0) > 0 && (
-                <details style={{
-                  marginBottom: '1.25rem',
-                  background: 'var(--glass-bg)',
-                  border: '1px solid var(--glass-border)',
-                  borderRadius: '10px',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-secondary)',
-                }}>
-                  <summary style={{ fontWeight: 600, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                    🔧 Layout Auto-Corrections Applied ({activePlan.validationReport!.length})
-                  </summary>
-                  <ul style={{ margin: '0.5rem 0 0 1rem', padding: 0, lineHeight: 1.6 }}>
-                    {activePlan.validationReport!.map((entry, i) => (
-                      <li key={i}>{entry}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-
-              {/* Action bar */}
-              <div className="action-bar">
-                <button id="export-dxf-btn" className="action-btn success" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length}>
-                  {dxfLoading ? 'Exporting…' : '⬇ Download AutoCAD DXF'}
-                </button>
-                <button className="action-btn primary" onClick={handleSaveToDatabase} disabled={saveLoading || !currentRooms.length} style={{ backgroundColor: 'var(--accent-color)', color: '#fff' }}>
-                  {saveLoading ? 'Saving...' : '💾 Save to My Plans'}
-                </button>
-                <button className="action-btn" onClick={handleGenerate} disabled={loading}>
-                  {loading ? 'Generating…' : '↻ Regenerate Plan'}
-                </button>
-              </div>
-
-              {/* ── Vastu Analysis Panel ── */}
+              {/* Vastu Analysis — always first, always visible */}
               {activePlan.vastuResult && activePlan.vastuResult.rules.length > 0 && (
-                <div style={{ marginTop: '1.5rem', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '14px', overflow: 'hidden', backdropFilter: 'blur(12px)' }}>
-                  {/* Header row */}
-                  <button
-                    onClick={() => setVastuOpen(o => !o)}
-                    style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span style={{ fontSize: '1.1rem' }}>🧿</span>
-                      <span style={{ fontWeight: 700, fontSize: '1rem' }}>Vastu Analysis</span>
-                      <span style={{
-                        padding: '0.2rem 0.7rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700,
-                        background: activePlan.vastuScore >= 80 ? 'rgba(76,175,80,0.15)' : activePlan.vastuScore >= 60 ? 'rgba(255,167,38,0.15)' : 'rgba(239,83,80,0.15)',
-                        color: activePlan.vastuScore >= 80 ? '#4caf50' : activePlan.vastuScore >= 60 ? '#ffa726' : '#ef5350',
-                        border: `1px solid ${activePlan.vastuScore >= 80 ? 'rgba(76,175,80,0.3)' : activePlan.vastuScore >= 60 ? 'rgba(255,167,38,0.3)' : 'rgba(239,83,80,0.3)'}`
-                      }}>
-                        {activePlan.vastuScore}/100 — {activePlan.vastuResult.grade}
+                <div className="vastu-panel">
+                  <button onClick={() => setVastuOpen(o => !o)} className="vastu-panel-toggle">
+                    <span>🧿 Vastu Analysis</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className={`vastu-pill ${activePlan.vastuScore >= 90 ? 'vastu-pill--high' : activePlan.vastuScore >= 60 ? 'vastu-pill--med' : 'vastu-pill--low'}`}>
+                        {activePlan.vastuScore}/100
                       </span>
+                      <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{vastuOpen ? '▲' : '▼'}</span>
                     </div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{vastuOpen ? '▲ Hide' : '▼ Show breakdown'}</span>
                   </button>
-
                   {vastuOpen && (
-                    <div style={{ padding: '0 1.5rem 1.5rem' }}>
-
-                      {/* Auto-Fix button — shown when score < 100 */}
+                    <div className="vastu-panel-body">
                       {activePlan.vastuScore < 100 && (
-                        <button
-                          onClick={handleVastuFix}
-                          disabled={vastuFixing}
-                          style={{
-                            width: '100%', marginBottom: '1rem', padding: '0.85rem 1.5rem',
-                            background: vastuFixing
-                              ? 'rgba(138,255,196,0.15)'
-                              : 'var(--accent-gradient)',
-                            border: '1px solid var(--accent-color)', borderRadius: '10px',
-                            color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: vastuFixing ? 'wait' : 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem',
-                            transition: 'opacity 0.2s', opacity: vastuFixing ? 0.7 : 1,
-                            boxShadow: vastuFixing ? 'none' : 'var(--accent-glow)',
-                          }}
-                        >
-                          {vastuFixing ? (
-                            <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>✨</span> Optimising layout…</>
-                          ) : (
-                            <><span>✨</span> Auto-Fix Vastu — Reach Perfect Score</>
-                          )}
+                        <button onClick={handleVastuFix} disabled={vastuFixing} className="btn-primary" style={{ width: '100%', marginBottom: '1rem', justifyContent: 'center', fontSize: '0.8rem' }}>
+                          {vastuFixing ? '✨ Optimising...' : '✨ Auto-Fix Vastu'}
                         </button>
                       )}
-
-                      {/* Rule cards grid */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {activePlan.vastuResult.rules.map((r, i) => {
-                          const icon = r.status === 'pass' ? '✔' : r.status === 'warn' ? '⚠' : '✖';
-                          const clr  = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
-                          const bg   = r.status === 'pass' ? 'rgba(76,175,80,0.07)' : r.status === 'warn' ? 'rgba(255,167,38,0.07)' : 'rgba(239,83,80,0.07)';
                           if (r.max === 0) return null;
+                          const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
+                          const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
                           return (
-                            <div key={i} style={{ background: bg, border: `1px solid ${clr}30`, borderRadius: '10px', padding: '0.85rem 1rem' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                                  <span style={{ color: clr, marginRight: '0.4rem' }}>{icon}</span>{r.rule}
-                                </span>
-                                {r.max > 0 && <span style={{ fontSize: '0.75rem', color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>}
+                            <div key={i} className="vastu-rule-card" style={{ border: `1px solid ${clr}40` }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', alignItems: 'center' }}>
+                                <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span>{icon}</span>{r.rule}</strong>
+                                <span style={{ color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>
                               </div>
-                              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{r.detail}</p>
+                              <div style={{ opacity: 0.7, lineHeight: 1.3, fontSize: '0.72rem' }}>{r.detail}</div>
                             </div>
                           );
                         })}
@@ -577,6 +482,23 @@ export default function Editor() {
                 </div>
               )}
 
+
+              {/* Action bar */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button className="btn-primary" onClick={handleSaveToDatabase} disabled={saveLoading || !currentRooms.length} style={{ width: '100%', justifyContent: 'center' }}>
+                  {saveLoading ? 'Saving...' : '💾 Save to My Plans'}
+                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="btn-ghost" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
+                    {dxfLoading ? '...' : '⬇ DXF'}
+                  </button>
+                  <button className="btn-ghost" onClick={handleGenerate} disabled={loading} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
+                    {loading ? '...' : '↻ Redraw'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Room Editor — slides in below actions when a room is selected */}
               {selectedRoom && (
                 <RoomEditor
                   room={selectedRoom}
@@ -586,43 +508,59 @@ export default function Editor() {
                   onClose={() => setSelectedRoom(null)}
                 />
               )}
-            </div>
-          ) : plans.length > 0 ? (
-            <div>
-              <p className="gallery-heading">Generated Plans — click to inspect</p>
-              <div className="gallery">
-                {plans.map(plan => (
-                  <div key={plan.id} className="plan-card" onClick={() => openPlan(plan)}>
-                    <div className="plan-img">
-                      <img
-                        src={plan.imageUrl}
-                        alt="Floor plan concept"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    </div>
-                    <div className="plan-info">
-                      <span className="plan-id-text">{plan.id}</span>
-                      <span className="vastu-score">{plan.vastuScore}/100 Vastu</span>
-                    </div>
+
+              {/* Circulation Warning */}
+              {(activePlan.circulationWarnings?.length ?? 0) > 0 && (
+                <div style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.45)', borderRadius: '8px', padding: '0.6rem 0.9rem', fontSize: '0.78rem', color: 'var(--text-primary)' }}>
+                  <span style={{ fontSize: '1rem' }}>⚠️</span> <strong>Circulation Warning:</strong> {activePlan.circulationWarnings!.length} room(s) may lack paths.
+                </div>
+              )}
+
+              {/* Validation Report */}
+              {(activePlan.validationReport?.length ?? 0) > 0 && (
+                <details style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.6rem', fontSize: '0.78rem' }}>
+                  <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({activePlan.validationReport!.length})</summary>
+                  <ul style={{ margin: '0.5rem 0 0 1rem', padding: 0, opacity: 0.8 }}>
+                    {activePlan.validationReport!.map((entry, i) => <li key={i}>{entry}</li>)}
+                  </ul>
+                </details>
+              )}
+
+            </aside>
+            
+          </>
+        ) : plans.length > 0 ? (
+          <main className="results-pane panel-scroll-area">
+            <p className="panel-label" style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Generated Plans — click to inspect</p>
+            <div className="gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.5rem' }}>
+              {plans.map(plan => (
+                <div key={plan.id} className="card" onClick={() => openPlan(plan)} style={{ cursor: 'pointer', padding: 0, overflow: 'hidden', border: '1px solid var(--glass-border)', transition: 'transform 0.2s' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+                  <div style={{ height: '180px', background: '#fff' }}>
+                    <img src={plan.imageUrl} alt="Concept" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
-                ))}
+                  <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{plan.id.slice(0, 8)}</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-color)' }}>{plan.vastuScore} Vastu</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </main>
+        ) : (
+          <main className="results-pane" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+            <div style={{ fontSize: '4rem', background: 'var(--accent-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '1rem' }}>⬡</div>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>No Plans Yet</h2>
+            <p style={{ opacity: 0.7, maxWidth: '400px', margin: '0 auto 2rem', lineHeight: 1.6 }}>Configure your requirements on the left and click <strong>Generate Plans</strong> to get started.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', textAlign: 'left' }}>
+              <div style={{ background: 'var(--glass-bg)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                <strong>🤖 Generative Layouts</strong><br/><span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Llama-3 calculates precise rooms.</span>
+              </div>
+              <div style={{ background: 'var(--glass-bg)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                <strong>🗂 Export to CAD</strong><br/><span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Download perfectly scaled DXFs.</span>
               </div>
             </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon">⬡</div>
-              <h2>No Plans Yet</h2>
-              <p>Configure your requirements on the left and click <strong>Generate Plans</strong> to get started.</p>
-              <ul className="feature-list">
-                <li>🤖 Llama-3 calculates precise room coordinates</li>
-                <li>🎨 Pillow renders a perfect 2D PNG matching the JSON</li>
-                <li>🗂 Export any plan to AutoCAD DXF</li>
-                <li>💾 Save your progress to the Cloud</li>
-              </ul>
-            </div>
-          )}
-        </main>
+          </main>
+        )}
       </div>
     </div>
   );

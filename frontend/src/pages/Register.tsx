@@ -34,14 +34,7 @@ export default function Register() {
     }
   };
 
-  const inputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = 'var(--accent-color)';
-    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(138,255,196,0.15)';
-  };
-  const inputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = 'var(--input-border)';
-    e.currentTarget.style.boxShadow = 'none';
-  };
+
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative', overflow: 'hidden' }}>
@@ -62,11 +55,11 @@ export default function Register() {
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <input type="text" placeholder="Full Name" required value={name} onChange={e => setName(e.target.value)} style={inputStyle} onFocus={inputFocus} onBlur={inputBlur} />
-            <input type="email" placeholder="Email Address" required value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} onFocus={inputFocus} onBlur={inputBlur} />
-            <input type="password" placeholder="Password (min 6 characters)" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} onFocus={inputFocus} onBlur={inputBlur} />
-            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0 }}>⚠ {error}</p>}
-            <button type="submit" disabled={loading} style={btnStyle}>
+            <input type="text" placeholder="Full Name" className="input-field" required value={name} onChange={e => setName(e.target.value)} />
+            <input type="email" placeholder="Email Address" className="input-field" required value={email} onChange={e => setEmail(e.target.value)} />
+            <input type="password" placeholder="Password (min 6 characters)" className="input-field" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} />
+            {error && <p style={{ color: 'var(--error)', fontSize: '0.85rem', margin: 0 }}>⚠ {error}</p>}
+            <button type="submit" disabled={loading} className="btn-primary" style={{ padding: '0.9rem', fontSize: '1rem', width: '100%', justifyContent: 'center' }}>
               {loading ? 'Creating Account…' : 'Sign Up Free →'}
             </button>
           </form>
@@ -81,28 +74,4 @@ export default function Register() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: '0.85rem 1rem',
-  borderRadius: '10px',
-  border: '1px solid var(--glass-border)',
-  background: 'var(--glass-bg)',
-  color: 'var(--text-primary)',
-  fontSize: '0.95rem',
-  outline: 'none',
-  transition: 'border-color 0.2s, box-shadow 0.2s',
-  fontFamily: 'var(--font-primary)',
-};
 
-const btnStyle: React.CSSProperties = {
-  padding: '0.9rem',
-  borderRadius: '10px',
-  border: 'none',
-  background: 'var(--accent-gradient)',
-  color: 'var(--text-primary)',
-  fontSize: '1rem',
-  fontWeight: 700,
-  cursor: 'pointer',
-  transition: 'opacity 0.2s',
-  fontFamily: 'var(--font-primary)',
-  boxShadow: 'var(--accent-glow)',
-};
