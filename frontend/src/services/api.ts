@@ -8,6 +8,12 @@ interface FurnitureItem {
   height: number;
 }
 
+interface DoorSpec {
+  wall: 'top' | 'bottom' | 'left' | 'right';
+  position: number;
+  width: number;
+}
+
 export interface Room {
   name: string;
   x: number;
@@ -15,6 +21,7 @@ export interface Room {
   width: number;
   height: number;
   furniture?: FurnitureItem[];
+  doors?: DoorSpec[];
 }
 
 export interface VastuRule {

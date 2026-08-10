@@ -44,28 +44,40 @@ def export_to_dxf(rooms: list) -> bytes:
         mtext.dxf.char_height = SCALE * 0.6
         mtext.dxf.width       = w * 0.85
 
-        # ── Door arc (on the bottom wall) ─────────────────────────────────────
-        door_w = min(w * 0.28, SCALE * 3.5)
-        door_x = x + w * 0.12
-        door_y = y
+        # ── Doors (from layout engine coordinates) ─────────────────────────────
+        for door in room.get("doors", []):
+            door_w = door.get("width", 3) * SCALE
+            wall = door.get("wall", "bottom")
+            pos = door.get("position", 0) * SCALE
+            
+            door_x, door_y = x, y
+            start_angle, end_angle = 0, 90
 
-        msp.add_line(
-            (door_x, door_y),
-            (door_x + door_w, door_y),
-            dxfattribs={"layer": "DOORS", "lineweight": 13},
-        )
-        msp.add_arc(
-            center=(door_x, door_y),
-            radius=door_w,
-            start_angle=0,
-            end_angle=90,
-            dxfattribs={"layer": "DOORS", "lineweight": 13},
-        )
-        msp.add_line(
-            (door_x, door_y),
-            (door_x, door_y + door_w),
-            dxfattribs={"layer": "DOORS", "lineweight": 13},
-        )
+            if wall == "bottom":
+                door_x = x + pos
+                door_y = y
+                # draw arc sweeping up/right
+                msp.add_arc(center=(door_x, door_y), radius=door_w, start_angle=0, end_angle=90, dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x + door_w, door_y), dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x, door_y + door_w), dxfattribs={"layer": "DOORS", "lineweight": 13})
+            elif wall == "top":
+                door_x = x + pos
+                door_y = y + h
+                msp.add_arc(center=(door_x, door_y), radius=door_w, start_angle=270, end_angle=360, dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x + door_w, door_y), dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x, door_y - door_w), dxfattribs={"layer": "DOORS", "lineweight": 13})
+            elif wall == "left":
+                door_x = x
+                door_y = y + pos
+                msp.add_arc(center=(door_x, door_y), radius=door_w, start_angle=0, end_angle=90, dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x, door_y + door_w), dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x + door_w, door_y), dxfattribs={"layer": "DOORS", "lineweight": 13})
+            elif wall == "right":
+                door_x = x + w
+                door_y = y + pos
+                msp.add_arc(center=(door_x, door_y), radius=door_w, start_angle=90, end_angle=180, dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x, door_y + door_w), dxfattribs={"layer": "DOORS", "lineweight": 13})
+                msp.add_line((door_x, door_y), (door_x - door_w, door_y), dxfattribs={"layer": "DOORS", "lineweight": 13})
 
         # ── Width dimension line ──────────────────────────────────────────────
         try:

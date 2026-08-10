@@ -21,6 +21,8 @@ interface Plan {
   layout: { rooms?: Room[]; floors?: Floor[]; error?: string };
   vastuScore: number;
   vastuResult?: VastuResult;
+  circulationWarnings?: string[];
+  validationReport?: string[];
 }
 
 const INITIAL_FORM = {
@@ -161,6 +163,11 @@ export default function Editor() {
     setDxfLoading(true);
     try {
       await exportDxf(currentRooms, `${activePlan.id}_${floors[activeFloorIndex].level.replace(/\s+/g, '_')}`);
+      toast.success(
+        '✅ DXF downloaded — Scale: 1 unit = 1 ft = 304.8 mm (AutoCAD units: mm). ' +
+        'Verify units in AutoCAD with UNITS command before printing.',
+        { duration: 6000 }
+      );
     } catch (e: unknown) {
       const err = e as Error;
       toast.error(`DXF export failed: ${err.message}`);
@@ -424,6 +431,33 @@ export default function Editor() {
                     )}
                   </div>
                   <div className="blueprint-wrapper" style={{ flex: 1, minHeight: '400px' }}>
+                    {/* ── Circulation Warning (from API) ───────────────────── */}
+                    {(activePlan.circulationWarnings?.length ?? 0) > 0 && (
+                      <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: '0.6rem',
+                        background: 'rgba(234,179,8,0.12)',
+                        border: '1px solid rgba(234,179,8,0.45)',
+                        borderRadius: '8px', padding: '0.6rem 0.9rem',
+                        marginBottom: '0.75rem', fontSize: '0.78rem',
+                        color: 'var(--text-primary)',
+                      }}>
+                        <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
+                        <span>
+                          <strong>Structural Draft — Circulation Not Fully Validated.</strong>{' '}
+                          {activePlan.circulationWarnings!.length} room(s) may lack accessible paths.
+                          This plan is suitable for review but not construction without architect sign-off.
+                          <details style={{ marginTop: '0.3rem', cursor: 'pointer' }}>
+                            <summary style={{ fontSize: '0.74rem', opacity: 0.7 }}>Show details</summary>
+                            <ul style={{ margin: '0.3rem 0 0 1rem', padding: 0 }}>
+                              {activePlan.circulationWarnings!.map((w, i) => (
+                                <li key={i} style={{ marginBottom: '0.15rem' }}>{w}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        </span>
+                      </div>
+                    )}
+
                     {currentRooms.length > 0
                       ? <InteractiveBlueprint rooms={currentRooms} selectedRoom={selectedRoom} onRoomSelect={handleRoomSelect} onRoomDrop={handleLayoutUpdate} />
                       : <div className="blueprint-empty"><p>AI did not return layout data for this floor.</p></div>
@@ -431,6 +465,28 @@ export default function Editor() {
                   </div>
                 </div>
               </div>
+
+              {/* ── Validation Report Panel ────────────── */}
+              {(activePlan.validationReport?.length ?? 0) > 0 && (
+                <details style={{
+                  marginBottom: '1.25rem',
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '10px',
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                }}>
+                  <summary style={{ fontWeight: 600, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                    🔧 Layout Auto-Corrections Applied ({activePlan.validationReport!.length})
+                  </summary>
+                  <ul style={{ margin: '0.5rem 0 0 1rem', padding: 0, lineHeight: 1.6 }}>
+                    {activePlan.validationReport!.map((entry, i) => (
+                      <li key={i}>{entry}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
 
               {/* Action bar */}
               <div className="action-bar">

@@ -10,12 +10,22 @@
 ## Backend Processing Layer
 - **Framework:** Python + FastAPI
 - **Web Server:** Uvicorn (ASGI)
-- **Database:** MongoDB Atlas via Motor (Async PyMongo)
-- **Authentication:** Python-Jose (JWT), Bcrypt for password hashing
-- **Image Rendering:** Pillow (Python Imaging Library) to auto-scale and render floor plan PNGs in memory (Base64 streamed to client).
-- **CAD Exporter:** `ezdxf` to dynamically write structural boundaries to DXF.
+- **Database:** **MongoDB Atlas** via Motor (Async PyMongo). MONGO_URI is configured in `backend/.env`.
+  - ⚠️ NOT SQLite — any docs/notes saying SQLite are incorrect.
+- **Authentication:** Python-Jose (JWT HS256, 7-day expiry), Bcrypt password hashing. JWT_SECRET must be set in `.env` — no fallback.
+- **Image Rendering:** Pillow (Python Imaging Library), auto-scaled floor plan PNGs streamed as Base64 to client.
+- **CAD Exporter:** `ezdxf` — writes wall polylines + door arcs (per-wall, from layout JSON) to AutoCAD R2010-compatible DXF at 1ft = 304.8mm scale.
 
 ## AI Infrastructure
-- **Base Model:** Meta Llama-3 70B Instruct
-- **API Provider:** Hugging Face Inference API
-- **Prompt Strategy:** Chain-of-Thought (CoT) prompting enforcing grid-partitioning constraints and strict JSON payload outputs.
+- **Layout Engine:** **Deterministic Python** (`backend/architectural_layout.py`) — all room geometry, corridor, and door placement is handled in Python. The LLM is NOT used for spatial coordinates.
+- **Furniture Placement:** `backend/inference.py` injects standard furniture items deterministically (catalog-based, no LLM call).
+- **Vastu Scoring:** `backend/vastu_engine.py` — rule-based scorer (10 rules, 3×3 compass grid). Scoring only — no LLM repair loop exists.
+- **LLM Provider:** **Groq** (`api.groq.com/openai/v1`) — NOT Hugging Face.
+- **LLM Model:** `llama-3.3-70b-versatile`
+- **API Key:** `GROQ_API_KEY` in `backend/.env`
+
+## Security Notes (as of Aug 2026)
+- `/generate` and `/export/dxf` endpoints require valid JWT (`Depends(get_current_user)`).
+- JWT_SECRET raises `ValueError` on startup if missing (no insecure fallback).
+- Error responses are sanitized — no raw exceptions or API context leaked to frontend.
+- CORS is currently `allow_origins=["*"]` — restrict before production deployment.

@@ -7,7 +7,10 @@ from fastapi.security import OAuth2PasswordBearer
 from database import users_collection
 from bson import ObjectId
 
-SECRET_KEY = os.getenv("JWT_SECRET", "super_secret_fallback_key")
+SECRET_KEY = os.getenv("JWT_SECRET")
+if not SECRET_KEY:
+    raise ValueError("JWT_SECRET environment variable is missing. Do not run without a secret.")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 

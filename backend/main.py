@@ -29,14 +29,24 @@ from models import UserCreate, UserLogin, ProjectCreate, ProjectResponse
 
 app = FastAPI(title="AI Architect API")
 
+# ── CORS Setup ────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"],  # Dev frontend origin, change for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ── Startup Validation ────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    if not os.getenv("JWT_SECRET"):
+        raise ValueError("CRITICAL: JWT_SECRET environment variable is missing. Cannot boot securely.")
+    if not os.getenv("GROQ_API_KEY"):
+        raise ValueError("CRITICAL: GROQ_API_KEY environment variable is missing. Cannot generate AI layouts.")
+
+# ── Pydantic Models ───────────────────────────────────────────────────────────
 public_dir = os.path.join(os.path.dirname(__file__), "public")
 os.makedirs(os.path.join(public_dir, "downloads"), exist_ok=True)
 app.mount("/public", StaticFiles(directory=public_dir), name="public")
@@ -142,7 +152,7 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
 
 
 @app.post("/generate")
-def generate_plans(req: GenerateRequest):
+def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_current_user)):
     plan_id = f"plan_{uuid.uuid4().hex[:8]}"
 
     # ── 1. LLM generates the mathematical room layout (JSON) ──────────────────
@@ -164,7 +174,7 @@ def generate_plans(req: GenerateRequest):
     if "error" in json_layout:
         raise HTTPException(
             status_code=500,
-            detail=f"AI Layout Generation Failed: {json_layout['error']}"
+            detail="AI Layout Generation Failed. Please try again."
         )
 
     floors = json_layout.get("floors", [])
@@ -187,9 +197,10 @@ def generate_plans(req: GenerateRequest):
         data_uri = floors[0]["imageUrl"]
         
     except Exception as e:
+        print(f"Render Error: {str(e)}") # Log securely instead of leaking
         raise HTTPException(
             status_code=500,
-            detail=f"Floor Plan Rendering Failed: {str(e)}"
+            detail="Floor Plan Rendering Failed due to an internal error."
         )
 
     # ── 3. Score Vastu on the ground floor rooms ──────────────────────────────
@@ -205,11 +216,13 @@ def generate_plans(req: GenerateRequest):
         "status": "success",
         "candidates": [
             {
-                "id":          plan_id,
-                "imageUrl":    data_uri,
-                "layout":      json_layout,
-                "vastuScore":  vastu_result["score"],
-                "vastuResult": vastu_result,
+                "id":                   plan_id,
+                "imageUrl":             data_uri,
+                "layout":               json_layout,
+                "vastuScore":           vastu_result["score"],
+                "vastuResult":          vastu_result,
+                "validationReport":     json_layout.get("validation_report", []),
+                "circulationWarnings":  json_layout.get("circulation_warnings", []),
             }
         ],
     }
@@ -223,7 +236,7 @@ class DxfExportRequest(BaseModel):
 
 
 @app.post("/export/dxf")
-def export_dxf(req: DxfExportRequest):
+def export_dxf(req: DxfExportRequest, current_user: dict = Depends(get_current_user)):
     """Converts the JSON layout to an AutoCAD-ready DXF file."""
     try:
         dxf_bytes = export_to_dxf(req.rooms)
@@ -274,7 +287,7 @@ def regenerate_room(req: RegenerateRoomRequest):
         response = llm_client.chat.completions.create(
             model=MODEL,
             messages=messages,
-            max_tokens=1500,
+            max_tokens=4000,
             temperature=0.05,
         )
         content = response.choices[0].message.content
@@ -370,7 +383,7 @@ def vastu_fix(req: VastuFixRequest):
         response = llm_client.chat.completions.create(
             model=MODEL,
             messages=messages,
-            max_tokens=2000,
+            max_tokens=5000,
             temperature=0.02,
         )
         content  = response.choices[0].message.content

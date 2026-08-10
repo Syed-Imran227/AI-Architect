@@ -194,18 +194,58 @@ function FurnitureLayer({ room }: { room: Room }) {
 }
 
 
-function DoorArc({ room }: { room: Room }) {
-  const doorW = Math.min(room.width * 0.28, 3.5);
-  const dx = room.x + room.width * 0.12;
-  const dy = room.y + room.height;
+function DoorArcs({ room }: { room: Room }) {
+  if (!room.doors || room.doors.length === 0) return null;
+
   return (
     <g>
-      {/* Gap in wall */}
-      <line x1={dx} y1={dy} x2={dx + doorW} y2={dy}
-        stroke="white" strokeWidth={0.35} />
-      {/* Swing arc */}
-      <path d={`M ${dx} ${dy} L ${dx} ${dy - doorW} A ${doorW} ${doorW} 0 0 1 ${dx + doorW} ${dy}`}
-        fill="rgba(180,200,240,0.25)" stroke="#94a3b8" strokeWidth={0.12} strokeDasharray="0.5 0.3" />
+      {room.doors.map((door, idx) => {
+        const dw = door.width || 3;
+        const pos = door.position || 0;
+        let dx = 0, dy = 0;
+        let path = '';
+        let gapLine = null;
+
+        // Remember: SVG coords (y goes down).
+        // Backend maps: 'bottom' = y, 'top' = y+h, 'left' = x, 'right' = x+w
+        if (door.wall === 'bottom') {
+          // Top edge visually (y)
+          dx = room.x + pos;
+          dy = room.y;
+          // Gap in wall
+          gapLine = <line x1={dx} y1={dy} x2={dx + dw} y2={dy} stroke="#f8f9fb" strokeWidth={0.6} />;
+          // Swing up and right (into the room above, or out if exterior)
+          path = `M ${dx} ${dy} L ${dx} ${dy - dw} A ${dw} ${dw} 0 0 1 ${dx + dw} ${dy}`;
+        } else if (door.wall === 'top') {
+          // Bottom edge visually (y+h)
+          dx = room.x + pos;
+          dy = room.y + room.height;
+          gapLine = <line x1={dx} y1={dy} x2={dx + dw} y2={dy} stroke="#f8f9fb" strokeWidth={0.6} />;
+          // Swing down and right
+          path = `M ${dx} ${dy} L ${dx} ${dy + dw} A ${dw} ${dw} 0 0 0 ${dx + dw} ${dy}`;
+        } else if (door.wall === 'left') {
+          // Left edge visually (x)
+          dx = room.x;
+          dy = room.y + pos;
+          gapLine = <line x1={dx} y1={dy} x2={dx} y2={dy + dw} stroke="#f8f9fb" strokeWidth={0.6} />;
+          // Swing left and down
+          path = `M ${dx} ${dy} L ${dx - dw} ${dy} A ${dw} ${dw} 0 0 0 ${dx} ${dy + dw}`;
+        } else if (door.wall === 'right') {
+          // Right edge visually (x+w)
+          dx = room.x + room.width;
+          dy = room.y + pos;
+          gapLine = <line x1={dx} y1={dy} x2={dx} y2={dy + dw} stroke="#f8f9fb" strokeWidth={0.6} />;
+          // Swing right and down
+          path = `M ${dx} ${dy} L ${dx + dw} ${dy} A ${dw} ${dw} 0 0 1 ${dx} ${dy + dw}`;
+        }
+
+        return (
+          <g key={`${room.name}-door-${idx}`}>
+            {gapLine}
+            <path d={path} fill="rgba(180,200,240,0.3)" stroke="#64748b" strokeWidth={0.12} strokeDasharray="0.4 0.2" />
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -419,8 +459,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
             {/* Furniture — rendered from LLM coordinates (falls back to symbols) */}
             <FurnitureLayer room={room} />
 
-            {/* Door arc */}
-            {room.width > 4 && room.height > 4 && <DoorArc room={room} />}
+            {/* Doors */}
+            <DoorArcs room={room} />
 
             {/* Window marks */}
             {room.width > 5 && <WindowMarks room={room} />}

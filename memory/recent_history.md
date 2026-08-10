@@ -1,5 +1,11 @@
 # Recent History & Conversations
 
+## August 2026: Full-Stack Audit & Remediation
+- Replaced the LLM geometry generator with a **Deterministic Python Engine** (`architectural_layout.py`) that strictly enforces boundaries and tiling.
+- **Security & DB**: Corrected project documentation to reflect the actual MongoDB usage (was mistakenly documented as SQLite). Secured `/generate` and `/export/dxf` endpoints with JWT auth, and removed fallback JWT secrets.
+- **UX & Architecture**: Added circulation reachability detection, reporting landlocked rooms to the UI via a warning banner.
+- **Geometry Fixes**: Implemented a 3x3 ft door swing exclusion zone so furniture doesn't block doors. Fixed the DXF exporter to correctly map real door arcs instead of hardcoding a bottom-wall arc.
+
 ## UI Refinements
 - Modified the glassmorphism layout to ensure all cards have the exact same color variables.
 - Integrated a Uiverse `namecho` design toggle switch for the UI. Replaced static dark/purple states with `--toggle-off-bg` to correctly represent an "off-white" switch in light mode and "off-dark" switch in dark mode.

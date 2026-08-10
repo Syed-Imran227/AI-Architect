@@ -409,70 +409,72 @@ def _ensure_circulation(
     plot_h: float,
 ) -> tuple[list[dict], list[str]]:
     """
-    Find rooms blocked from the entrance and insert a corridor strip between
-    the entrance room and the blocked room.
+    Detects landlocked rooms (no doors, or doors with no adjacent room to reach).
+    Does NOT insert corridors — auto-insertion was spawning overlapping rectangles.
+    Instead, adds to the report so the API can surface circulation_warnings to the UI.
     """
-    if not rooms:
-        return rooms, report
-
-    ex, ey = entrance_point
-
-    # Find the room closest to the entrance (this is our "anchor")
-    def dist_to_entrance(r: dict) -> float:
-        cx = r["x"] + r["width"] / 2
-        cy = r["y"] + r["height"] / 2
-        return (cx - ex) ** 2 + (cy - ey) ** 2
-
-    entrance_room = min(rooms, key=dist_to_entrance)
-    inserted = 0
+    SKIP = {"staircase", "landing", "open area", "terrace", "balcony", "corridor"}
+    warnings: list[str] = []
 
     for room in rooms:
-        if room is entrance_room:
+        rname_lower = room["name"].lower()
+        if any(s in rname_lower for s in SKIP):
             continue
-        if _rooms_block_path(entrance_room, room, rooms, corridor_width):
-            # Insert a narrow corridor strip between them
-            cx_e = entrance_room["x"] + entrance_room["width"] / 2
-            cy_e = entrance_room["y"] + entrance_room["height"] / 2
-            cx_r = room["x"] + room["width"] / 2
-            cy_r = room["y"] + room["height"] / 2
 
-            # Determine corridor orientation based on dominant axis
-            if abs(cx_r - cx_e) > abs(cy_r - cy_e):
-                # Horizontal corridor
-                corr_x = min(cx_e, cx_r)
-                corr_y = (cy_e + cy_r) / 2 - corridor_width / 2
-                corr_w = abs(cx_r - cx_e)
-                corr_h = corridor_width
+        doors = room.get("doors", [])
+        if not doors:
+            warnings.append(f"'{room['name']}' has no door — may be inaccessible.")
+            continue
+
+        # Check each door: does it open onto a shared wall of any other room?
+        rx0, ry0 = room["x"], room["y"]
+        rx1, ry1 = rx0 + room["width"], ry0 + room["height"]
+        door_reachable = False
+
+        for door in doors:
+            wall = door.get("wall", "")
+            pos  = door.get("position", 0)
+            dw   = door.get("width", 3)
+
+            # Compute door segment endpoints in plot coordinates
+            if wall == "bottom":
+                d_x0, d_y0, d_x1, d_y1 = rx0 + pos, ry0, rx0 + pos + dw, ry0
+            elif wall == "top":
+                d_x0, d_y0, d_x1, d_y1 = rx0 + pos, ry1, rx0 + pos + dw, ry1
+            elif wall == "left":
+                d_x0, d_y0, d_x1, d_y1 = rx0, ry0 + pos, rx0, ry0 + pos + dw
+            elif wall == "right":
+                d_x0, d_y0, d_x1, d_y1 = rx1, ry0 + pos, rx1, ry0 + pos + dw
             else:
-                # Vertical corridor
-                corr_x = (cx_e + cx_r) / 2 - corridor_width / 2
-                corr_y = min(cy_e, cy_r)
-                corr_w = corridor_width
-                corr_h = abs(cy_r - cy_e)
+                continue
 
-            # Clamp corridor to plot
-            corr_x = max(0.0, min(corr_x, plot_w - corr_w))
-            corr_y = max(0.0, min(corr_y, plot_h - corr_h))
+            # Any neighbour whose bounding box touches this wall segment?
+            for other in rooms:
+                if other is room:
+                    continue
+                ox0, oy0 = other["x"], other["y"]
+                ox1, oy1 = ox0 + other["width"], oy0 + other["height"]
+                # Ranges overlap (1-D check on both axes with 1 ft tolerance)
+                h_overlap = d_x0 < ox1 + 1 and d_x1 > ox0 - 1
+                v_overlap = d_y0 < oy1 + 1 and d_y1 > oy0 - 1
+                if h_overlap and v_overlap:
+                    door_reachable = True
+                    break
+            if door_reachable:
+                break
 
-            corridor = {
-                "name":      "Corridor",
-                "x":         corr_x,
-                "y":         corr_y,
-                "width":     corr_w,
-                "height":    corr_h,
-                "furniture": [],
-            }
-            rooms.append(corridor)
-            inserted += 1
-            report.append(
-                f"Corridor: Inserted {corridor_width:.1f} ft corridor between "
-                f"'{entrance_room['name']}' and '{room['name']}'."
+        if not door_reachable:
+            warnings.append(
+                f"'{room['name']}' has door(s) but no adjacent room shares that wall — "
+                "it may be landlocked."
             )
 
-    if inserted == 0:
-        report.append("Circulation: All rooms reachable — no corridors inserted.")
+    if warnings:
+        report.append("CIRCULATION_WARNINGS:" + "|".join(warnings))
 
     return rooms, report
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
