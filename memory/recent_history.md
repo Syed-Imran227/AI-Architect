@@ -17,6 +17,17 @@
 - Refactored `Dashboard.tsx` to use strict domain types instead of `Record<string, unknown>`.
 - Added "Real Developer Refactoring Standard" rule to `.agents/AGENTS.md`.
 
+## August 2026: Technical Debt & Critical Bug Fixes
+- **State Sync**: Fixed the "Stale Concept Sketch" bug by forcing backend layout operations to re-render the PNG and propagate the new `imageUrl` via `handleLayoutUpdate`.
+- **Redundant Data**: Dropped `plotSize` from API payloads in favor of dynamic backend computation (`length * width`).
+- **UI Requirements**: Added a theme toggle button to `Editor.tsx` to unlock Light Mode.
+- **Error Handling**: 
+  - Added `try/except` guards around Groq/LLM network calls.
+  - Removed naive math fallbacks in room regeneration in favor of failing gracefully with a 400 status.
+  - Handled `InvalidId` exceptions explicitly in MongoDB auth and data repositories to return proper HTTP errors (401/404) instead of 500s.
+- **React Stability**: Fixed an illegitimate `exhaustive-deps` linter suppression by correctly wrapping `loadSavedProject` in a `useCallback`.
+- **Python Code Quality**: Resolved a `floors` variable shadowing issue in `engine_routes.py` and converted a mutable dict default (`{}`) to `Field(default_factory=dict)` in Pydantic models.
+
 ## August 2026: Roadmap Execution — Phases 1–3 Implemented
 
 ### Phase 1: Window Generation ✅

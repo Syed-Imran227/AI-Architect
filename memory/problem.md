@@ -20,3 +20,11 @@
 | 4 | **Unauthenticated LLM Routes** | Added `Depends(get_current_user)` to `/regenerate-room` and `/vastu-fix`. |
 | 5 | **Furniture Injection Overlaps** | `inject_furniture()` upgraded with 2D overlap checking against placed items AND door-swing zones. |
 | 6 | **DXF Exporter Arc Divergence** | Rewrote door arc logic to swing inward per wall direction; added `WALLOPENING` layer for the gap; clamped arc radius. Verified: 76 KB DXF with DOORS + WALLOPENING layers present. |
+| 7 | **Stale Concept Sketch (State Desync)** | Backend auto-fixes now return `imageUrl`; Frontend merges it properly via `handleLayoutUpdate`. |
+| 8 | **Missing Payload Propagation** | Refactored `handleLayoutUpdate` to accept optional `newImageUrl`. |
+| 9 | **Redundant State Data Risk** | Dropped `plotSize` from API models; backend computes it dynamically. |
+| 10 | **Missing Theme Toggle** | Added a functional theme toggle button to `Editor.tsx`. |
+| 11 | **Unhandled LLM Exceptions** | Wrapped Groq inference calls in `try/except`; properly returning HTTP 503 instead of raw 500s. |
+| 12 | **Stubbed Regeneration Fallback** | Removed naive math fallbacks; now fails gracefully with HTTP 400 on LLM non-convergence. |
+| 13 | **Suppressed Exhaustive-Deps** | Wrapped `loadSavedProject` in `useCallback`; removed erroneous `eslint-disable`. |
+| 14 | **Swallowed DB Exceptions** | Explicitly catch `InvalidId` in DB methods; surface genuine DB errors properly. |
