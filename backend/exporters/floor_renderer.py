@@ -153,14 +153,65 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
             # Door panel line
             draw.line([(dx, dy), (dx, dy - door_w)], fill=DOOR_CLR, width=1)
 
-        # ── Window marks (top wall) ────────────────────────────────────────
-        if rw > pl(5):
-            ww = min(int(rw * 0.35), pl(4))
-            wx0 = cx_px - ww // 2
-            wy  = ry0
-            draw.line([(wx0, wy), (wx0 + ww, wy)], fill=WIN_CLR, width=2)
-            for tx in [wx0, wx0 + ww // 2, wx0 + ww]:
-                draw.line([(tx, wy - 4), (tx, wy + 4)], fill=WIN_CLR, width=1)
+        # ── Window marks — data-driven from room["windows"] ───────────────
+        for win in room.get("windows", []):
+            wall    = win.get("wall", "")
+            w_pos   = win.get("position", 0)
+            w_width = win.get("width", 3)
+            gap_px  = 3    # pixels between the two parallel lines
+
+            if wall == "top":
+                wx1 = px(room["x"] + w_pos)
+                wx2 = px(room["x"] + w_pos + w_width)
+                wy  = ry0
+                draw.line([(wx1, wy), (wx2, wy)], fill=WIN_CLR, width=2)
+                draw.line([(wx1, wy - gap_px), (wx2, wy - gap_px)], fill=WIN_CLR, width=1)
+                for tx in [wx1, wx2]:
+                    draw.line([(tx, wy - 5), (tx, wy + 3)], fill=WIN_CLR, width=1)
+            elif wall == "bottom":
+                wx1 = px(room["x"] + w_pos)
+                wx2 = px(room["x"] + w_pos + w_width)
+                wy  = ry1
+                draw.line([(wx1, wy), (wx2, wy)], fill=WIN_CLR, width=2)
+                draw.line([(wx1, wy + gap_px), (wx2, wy + gap_px)], fill=WIN_CLR, width=1)
+                for tx in [wx1, wx2]:
+                    draw.line([(tx, wy - 3), (tx, wy + 5)], fill=WIN_CLR, width=1)
+            elif wall == "left":
+                wy1 = py(room["y"] + w_pos)
+                wy2 = py(room["y"] + w_pos + w_width)
+                wx  = rx0
+                draw.line([(wx, wy1), (wx, wy2)], fill=WIN_CLR, width=2)
+                draw.line([(wx - gap_px, wy1), (wx - gap_px, wy2)], fill=WIN_CLR, width=1)
+                for ty in [wy1, wy2]:
+                    draw.line([(wx - 5, ty), (wx + 3, ty)], fill=WIN_CLR, width=1)
+            elif wall == "right":
+                wy1 = py(room["y"] + w_pos)
+                wy2 = py(room["y"] + w_pos + w_width)
+                wx  = rx1
+                draw.line([(wx, wy1), (wx, wy2)], fill=WIN_CLR, width=2)
+                draw.line([(wx + gap_px, wy1), (wx + gap_px, wy2)], fill=WIN_CLR, width=1)
+                for ty in [wy1, wy2]:
+                    draw.line([(wx - 3, ty), (wx + 5, ty)], fill=WIN_CLR, width=1)
+
+        # ── Furniture ─────────────────────────────────────────────────────────
+        for furn in room.get("furniture", []):
+            fx0 = px(room["x"] + furn["x"])
+            fy0 = py(room["y"] + furn["y"])
+            fx1 = px(room["x"] + furn["x"] + furn["width"])
+            fy1 = py(room["y"] + furn["y"] + furn["height"])
+            fcx = (fx0 + fx1) // 2
+            fcy = (fy0 + fy1) // 2
+            
+            # Furniture fill + border
+            draw.rectangle([fx0, fy0, fx1, fy1], fill="#e2e8f0", outline="#94a3b8", width=1)
+            
+            # Furniture label
+            f_label = furn["name"].split(" ")[0]  # Just first word to fit
+            f_size = max(7, min(int((fx1 - fx0) * 0.15), 10))
+            ffont = _font(f_size)
+            _, _, ftw, fth = draw.textbbox((0, 0), f_label, font=ffont)
+            if ftw < (fx1 - fx0) * 0.9:
+                draw.text((fcx - ftw/2, fcy - fth/2), f_label, fill="#475569", font=ffont)
 
         # ── Labels ────────────────────────────────────────────────────────
         nf_size = max(11, min(int(min(rw, rh) * 0.14), 17))

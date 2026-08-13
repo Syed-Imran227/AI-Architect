@@ -113,6 +113,8 @@ def export_to_dxf(rooms: list) -> bytes:
     doc.layers.add("LABELS",      color=2)    # yellow
     doc.layers.add("DOORS",       color=3)    # green — inward arc + leaf
     doc.layers.add("WALLOPENING", color=7)    # white — wall gap at door
+    doc.layers.add("WINDOW",      color=4)    # cyan — window double-line symbol
+    doc.layers.add("FURNITURE",   color=8)    # dark gray
     doc.layers.add("DIMENSIONS",  color=4)    # cyan
 
     for room in rooms:
@@ -162,6 +164,57 @@ def export_to_dxf(rooms: list) -> bytes:
                 layer="DOORS",
             )
 
+        # ── Windows — double-line symbol on exterior walls ────────────────────
+        for window in room.get("windows", []):
+            wall    = window.get("wall", "")
+            w_pos   = window.get("position", 0) * SCALE
+            w_width = window.get("width", 3)    * SCALE
+            gap     = SCALE * 0.15   # 0.15 ft gap between the two parallel lines in mm
+            w_attribs = {"layer": "WINDOW", "lineweight": 25}
+
+            if wall == "top":
+                # SVG top = DXF bottom face (y=ry)
+                x1, x2, y = rx + w_pos, rx + w_pos + w_width, ry
+                msp.add_line((x1, y),       (x2, y),       dxfattribs=w_attribs)
+                msp.add_line((x1, y - gap), (x2, y - gap), dxfattribs=w_attribs)
+                for tx in [x1, x2]:
+                    msp.add_line((tx, y - gap * 2), (tx, y + gap), dxfattribs=w_attribs)
+            elif wall == "bottom":
+                # SVG bottom = DXF top face (y=ry+rh)
+                x1, x2, y = rx + w_pos, rx + w_pos + w_width, ry + rh
+                msp.add_line((x1, y),       (x2, y),       dxfattribs=w_attribs)
+                msp.add_line((x1, y + gap), (x2, y + gap), dxfattribs=w_attribs)
+                for tx in [x1, x2]:
+                    msp.add_line((tx, y - gap), (tx, y + gap * 2), dxfattribs=w_attribs)
+            elif wall == "left":
+                y1, y2, x = ry + w_pos, ry + w_pos + w_width, rx
+                msp.add_line((x,       y1), (x,       y2), dxfattribs=w_attribs)
+                msp.add_line((x - gap, y1), (x - gap, y2), dxfattribs=w_attribs)
+                for ty in [y1, y2]:
+                    msp.add_line((x - gap * 2, ty), (x + gap, ty), dxfattribs=w_attribs)
+            elif wall == "right":
+                y1, y2, x = ry + w_pos, ry + w_pos + w_width, rx + rw
+                msp.add_line((x,       y1), (x,       y2), dxfattribs=w_attribs)
+                msp.add_line((x + gap, y1), (x + gap, y2), dxfattribs=w_attribs)
+                for ty in [y1, y2]:
+                    msp.add_line((x - gap, ty), (x + gap * 2, ty), dxfattribs=w_attribs)
+
+        # ── Furniture ─────────────────────────────────────────────────────────────
+        for furn in room.get("furniture", []):
+            fx = rx + (furn["x"] * SCALE)
+            fy = ry + (furn["y"] * SCALE)
+            fw = furn["width"] * SCALE
+            fh = furn["height"] * SCALE
+            
+            pts = [(fx, fy), (fx + fw, fy), (fx + fw, fy + fh), (fx, fy + fh)]
+            msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": "FURNITURE", "lineweight": 13})
+            
+            # Furniture Label
+            fcx, fcy = fx + fw / 2, fy + fh / 2
+            f_label = msp.add_mtext(furn["name"], dxfattribs={"layer": "FURNITURE"})
+            f_label.set_location((fcx, fcy), attachment_point=5)
+            f_label.dxf.char_height = SCALE * 0.3
+            f_label.dxf.width = fw * 0.9
         # ── Width dimension line ──────────────────────────────────────────────
         try:
             dim = msp.add_linear_dim(

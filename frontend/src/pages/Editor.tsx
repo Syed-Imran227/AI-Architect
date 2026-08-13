@@ -1,18 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import '../App.css';
-import { generatePlans, exportDxf, saveProject, getProjectById, vastuFix } from '../services/api';
+import { generatePlans, exportDxf, exportReport, saveProject, getProjectById } from '../services/api';
 import toast from 'react-hot-toast';
-import type { Room, VastuResult } from '../services/api';
+import type { Room, VastuResult, NbcResult, FloorCirculation } from '../services/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
+import FloorPlan3D from '../components/FloorPlan3D';
 import RoomEditor from '../components/RoomEditor';
+import ComplianceSidebar from '../components/ComplianceSidebar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import FloatingOrbs from '../components/FloatingOrbs';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface Floor {
   level: string;
   rooms: Room[];
   imageUrl?: string;
+  circulation?: FloorCirculation;
 }
 
 interface Plan {
@@ -21,12 +25,13 @@ interface Plan {
   layout: { rooms?: Room[]; floors?: Floor[]; error?: string };
   vastuScore: number;
   vastuResult?: VastuResult;
+  nbcResult?: NbcResult;
   circulationWarnings?: string[];
   validationReport?: string[];
 }
 
 const INITIAL_FORM = {
-  plotSize: 1200, length: 40, width: 30, floors: 1,
+  length: 40, width: 30, floors: 1,
   duplex: false, bedrooms: 2, bathrooms: 2, kitchen: 1,
   balcony: 1, terrace: true, lift: false, parking: true,
   vastuToggle: true, entryDir: 'east',
@@ -36,6 +41,7 @@ export default function Editor() {
   const [loading, setLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [dxfLoading, setDxfLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
@@ -43,8 +49,13 @@ export default function Editor() {
   const [activeFloorIndex, setActiveFloorIndex] = useState(0);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
-  const [vastuOpen, setVastuOpen] = useState(false);
-  const [vastuFixing, setVastuFixing] = useState(false);
+  const [showCirculation, setShowCirculation] = useState(false);
+  const [show3D, setShow3D] = useState(false);
+
+  // Keep a ref always mirroring activeFloorIndex so memoised callbacks
+  // don't need it as a dependency and never capture a stale value.
+  const activeFloorIndexRef = useRef(0);
+  useEffect(() => { activeFloorIndexRef.current = activeFloorIndex; }, [activeFloorIndex]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,7 +81,8 @@ export default function Editor() {
     setSelectedRoom(null);
   };
 
-  const loadSavedProject = async (id: string) => {
+  // Issue 6: memoised so the useEffect dependency array is honest.
+  const loadSavedProject = useCallback(async (id: string) => {
     setLoading(true);
     try {
       const project = await getProjectById(id);
@@ -78,7 +90,7 @@ export default function Editor() {
         id: project.id,
         imageUrl: project.image_url || "",
         layout: project.layout_data || { rooms: [] },
-        vastuScore: 90, // Default for restored plans
+        vastuScore: 90,
       };
       setPlans([restoredPlan]);
       openPlan(restoredPlan);
@@ -89,17 +101,17 @@ export default function Editor() {
     } finally {
       setLoading(false);
     }
-  };
+  // openPlan is a stable plain function defined above; navigate is stable from react-router
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const projectId = params.get("project");
     if (projectId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadSavedProject(projectId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [location.search, loadSavedProject]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target as HTMLInputElement;
@@ -135,26 +147,34 @@ export default function Editor() {
 
   const handleRoomUpdate = useCallback((updated: Room) => {
     setFloors(prev => {
+      const idx = activeFloorIndexRef.current;
       const newFloors = [...prev];
-      newFloors[activeFloorIndex] = {
-        ...newFloors[activeFloorIndex],
-        rooms: newFloors[activeFloorIndex].rooms.map(r => r.name === updated.name ? updated : r)
+      newFloors[idx] = {
+        ...newFloors[idx],
+        rooms: newFloors[idx].rooms.map(r => r.name === updated.name ? updated : r)
       };
       return newFloors;
     });
     setSelectedRoom(updated);
-  }, [activeFloorIndex]);
+  }, []);
 
-  const handleLayoutUpdate = useCallback((updatedRooms: Room[]) => {
+  // Issue 1: accepts an optional imageUrl so that AI-mutated layouts stay in sync
+  // with the concept sketch, PDF export, and database saves.
+  const handleLayoutUpdate = useCallback((updatedRooms: Room[], imageUrl?: string) => {
     setFloors(prev => {
+      const idx = activeFloorIndexRef.current;
       const newFloors = [...prev];
-      newFloors[activeFloorIndex] = {
-        ...newFloors[activeFloorIndex],
-        rooms: updatedRooms
+      newFloors[idx] = {
+        ...newFloors[idx],
+        rooms: updatedRooms,
+        ...(imageUrl ? { imageUrl } : {}),
       };
       return newFloors;
     });
-  }, [activeFloorIndex]);
+    if (imageUrl) {
+      setActivePlan(prev => prev ? { ...prev, imageUrl } : prev);
+    }
+  }, []);
 
   const handleExportDxf = async () => {
     if (!activePlan || !floors.length) return;
@@ -173,6 +193,38 @@ export default function Editor() {
       toast.error(`DXF export failed: ${err.message}`);
     } finally {
       setDxfLoading(false);
+    }
+  };
+
+  const handleExportReport = async () => {
+    if (!activePlan || !floors.length) return;
+    setReportLoading(true);
+    toast.loading('📄 Generating PDF report…', { id: 'report-gen' });
+    try {
+      const bhk    = formData.bedrooms;
+      const dir    = formData.entryDir.charAt(0).toUpperCase() + formData.entryDir.slice(1);
+      const dupTag = formData.duplex ? ' Duplex' : '';
+      const meta   = {
+        name:      `${bhk}BHK${dupTag} ${dir}-facing ${formData.length}\u00d7${formData.width}ft`,
+        length:    formData.length,
+        width:     formData.width,
+        bedrooms:  formData.bedrooms,
+        bathrooms: formData.bathrooms,
+        entry_dir: formData.entryDir,
+        vastu:     formData.vastuToggle,
+      };
+      await exportReport(
+        activePlan.layout as Record<string, unknown>,
+        activePlan.vastuResult,
+        activePlan.id,
+        meta,
+      );
+      toast.success('✅ Architectural report downloaded!', { id: 'report-gen' });
+    } catch (e: unknown) {
+      const err = e as Error;
+      toast.error(`Report failed: ${err.message}`, { id: 'report-gen' });
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -200,43 +252,24 @@ export default function Editor() {
       setSaveLoading(false);
     }
   };
-  const handleVastuFix = async () => {
-    if (!activePlan?.vastuResult || !floors.length) return;
-    setVastuFixing(true);
-    toast.loading('✨ AI is optimising your Vastu layout…', { id: 'vastu-fix' });
-    try {
-      const currentRooms = floors[activeFloorIndex].rooms;
-      const result = await vastuFix(
-        currentRooms,
-        formData.length,
-        formData.width,
-        formData.entryDir,
-        activePlan.vastuResult.rules
-      );
-      // Update the active floor rooms
-      setFloors(prev => {
-        const next = [...prev];
-        next[activeFloorIndex] = { ...next[activeFloorIndex], rooms: result.rooms };
-        return next;
-      });
-      // Update the active plan score + image
-      setActivePlan(prev => prev ? {
-        ...prev,
-        vastuScore:  result.vastuScore,
-        vastuResult: result.vastuResult,
-        imageUrl:    result.imageUrl,
-      } : prev);
-      setVastuOpen(true);
-      toast.success(`✨ Vastu score improved to ${result.vastuScore}/100!`, { id: 'vastu-fix' });
-    } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(`Auto-fix failed: ${err.message}`, { id: 'vastu-fix' });
-    } finally {
-      setVastuFixing(false);
-    }
+
+  const currentRooms     = floors[activeFloorIndex]?.rooms       || [];
+  const floorCirculation = floors[activeFloorIndex]?.circulation ?? null;
+  const currentLayout    = activePlan?.layout as Record<string, unknown> | undefined;
+
+  // Derived plot context — passed into ComplianceSidebar and RoomEditor
+  const plotContext = {
+    plotWidth:  formData.length,
+    plotHeight: formData.width,
+    entryDir:   formData.entryDir,
+    bedrooms:   formData.bedrooms,
+    bathrooms:  formData.bathrooms,
+    floors:     formData.floors,
   };
 
-  const currentRooms = floors[activeFloorIndex]?.rooms || [];
+  const handleVastuUpdate = useCallback((newVastuResult: VastuResult, newScore: number) => {
+    setActivePlan(prev => prev ? { ...prev, vastuScore: newScore, vastuResult: newVastuResult } : prev);
+  }, []);
 
   return (
     <div className="app-container" style={{ position: 'relative', overflow: 'hidden' }}>
@@ -268,10 +301,13 @@ export default function Editor() {
           </div>
         </div>
 
-        {/* Right: user info */}
-        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-          {user?.name || 'Architect'}
-        </span>
+        {/* Right: theme toggle + user info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <ThemeToggle />
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+            {user?.name || 'Architect'}
+          </span>
+        </div>
       </header>
 
       <div className={`content-grid ${activePlan ? 'active-plan-view' : ''}`}>
@@ -281,7 +317,13 @@ export default function Editor() {
 
           <div className="form-group">
             <label>Plot Size (sq ft)</label>
-            <input type="number" name="plotSize" value={formData.plotSize} onChange={handleChange} />
+            <input
+              type="number"
+              value={formData.length * formData.width}
+              readOnly
+              style={{ opacity: 0.6, cursor: 'not-allowed' }}
+              title="Computed from Length × Width"
+            />
           </div>
           <div className="form-row">
             <div className="form-group">
@@ -411,7 +453,20 @@ export default function Editor() {
               </div>
               <div className="blueprint-wrapper" style={{ minHeight: '60vh', flexShrink: 0, position: 'relative', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
                 {currentRooms.length > 0
-                  ? <InteractiveBlueprint rooms={currentRooms} selectedRoom={selectedRoom} onRoomSelect={handleRoomSelect} onRoomDrop={handleLayoutUpdate} />
+                  ? (
+                    show3D ? (
+                      <FloorPlan3D rooms={currentRooms} />
+                    ) : (
+                      <InteractiveBlueprint
+                        rooms={currentRooms}
+                        selectedRoom={selectedRoom}
+                        onRoomSelect={handleRoomSelect}
+                        onRoomDrop={handleLayoutUpdate}
+                        circulation={floorCirculation}
+                        showCirculation={showCirculation}
+                      />
+                    )
+                  )
                   : <div className="blueprint-empty"><p>No layout data for this floor.</p></div>
                 }
               </div>
@@ -442,46 +497,15 @@ export default function Editor() {
                 </div>
               </div>
 
-              {/* Vastu Analysis — always first, always visible */}
-              {activePlan.vastuResult && activePlan.vastuResult.rules.length > 0 && (
-                <div className="vastu-panel">
-                  <button onClick={() => setVastuOpen(o => !o)} className="vastu-panel-toggle">
-                    <span>🧿 Vastu Analysis</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className={`vastu-pill ${activePlan.vastuScore >= 90 ? 'vastu-pill--high' : activePlan.vastuScore >= 60 ? 'vastu-pill--med' : 'vastu-pill--low'}`}>
-                        {activePlan.vastuScore}/100
-                      </span>
-                      <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{vastuOpen ? '▲' : '▼'}</span>
-                    </div>
-                  </button>
-                  {vastuOpen && (
-                    <div className="vastu-panel-body">
-                      {activePlan.vastuScore < 100 && (
-                        <button onClick={handleVastuFix} disabled={vastuFixing} className="btn-primary" style={{ width: '100%', marginBottom: '1rem', justifyContent: 'center', fontSize: '0.8rem' }}>
-                          {vastuFixing ? '✨ Optimising...' : '✨ Auto-Fix Vastu'}
-                        </button>
-                      )}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {activePlan.vastuResult.rules.map((r, i) => {
-                          if (r.max === 0) return null;
-                          const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
-                          const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
-                          return (
-                            <div key={i} className="vastu-rule-card" style={{ border: `1px solid ${clr}40` }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', alignItems: 'center' }}>
-                                <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span>{icon}</span>{r.rule}</strong>
-                                <span style={{ color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>
-                              </div>
-                              <div style={{ opacity: 0.7, lineHeight: 1.3, fontSize: '0.72rem' }}>{r.detail}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
+              <ComplianceSidebar
+                vastuScore={activePlan.vastuScore}
+                vastuResult={activePlan.vastuResult}
+                nbcResult={activePlan.nbcResult}
+                layout={currentLayout ?? {}}
+                plotContext={plotContext}
+                onLayoutUpdate={handleLayoutUpdate}
+                onVastuUpdate={handleVastuUpdate}
+              />
 
               {/* Action bar */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -491,6 +515,31 @@ export default function Editor() {
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button className="btn-ghost" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
                     {dxfLoading ? '...' : '⬇ DXF'}
+                  </button>
+                  <button className="btn-ghost" onClick={handleExportReport} disabled={reportLoading || !currentRooms.length} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
+                    {reportLoading ? '...' : '📄 Report'}
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => setShowCirculation(v => !v)}
+                    disabled={!floorCirculation}
+                    title={floorCirculation ? 'Toggle circulation path overlay' : 'Generate a plan to see paths'}
+                    style={{
+                      flex: 1, justifyContent: 'center', fontSize: '0.8rem',
+                      background: showCirculation ? 'rgba(34,197,94,0.15)' : undefined,
+                      borderColor: showCirculation ? '#22c55e' : undefined,
+                      color:       showCirculation ? '#22c55e' : undefined,
+                    }}
+                  >
+                    {showCirculation ? '🟢 Paths On' : '🛤 Show Paths'}
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => setShow3D(v => !v)}
+                    disabled={!currentRooms.length}
+                    style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}
+                  >
+                    {show3D ? '2D View' : '3D View'}
                   </button>
                   <button className="btn-ghost" onClick={handleGenerate} disabled={loading} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
                     {loading ? '...' : '↻ Redraw'}
@@ -503,18 +552,23 @@ export default function Editor() {
                 <RoomEditor
                   room={selectedRoom}
                   allRooms={currentRooms}
+                  plotContext={plotContext}
                   onRoomUpdate={handleRoomUpdate}
                   onLayoutUpdate={handleLayoutUpdate}
                   onClose={() => setSelectedRoom(null)}
                 />
               )}
 
-              {/* Circulation Warning */}
-              {(activePlan.circulationWarnings?.length ?? 0) > 0 && (
-                <div style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.45)', borderRadius: '8px', padding: '0.6rem 0.9rem', fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-                  <span style={{ fontSize: '1rem' }}>⚠️</span> <strong>Circulation Warning:</strong> {activePlan.circulationWarnings!.length} room(s) may lack paths.
-                </div>
-              )}
+              {/* Circulation Warning — sourced from the computed floor circulation data */}
+              {(() => {
+                const unreachable = floorCirculation?.unreachable ?? activePlan.circulationWarnings ?? [];
+                return unreachable.length > 0 ? (
+                  <div style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.45)', borderRadius: '8px', padding: '0.6rem 0.9rem', fontSize: '0.78rem', color: 'var(--text-primary)' }}>
+                    <span style={{ fontSize: '1rem' }}>⚠️</span> <strong>Circulation Warning:</strong>{' '}
+                    {unreachable.length} room(s) unreachable: {unreachable.join(', ')}
+                  </div>
+                ) : null;
+              })()}
 
               {/* Validation Report */}
               {(activePlan.validationReport?.length ?? 0) > 0 && (

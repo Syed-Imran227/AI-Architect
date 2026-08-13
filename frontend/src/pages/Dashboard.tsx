@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getProjects, deleteProject, Room } from '../services/api';
+import type { Room } from '../services/api';
+import { getProjects, deleteProject } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, Trash2, FolderOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -27,7 +28,7 @@ export default function Dashboard() {
 
 
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const data = await getProjects();
       setProjects(data);
@@ -36,12 +37,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProjects();
-  }, []);
+  }, [fetchProjects]);
 
 
 

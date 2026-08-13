@@ -18,8 +18,8 @@ from typing import Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
-from architectural_layout import build_layout_from_topology, inject_furniture, default_topology
-from layout_validator import boundary_check_only
+from engines.architectural_layout import build_layout_from_topology, inject_furniture, default_topology
+from engines.layout_validator import boundary_check_only
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -257,3 +257,261 @@ def _run_boundary_check(layout: dict, plot_w: float, plot_h: float) -> dict:
 def _validate_rooms(layout: dict, max_x: float, max_y: float) -> dict:
     """Legacy alias — now does boundary-only check."""
     return _run_boundary_check(layout, max_x, max_y)
+
+
+# ── Fix 1: LLM-driven Vastu topology correction ───────────────────────────────
+
+def _build_vastu_fix_prompt(
+    length: float, width: float,
+    bedrooms: int, bathrooms: int,
+    violated_rules: list[dict],
+    current_rationale: str,
+) -> str:
+    """Build a prompt asking the LLM to fix specific Vastu violations via topology changes."""
+    rule_lines = "\n".join(
+        f"  - {r['rule']}: {r['detail']} (currently {r['points']}/{r['max']})"
+        for r in violated_rules
+    )
+    return f"""
+You are the Lead AI Architect performing a Vastu compliance correction.
+
+# Current Layout
+- Plot: {length} ft wide x {width} ft deep
+- Bedrooms: {bedrooms}, Bathrooms: {bathrooms}
+- Current design rationale: {current_rationale}
+
+# Vastu Violations to Fix
+{rule_lines}
+
+# Your Task
+Revise the topology to address these violations. You MUST:
+1. Keep the 3-bay structure (left_bay, spine, right_bay) — do NOT output coordinates.
+2. Address the specific failing rules above (e.g. move Kitchen to SE by placing it in right_bay rear, move Master Bedroom to SW by placing it in left_bay).
+3. Kitchen in right_bay with kitchen_position "rear" puts it in the Southeast — ideal for Vastu.
+4. Master Bedroom in left_bay positions it in the Southwest — ideal for Vastu.
+5. Total bathrooms_allocated across both bays must sum to {bathrooms}.
+
+# Output Schema (ONLY this JSON, no wrapping, no explanations):
+{{
+  "topology": {{
+    "left_bay": {{
+      "rooms": ["Master Bedroom"],
+      "bathrooms_allocated": 1
+    }},
+    "right_bay": {{
+      "rooms": ["Living Room", "Dining Room", "Kitchen"],
+      "open_plan_living_dining": false,
+      "kitchen_position": "rear"
+    }},
+    "spine": {{
+      "rooms": ["Foyer", "Corridor", "Staircase"]
+    }}
+  }},
+  "design_rationale": "One sentence explaining the Vastu corrections made."
+}}
+"""
+
+
+def fix_vastu_topology(
+    length: float,
+    width: float,
+    bedrooms: int,
+    bathrooms: int,
+    floors: int,
+    entry_dir: str,
+    violated_rules: list[dict],
+    max_retries: int = 2,
+) -> dict:
+    """
+    Use the LLM to correct Vastu violations via topology changes, then rerun the Drafter.
+
+    Returns:
+        {
+          "layout": dict,               # new full floor layout
+          "converged": bool,            # True if score improved
+          "attempts": int,              # how many LLM calls were made
+          "design_rationale": str,
+        }
+    """
+    from architectural_layout import build_layout_from_topology, inject_furniture
+
+    best_layout: Optional[dict] = None
+    best_rationale = ""
+
+    current_violations = violated_rules
+    for attempt in range(1, max_retries + 1):
+        prompt = _build_vastu_fix_prompt(
+            length, width, bedrooms, bathrooms,
+            current_violations, best_rationale or "No prior rationale."
+        )
+        topology = _call_architect_llm(prompt, retries=1)
+
+        if topology is None:
+            print(f"[vastu-fix] Attempt {attempt}: LLM returned no topology — skipping.")
+            continue
+
+        try:
+            layout = build_layout_from_topology(
+                topology=topology,
+                length=length,
+                width=width,
+                bedrooms=bedrooms,
+                bathrooms=bathrooms,
+                floors=floors,
+                balcony=0,
+                terrace=0,
+                lift=0,
+                vastu=True,
+                entry_dir=entry_dir,
+            )
+            layout = inject_furniture(layout)
+            layout = _run_boundary_check(layout, length, width)
+            best_layout = layout
+            best_rationale = topology.design_rationale
+            print(f"[vastu-fix] Attempt {attempt}: topology applied. Rationale: {best_rationale}")
+            break  # one successful Drafter run is enough per attempt
+        except Exception as e:
+            print(f"[vastu-fix] Attempt {attempt}: Drafter failed — {e}")
+            continue
+
+    return {
+        "layout": best_layout,
+        "converged": best_layout is not None,
+        "attempts": attempt,
+        "design_rationale": best_rationale,
+    }
+
+
+# ── Fix 2: LLM-driven single-room topology regeneration ──────────────────────
+
+_ROOM_SIZE_VOCAB = {
+    "small":       0.7,
+    "compact":     0.8,
+    "medium":      1.0,
+    "large":       1.2,
+    "extra large": 1.4,
+    "bigger":      1.2,
+    "larger":      1.2,
+    "smaller":     0.8,
+    "wider":       1.2,
+    "narrower":    0.8,
+}
+
+def _build_room_regen_prompt(
+    room_name: str,
+    instruction: str,
+    length: float,
+    width: float,
+    bedrooms: int,
+    bathrooms: int,
+) -> str:
+    return f"""
+You are the Lead AI Architect handling a targeted room resize request.
+
+# Current Layout
+- Plot: {length} ft wide x {width} ft deep
+- Bedrooms: {bedrooms}, Bathrooms: {bathrooms}
+
+# User Request
+Room: "{room_name}"
+Instruction: "{instruction}"
+
+# Your Task
+Revise the topology to honour this request. The only thing you can change is:
+- Which bay a room is allocated to
+- The kitchen_position ("front" | "middle" | "rear")
+- The bathrooms_allocated counts
+
+You CANNOT change the 3-bay structure and MUST NOT output any coordinates.
+If the request implies the room should be larger, prioritise it in its bay by listing it first.
+If smaller, list it last.
+
+# Output Schema (ONLY this JSON, no wrapping):
+{{
+  "topology": {{
+    "left_bay": {{
+      "rooms": ["Master Bedroom", "Bedroom 2"],
+      "bathrooms_allocated": 2
+    }},
+    "right_bay": {{
+      "rooms": ["Living Room", "Dining Room", "Kitchen"],
+      "open_plan_living_dining": false,
+      "kitchen_position": "rear"
+    }},
+    "spine": {{
+      "rooms": ["Foyer", "Corridor", "Staircase"]
+    }}
+  }},
+  "design_rationale": "One sentence explaining what changed for the room."
+}}
+"""
+
+
+def fix_room_topology(
+    room_name: str,
+    instruction: str,
+    length: float,
+    width: float,
+    bedrooms: int,
+    bathrooms: int,
+    floors: int,
+    entry_dir: str,
+) -> dict:
+    """
+    Use the LLM to update the topology to honour a natural-language room edit,
+    then rerun the Drafter so the full layout is recomputed without overlaps.
+
+    Returns:
+        {
+          "layout": dict | None,
+          "converged": bool,
+          "design_rationale": str,
+          "llm_called": True,
+        }
+    """
+    from architectural_layout import build_layout_from_topology, inject_furniture
+
+    prompt = _build_room_regen_prompt(
+        room_name, instruction, length, width, bedrooms, bathrooms
+    )
+    topology = _call_architect_llm(prompt, retries=1)
+
+    if topology is None:
+        return {
+            "layout": None,
+            "converged": False,
+            "design_rationale": "LLM did not return a valid topology.",
+            "llm_called": True,
+        }
+
+    try:
+        layout = build_layout_from_topology(
+            topology=topology,
+            length=length,
+            width=width,
+            bedrooms=bedrooms,
+            bathrooms=bathrooms,
+            floors=floors,
+            balcony=0,
+            terrace=0,
+            lift=0,
+            vastu=False,
+            entry_dir=entry_dir,
+        )
+        layout = inject_furniture(layout)
+        layout = _run_boundary_check(layout, length, width)
+        print(f"[room-regen] LLM topology applied: {topology.design_rationale}")
+        return {
+            "layout": layout,
+            "converged": True,
+            "design_rationale": topology.design_rationale,
+            "llm_called": True,
+        }
+    except Exception as e:
+        print(f"[room-regen] Drafter failed after LLM topology: {e}")
+        return {
+            "layout": None,
+            "converged": False,
+            "design_rationale": f"Drafter error: {e}",
+            "llm_called": True,
+        }

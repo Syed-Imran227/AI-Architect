@@ -23,6 +23,8 @@ frontend InteractiveBlueprint.tsx require no changes.
 from __future__ import annotations
 import math
 from typing import Any, Optional
+from engines.window_placer import place_windows
+from engines.circulation import compute_paths
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 DOOR_W     = 3    # ft door width (standard 3-ft interior door)
@@ -97,7 +99,10 @@ def build_layout_from_topology(
 
         result_floors.append(fl)
 
-    return {"floors": result_floors}
+    layout = {"floors": result_floors}
+    place_windows(layout, plot_w=float(L), plot_h=float(W))
+    compute_paths(layout)
+    return layout
 
 
 # ── Bay width calculator ──────────────────────────────────────────────────────

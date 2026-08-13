@@ -14,6 +14,12 @@ interface DoorSpec {
   width: number;
 }
 
+export interface WindowSpec {
+  wall: 'top' | 'bottom' | 'left' | 'right';
+  position: number;
+  width: number;
+}
+
 export interface Room {
   name: string;
   x: number;
@@ -22,6 +28,7 @@ export interface Room {
   height: number;
   furniture?: FurnitureItem[];
   doors?: DoorSpec[];
+  windows?: WindowSpec[];
 }
 
 export interface VastuRule {
@@ -36,6 +43,42 @@ export interface VastuResult {
   score: number;
   grade: string;
   rules: VastuRule[];
+}
+
+export interface VastuFixResult {
+  status: string;
+  before_score: number;
+  after_score: number;
+  new_vastu_result?: VastuResult;
+  fixed_layout: Room[];
+  design_rationale?: string;
+  converged?: boolean;
+  message?: string;
+  imageUrl?: string;
+}
+
+export interface NbcRule {
+  rule: string;
+  status: 'pass' | 'warn' | 'fail';
+  points: number;
+  max: number;
+  detail: string;
+}
+
+export interface NbcResult {
+  score: number;
+  grade: string;
+  rules: NbcRule[];
+}
+
+export interface CirculationPath {
+  to: string;
+  waypoints: [number, number][];
+}
+
+export interface FloorCirculation {
+  paths: CirculationPath[];
+  unreachable: string[];
 }
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
@@ -139,29 +182,89 @@ export const exportDxf = async (rooms: Room[], planId: string): Promise<void> =>
 export const regenerateRoom = async (
   rooms: Room[],
   roomName: string,
-  instruction: string
-): Promise<{ rooms: Room[] }> => {
+  instruction: string,
+  plotContext: {
+    plotWidth: number;
+    plotHeight: number;
+    entryDir: string;
+    bedrooms: number;
+    bathrooms: number;
+    floors: number;
+  }
+): Promise<{ rooms: Room[]; imageUrl?: string; llm_called: boolean; design_rationale?: string }> => {
   const res = await fetch(`${API_BASE_URL}/regenerate-room`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ rooms, room_name: roomName, instruction }),
+    body: JSON.stringify({
+      rooms,
+      room_name: roomName,
+      instruction,
+      plot_width: plotContext.plotWidth,
+      plot_height: plotContext.plotHeight,
+      entry_dir: plotContext.entryDir,
+      bedrooms: plotContext.bedrooms,
+      bathrooms: plotContext.bathrooms,
+      floors: plotContext.floors,
+    }),
   });
   if (!res.ok) throw new Error(`AI editing failed: ${await res.text()}`);
   return res.json();
 };
 
 export const vastuFix = async (
-  rooms: Room[],
-  length: number,
-  width: number,
-  entryDir: string,
-  vastuRules: VastuRule[]
-): Promise<{ rooms: Room[]; vastuScore: number; vastuResult: VastuResult; imageUrl: string }> => {
-  const res = await fetch(`${API_BASE_URL}/vastu-fix`, {
+  layout: Record<string, unknown>,
+  vastuResult: VastuResult | undefined,
+  plotContext: {
+    plotWidth: number;
+    plotHeight: number;
+    entryDir: string;
+    bedrooms: number;
+    bathrooms: number;
+    floors: number;
+  }
+): Promise<VastuFixResult> => {
+  const res = await fetch(`${API_BASE_URL}/vastu/fix`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ rooms, length, width, entry_dir: entryDir, vastu_rules: vastuRules }),
+    body: JSON.stringify({
+      layout,
+      vastu_result: vastuResult ?? { score: 0, grade: "N/A", rules: [] },
+      plot_width: plotContext.plotWidth,
+      plot_height: plotContext.plotHeight,
+      entry_dir: plotContext.entryDir,
+      bedrooms: plotContext.bedrooms,
+      bathrooms: plotContext.bathrooms,
+      floors: plotContext.floors,
+    }),
   });
   if (!res.ok) throw new Error(`Vastu fix failed: ${await res.text()}`);
   return res.json();
+};
+
+export const exportReport = async (
+  layout: Record<string, unknown>,
+  vastuResult: VastuResult | undefined,
+  planId: string,
+  projectMeta: Record<string, unknown>
+): Promise<void> => {
+  const res = await fetch(`${API_BASE_URL}/export/pdf`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      layout,
+      vastu_result: vastuResult ?? { score: 0, grade: "N/A", rules: [] },
+      plan_id: planId,
+      project_meta: projectMeta,
+    }),
+  });
+  if (!res.ok) throw new Error(`Report export failed: ${await res.text()}`);
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `report_${planId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };

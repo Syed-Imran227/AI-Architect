@@ -12,20 +12,38 @@
 - **Web Server:** Uvicorn (ASGI)
 - **Database:** **MongoDB Atlas** via Motor (Async PyMongo). MONGO_URI is configured in `backend/.env`.
   - ⚠️ NOT SQLite — any docs/notes saying SQLite are incorrect.
-- **Authentication:** Python-Jose (JWT HS256, 7-day expiry), Bcrypt password hashing. JWT_SECRET must be set in `.env` — no fallback.
-- **Image Rendering:** Pillow (Python Imaging Library), auto-scaled floor plan PNGs streamed as Base64 to client.
-- **CAD Exporter:** `ezdxf` — writes wall polylines + door arcs (per-wall, from layout JSON) to AutoCAD R2010-compatible DXF at 1ft = 304.8mm scale.
+- **Authentication:** Python-Jose (JWT HS256, 7-day expiry), Bcrypt password hashing.
+- **Architecture & Structure:** Broken into distinct layers:
+  - `core/`: Application-level config (auth algorithms).
+  - `db/`: Pydantic models and the repository layer (`repositories.py`) for all Motor DB interactions.
+  - `engines/`: Deterministic architecture generation (`architectural_layout.py`), circulation mapping (`circulation.py`), window placement (`window_placer.py`), BOM estimation (`bom_engine.py`), and rule scoring (`vastu_engine.py`, `nbc_engine.py`).
+  - `exporters/`: Output generation (`pdf_report.py`, `dxf_exporter.py`, `floor_renderer.py`).
+  - `routers/`: API endpoints (`auth_routes.py`, `projects_routes.py`, `engine_routes.py`).
 
 ## AI Infrastructure
-- **Layout Engine:** **Deterministic Python** (`backend/architectural_layout.py`) — all room geometry, corridor, and door placement is handled in Python. The LLM is NOT used for spatial coordinates.
-- **Furniture Placement:** `backend/inference.py` injects standard furniture items deterministically (catalog-based, no LLM call).
-- **Vastu Scoring:** `backend/vastu_engine.py` — rule-based scorer (10 rules, 3×3 compass grid). Scoring only — no LLM repair loop exists.
+- **Layout Engine:** **Deterministic Python** (`backend/engines/architectural_layout.py`) — all room geometry, corridor, door, window, and circulation path placement is handled in Python. The LLM is NOT used for spatial coordinates.
+- **Window Placement:** `backend/engines/window_placer.py` — places windows on exterior walls after layout generation.
+- **Circulation Paths:** `backend/engines/circulation.py` — BFS pathfinder on room adjacency graph, computes walking waypoints from entrance to every room.
+- **Furniture Placement:** `backend/engines/architectural_layout.py:inject_furniture()` — catalog-based, no LLM call. Door-swing exclusion zones respected.
+- **Vastu Scoring:** `backend/engines/vastu_engine.py` — rule-based scorer (10 rules, 3×3 compass grid).
 - **LLM Provider:** **Groq** (`api.groq.com/openai/v1`) — NOT Hugging Face.
 - **LLM Model:** `llama-3.3-70b-versatile`
 - **API Key:** `GROQ_API_KEY` in `backend/.env`
 
+## API Endpoints (key)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/generate` | ✅ JWT | Generate floor plan (layout + Vastu score + images) |
+| POST | `/export/dxf` | ✅ JWT | Download DXF CAD file |
+| POST | `/export/report` | ✅ JWT | Download 4-page PDF report (BOM + Vastu + images) |
+| POST | `/vastu-fix` | ✅ JWT | AI-powered Vastu room repositioning |
+| POST | `/regenerate-room` | ✅ JWT | NL room editing via LLM |
+| GET/POST | `/projects` | ✅ JWT | CRUD for saved projects in MongoDB |
+| POST | `/auth/register` | ❌ | User registration |
+| POST | `/auth/login` | ❌ | User login (returns JWT) |
+
 ## Security Notes (as of Aug 2026)
-- `/generate` and `/export/dxf` endpoints require valid JWT (`Depends(get_current_user)`).
+- `/generate`, `/export/dxf`, `/export/report` endpoints require valid JWT (`Depends(get_current_user)`).
 - JWT_SECRET raises `ValueError` on startup if missing (no insecure fallback).
 - Error responses are sanitized — no raw exceptions or API context leaked to frontend.
-- CORS is currently `allow_origins=["*"]` — restrict before production deployment.
+- CORS is currently `allow_origins=["http://localhost:5173"]` — restrict to production domain before deployment.

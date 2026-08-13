@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Room } from '../services/api';
 import { regenerateRoom } from '../services/api';
+
+interface PlotContext {
+  plotWidth: number;
+  plotHeight: number;
+  entryDir: string;
+  bedrooms: number;
+  bathrooms: number;
+  floors: number;
+}
 
 interface Props {
   room: Room;
   allRooms: Room[];
+  plotContext: PlotContext;
   onRoomUpdate: (updated: Room) => void;
-  onLayoutUpdate: (updatedRooms: Room[]) => void;
+  onLayoutUpdate: (updatedRooms: Room[], imageUrl?: string) => void;
   onClose: () => void;
 }
 
@@ -19,7 +29,7 @@ const FIELD_LABELS: Record<NumericRoomKey, string> = {
   height: 'Height (ft)',
 };
 
-const RoomEditor: React.FC<Props> = ({ room, allRooms, onRoomUpdate, onLayoutUpdate, onClose }) => {
+const RoomEditor: React.FC<Props> = ({ room, allRooms, plotContext, onRoomUpdate, onLayoutUpdate, onClose }) => {
   const [local, setLocal] = useState<Room>({ ...room });
   const [prevRoomName, setPrevRoomName] = useState(room.name);
   const [instruction, setInstruction] = useState('');
@@ -27,14 +37,17 @@ const RoomEditor: React.FC<Props> = ({ room, allRooms, onRoomUpdate, onLayoutUpd
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiSuccess, setAiSuccess] = useState(false);
 
-  // Sync local state when the selected room changes from parent
-  if (room.name !== prevRoomName) {
-    setPrevRoomName(room.name);
-    setLocal({ ...room });
-    setInstruction('');
-    setAiError(null);
-    setAiSuccess(false);
-  }
+  // Sync local state when the selected room prop changes — must be a useEffect,
+  // never call setState directly in the render body (causes infinite re-render loop).
+  useEffect(() => {
+    if (room.name !== prevRoomName) {
+      setPrevRoomName(room.name);
+      setLocal({ ...room });
+      setInstruction('');
+      setAiError(null);
+      setAiSuccess(false);
+    }
+  }, [room, prevRoomName]);
 
   const handleFieldChange = (field: NumericRoomKey, val: number) => {
     setLocal(prev => ({ ...prev, [field]: val }));
@@ -54,12 +67,12 @@ const RoomEditor: React.FC<Props> = ({ room, allRooms, onRoomUpdate, onLayoutUpd
     setAiError(null);
     setAiSuccess(false);
     try {
-      const res = await regenerateRoom(allRooms, room.name, instruction);
+      const res = await regenerateRoom(allRooms, room.name, instruction, plotContext);
       if (res?.rooms?.length) {
-        onLayoutUpdate(res.rooms);
+        onLayoutUpdate(res.rooms, res.imageUrl);
         setInstruction('');
         setAiSuccess(true);
-        setTimeout(() => setAiSuccess(false), 2000);
+        setTimeout(() => { setAiSuccess(false); }, 3000);
       } else {
         setAiError('AI returned an unexpected response.');
       }

@@ -1,11 +1,14 @@
-import React, { useState, useRef } from 'react';
-import type { Room } from '../services/api';
+import React, { useState, useRef, useMemo } from 'react';
+import type { Room, FloorCirculation } from '../services/api';
+import CirculationOverlay from './CirculationOverlay';
 
 interface Props {
   rooms: Room[];
   selectedRoom: Room | null;
   onRoomSelect: (room: Room) => void;
-  onRoomDrop?: (updatedRooms: Room[]) => void;
+  onRoomDrop?: (updatedRooms: Room[], imageUrl?: string) => void;
+  circulation?: FloorCirculation | null;
+  showCirculation?: boolean;
 }
 
 // Professional 2D architectural color scheme per room type
@@ -300,7 +303,7 @@ function WindowMarks({ room }: { room: Room }) {
   );
 }
 
-const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop }) => {
+const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation }) => {
   // Drag overlay: only maintain local state during an active drag.
   // When not dragging, the parent prop is the source of truth (no sync needed).
   const [dragRooms, setDragRooms] = useState<Room[] | null>(null);
@@ -490,13 +493,13 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
             )}
 
             {/* Furniture — rendered from LLM coordinates (falls back to symbols) */}
-            <FurnitureLayer room={room} />
+            {useMemo(() => <FurnitureLayer room={room} />, [room.x, room.y, room.width, room.height, room.furniture, room.name])}
 
             {/* Doors */}
-            <DoorArcs room={room} />
+            {useMemo(() => <DoorArcs room={room} />, [room.x, room.y, room.width, room.height, room.doors])}
 
             {/* Window marks */}
-            {room.width > 5 && <WindowMarks room={room} />}
+            {useMemo(() => <WindowMarks room={room} />, [room.x, room.y, room.width, room.height, room.windows])}
 
             {/* Room name */}
             <text
@@ -605,6 +608,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
           </g>
         );
       })()}
+      {/* Circulation path overlay — toggled by the parent via showCirculation prop */}
+      <CirculationOverlay circulation={circulation ?? null} visible={showCirculation ?? false} />
     </svg>
   );
 });
