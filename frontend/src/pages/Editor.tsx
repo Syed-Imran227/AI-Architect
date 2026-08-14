@@ -90,7 +90,9 @@ export default function Editor() {
         id: project.id,
         imageUrl: project.image_url || "",
         layout: project.layout_data || { rooms: [] },
-        vastuScore: 90,
+        vastuScore: project.layout_data?.vastuScore ?? 90,
+        vastuResult: project.layout_data?.vastuResult,
+        nbcResult: project.layout_data?.nbcResult,
       };
       setPlans([restoredPlan]);
       openPlan(restoredPlan);
@@ -240,7 +242,12 @@ export default function Editor() {
 
       await saveProject({
         name: projectName,
-        layout_data: { floors },
+        layout_data: { 
+          floors,
+          vastuScore: activePlan.vastuScore,
+          vastuResult: activePlan.vastuResult,
+          nbcResult: activePlan.nbcResult,
+        },
         image_url: activePlan.imageUrl
       });
       toast.success('Design saved to My Plans!');

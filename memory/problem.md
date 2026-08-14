@@ -28,3 +28,4 @@
 | 12 | **Stubbed Regeneration Fallback** | Removed naive math fallbacks; now fails gracefully with HTTP 400 on LLM non-convergence. |
 | 13 | **Suppressed Exhaustive-Deps** | Wrapped `loadSavedProject` in `useCallback`; removed erroneous `eslint-disable`. |
 | 14 | **Swallowed DB Exceptions** | Explicitly catch `InvalidId` in DB methods; surface genuine DB errors properly. |
+| 15 | **Report Export Failed (Signature Mismatch)** | Fixed `compute_bom` signature to accept `(layout_or_rooms, sqft)` flexibly; hardened `pdf_report.py` table wrapping and `entry_dir` string formatting. |

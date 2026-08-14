@@ -81,6 +81,8 @@
 ### Phase 6: 3D WebGL Visualization ✅
 - **Description:** Extrude the 2D layout into an interactive 3D walkthrough view.
 - **Implementation:** Installed `@react-three/fiber` and `@react-three/drei`. Added `FloorPlan3D.tsx` component that extrudes floor plates and semi-transparent walls based on JSON. Added a "2D View" / "3D View" toggle switch in the Editor action bar.
+- **3D Furniture Overhaul:** Rewrote `FloorPlan3D.tsx` to include rich 3D meshes for all furniture items (beds with headboards, sofas, tables, TVs, toilets, kitchen counters, cars). Added realistic room floor/wall coloring and animated 3D staircase generation with handrails.
+- **Geometry Fixes:** Fixed a sizing bug in `architectural_layout.py` where the final bedroom would incorrectly inherit all remaining vertical space. Massively expanded `FURNITURE_CATALOG` to populate rooms realistically.
 
 ## UI Refinements (earlier)
 - Modified the glassmorphism layout to ensure all cards have the exact same color variables.

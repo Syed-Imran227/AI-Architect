@@ -189,11 +189,12 @@ def generate_report_pdf(
         textColor=BRAND_DARK, alignment=TA_CENTER, spaceAfter=10,
     )))
 
+    entry_dir_str = str(project_meta.get("entry_dir") or "N/A").capitalize()
     meta_data = [
         ["Plot Size",     f"{project_meta.get('length', 0)} × {project_meta.get('width', 0)} ft"],
         ["Bedrooms",      str(project_meta.get("bedrooms", 0))],
         ["Bathrooms",     str(project_meta.get("bathrooms", 0))],
-        ["Entry Facing",  project_meta.get("entry_dir", "N/A").capitalize()],
+        ["Entry Facing",  entry_dir_str],
         ["Vastu Enabled", "Yes" if project_meta.get("vastu") else "No"],
         ["Vastu Score",   f"{vastu_result.get('score', 0)}/100 ({vastu_result.get('grade', '')})"],
         ["Report Date",   date.today().strftime("%d %B %Y")],
@@ -218,8 +219,14 @@ def generate_report_pdf(
     story.append(HRFlowable(width="100%", thickness=1, color=BRAND_ACCENT, spaceAfter=8))
 
     floors = layout.get("floors", [])
+    if not floors:
+        img_url = layout.get("imageUrl", "")
+        rooms_list = layout.get("rooms", [])
+        if img_url or rooms_list:
+            floors = [{"level": "Ground Floor", "rooms": rooms_list, "imageUrl": img_url}]
+
     for floor in floors:
-        img_b64 = floor.get("imageUrl", "")
+        img_b64 = floor.get("imageUrl") or layout.get("imageUrl", "")
         if img_b64 and img_b64.startswith("data:image/png;base64,"):
             img_bytes = base64.b64decode(img_b64.split(",", 1)[1])
             img_buf = io.BytesIO(img_bytes)
@@ -253,13 +260,13 @@ def generate_report_pdf(
             status = r.get("status", "")
             icon   = "✅ Pass" if status == "pass" else ("⚠ Warn" if status == "warn" else "❌ Fail")
             vastu_rows.append([
-                r.get("rule", ""),
+                Paragraph(str(r.get("rule", "")), styles["body"]),
                 icon,
                 f"{r.get('points', 0)}/{r.get('max', 0)}",
-                r.get("detail", ""),
+                Paragraph(str(r.get("detail", "")), styles["body"]),
             ])
 
-        col_w = [5.5 * cm, 2 * cm, 2 * cm, 8 * cm]
+        col_w = [4.5 * cm, 2 * cm, 2 * cm, 9 * cm]
         vastu_table = Table(vastu_rows, colWidths=col_w, repeatRows=1)
         vastu_table.setStyle(_std_table_style(len(vastu_rows)))
         # Colour the status column by value

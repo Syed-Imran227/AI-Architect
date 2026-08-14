@@ -492,14 +492,14 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
               />
             )}
 
-            {/* Furniture — rendered from LLM coordinates (falls back to symbols) */}
-            {useMemo(() => <FurnitureLayer room={room} />, [room.x, room.y, room.width, room.height, room.furniture, room.name])}
+            {/* Furniture (bottom layer) */}
+            <FurnitureLayer room={room} />
 
             {/* Doors */}
-            {useMemo(() => <DoorArcs room={room} />, [room.x, room.y, room.width, room.height, room.doors])}
+            <DoorArcs room={room} />
 
             {/* Window marks */}
-            {useMemo(() => <WindowMarks room={room} />, [room.x, room.y, room.width, room.height, room.windows])}
+            <WindowMarks room={room} />
 
             {/* Room name */}
             <text

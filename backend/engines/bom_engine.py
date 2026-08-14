@@ -116,20 +116,30 @@ def _room_bom(room: dict) -> dict:
     }
 
 
-def compute_bom(layout: dict) -> dict:
+def compute_bom(layout_or_rooms: dict | list, sqft: float = 0.0) -> dict:
     """
-    Compute a full BOM for all rooms across all floors in the layout.
+    Compute a full BOM for all rooms across all floors or a raw list of rooms.
 
     Args:
-        layout: The full {floors: [{rooms: [...]}]} dict.
+        layout_or_rooms: The full {floors: [{rooms: [...]}]} dict, or {rooms: [...]}, or list of room dicts.
+        sqft: Optional square footage float.
 
     Returns:
         BOM dict with per-room breakdown and project summary.
     """
     all_room_boms: list[dict] = []
 
-    for floor in layout.get("floors", []):
-        for room in floor.get("rooms", []):
+    if isinstance(layout_or_rooms, dict):
+        floors = layout_or_rooms.get("floors", [])
+        if floors:
+            for floor in floors:
+                for room in floor.get("rooms", []):
+                    all_room_boms.append(_room_bom(room))
+        elif "rooms" in layout_or_rooms:
+            for room in layout_or_rooms.get("rooms", []):
+                all_room_boms.append(_room_bom(room))
+    elif isinstance(layout_or_rooms, list):
+        for room in layout_or_rooms:
             all_room_boms.append(_room_bom(room))
 
     # ── Summary ───────────────────────────────────────────────────────────────

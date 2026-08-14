@@ -20,10 +20,11 @@ The system uses an "Architect-Drafter" split:
 ### Analysis & Compliance
 - **Vastu Shastra Scoring:** 10-rule geometric scoring engine (3×3 compass grid). Auto-Fix loop repositions failing rooms via LLM.
 - **BOM Cost Estimation:** `bom_engine.py` computes room-level construction costs in INR (wall, flooring, MEP, openings + 30% labour).
-- **NBC 2016 Compliance:** (Phase 4 — upcoming) Setback, FAR, and minimum room-size checks against the Indian National Building Code.
+- **NBC 2016 Compliance:** Setback, FAR, and minimum room-size checks against the Indian National Building Code.
 
 ### Export & Reporting
-- **Interactive SVG Blueprint:** React 19 drag-and-drop canvas at 60FPS. Shows doors, windows (data-driven), furniture, circulation paths (toggle overlay).
+- **Interactive SVG Blueprint:** React 19 drag-and-drop canvas at 60FPS. Shows doors, windows, furniture, circulation paths.
+- **3D WebGL Visualization:** `react-three-fiber` extrusion of 2D plans into interactive 3D spaces with detailed furniture and staircase meshes.
 - **AutoCAD DXF Export:** Multi-layered DXF (WALLS, DOORS, WALLOPENING, WINDOW, LABELS, DIMENSIONS) at 1ft = 304.8mm scale.
 - **PNG Concept Sketch:** Pillow-rendered floor plan with grid, north arrow, scale bar, and title block.
 - **PDF Architectural Report:** 4-page ReportLab PDF — cover, floor plan images, Vastu table, BOM cost breakdown.

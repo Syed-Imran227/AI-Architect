@@ -333,7 +333,6 @@ def fix_vastu_topology(
           "design_rationale": str,
         }
     """
-    from architectural_layout import build_layout_from_topology, inject_furniture
 
     best_layout: Optional[dict] = None
     best_rationale = ""
@@ -469,7 +468,6 @@ def fix_room_topology(
           "llm_called": True,
         }
     """
-    from architectural_layout import build_layout_from_topology, inject_furniture
 
     prompt = _build_room_regen_prompt(
         room_name, instruction, length, width, bedrooms, bathrooms

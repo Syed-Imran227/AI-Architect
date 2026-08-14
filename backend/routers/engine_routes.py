@@ -155,14 +155,7 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
         width = float(req.project_meta.get("width", 30))
         sqft = round(length * width)
         
-        rooms = req.layout.get("rooms", [])
-        if not rooms:
-            # Fallback if the layout structure is slightly different (e.g. floors)
-            floors = req.layout.get("floors", [])
-            if floors:
-                rooms = floors[0].get("rooms", [])
-                
-        cost_bom = compute_bom(rooms, sqft)
+        cost_bom = compute_bom(req.layout, sqft)
         
         pdf_bytes = generate_report_pdf(
             layout=req.layout,
@@ -178,9 +171,11 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
                 "Content-Disposition": f'attachment; filename="report_{req.plan_id}.pdf"'
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"PDF Export Error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate PDF Report")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF Report: {str(e)}")
 
 
 class VastuFixRequest(BaseModel):

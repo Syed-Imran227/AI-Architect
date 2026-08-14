@@ -381,15 +381,18 @@ def _build_upper_floor(
                     break  # no space
 
                 if is_last:
-                    # Last bed takes all remaining space (minus bath if needed)
+                    # Last bed: take remaining space but cap it to a fair share
+                    # so it doesn't balloon to fill the entire leftover floor space
+                    max_bed_h = MIN_BED_H + bed_bonus + 5  # fair maximum
                     if has_bath:
                         bath_h = max(MIN_BATH_H, min(7, remaining - MIN_BED_H))
-                        bed_h  = remaining - bath_h
+                        bed_h  = min(remaining - bath_h, max_bed_h)
+                        # If bed_h shrank so much we have leftovers, give them a utility
                     else:
-                        bed_h  = remaining
+                        bed_h  = min(remaining, max_bed_h)
                         bath_h = 0
                 else:
-                    bath_h = MAX_BATH_H = min(7, MIN_BATH_H + 1) if has_bath else 0
+                    bath_h = min(7, MIN_BATH_H + 1) if has_bath else 0
                     bed_h  = max(MIN_BED_H, MIN_BED_H + bed_bonus)
                     # Clamp so we don't overshoot
                     slot = bed_h + bath_h
@@ -503,15 +506,113 @@ def build_layout(
 # ── Furniture injection (Phase 6 — unchanged from original but validated) ─────
 
 FURNITURE_CATALOG: dict[str, list[tuple]] = {
-    "living":         [("Sofa", 7, 3), ("Coffee Table", 4, 2), ("TV Unit", 5, 1), ("Armchair", 3, 3)],
-    "dining":         [("Dining Table", 5, 3), ("Dining Chair", 2, 2)],
-    "kitchen":        [("Kitchen Counter", 8, 2), ("Kitchen Island", 4, 2), ("Refrigerator", 2, 2)],
-    "master bedroom": [("Double Bed", 7, 5), ("Wardrobe", 5, 2), ("Dressing Table", 4, 2)],
-    "bedroom":        [("Single Bed", 6, 4), ("Wardrobe", 4, 2), ("Study Desk", 4, 2)],
-    "bathroom":       [("Toilet", 3, 2), ("Bathtub", 4, 3), ("Sink", 2, 1)],
-    "guest bathroom": [("Toilet", 3, 2), ("Sink", 2, 1)],
-    "balcony":        [("Garden Chair", 2, 2), ("Plant Pot", 1, 1)],
-    "terrace":        [("Patio Chair", 2, 2), ("Patio Table", 2, 2)],
+    # ── Living / Lounge ─────────────────────────────────────────────────────────
+    "living": [
+        ("3-Seat Sofa",    7, 3),
+        ("Coffee Table",   3, 2),
+        ("TV Unit",        5, 1),
+        ("Armchair",       2.5, 2.5),
+        ("Side Table",     1.5, 1.5),
+        ("Floor Lamp",     1, 1),
+    ],
+    # ── Dining Room ──────────────────────────────────────────────────────────────
+    "dining": [
+        ("Dining Table",   5, 3),
+        ("Dining Chair",   1.5, 1.5),
+        ("Dining Chair",   1.5, 1.5),
+        ("Dining Chair",   1.5, 1.5),
+        ("Dining Chair",   1.5, 1.5),
+        ("Sideboard",      4, 1.5),
+    ],
+    # ── Kitchen ──────────────────────────────────────────────────────────────────
+    "kitchen": [
+        ("Counter Top",    8, 2),
+        ("Kitchen Island", 4, 2.5),
+        ("Refrigerator",   2.5, 2),
+        ("Oven",           2, 2),
+        ("Sink",           2, 1.5),
+    ],
+    # ── Master Bedroom ───────────────────────────────────────────────────────────
+    "master bedroom": [
+        ("King Bed",        7, 6),
+        ("Bedside Table",   1.5, 1.5),
+        ("Bedside Table",   1.5, 1.5),
+        ("Wardrobe",        6, 2),
+        ("Dressing Table",  4, 1.5),
+        ("Vanity Mirror",   2, 0.5),
+        ("Bench",           4, 1.5),
+    ],
+    # ── Regular Bedrooms ─────────────────────────────────────────────────────────
+    "bedroom": [
+        ("Double Bed",     6, 5),
+        ("Bedside Table",  1.5, 1.5),
+        ("Wardrobe",       5, 2),
+        ("Study Desk",     4, 2),
+        ("Study Chair",    2, 2),
+        ("Bookshelf",      3, 1),
+    ],
+    # ── Bathrooms ────────────────────────────────────────────────────────────────
+    "bathroom": [
+        ("WC",             2, 2.5),
+        ("Bathtub",        5, 3),
+        ("Vanity Sink",    2.5, 1.5),
+        ("Shower",         2.5, 2.5),
+    ],
+    "guest bathroom": [
+        ("WC",             2, 2.5),
+        ("Pedestal Sink",  2, 1.5),
+        ("Shower",         2.5, 2.5),
+    ],
+    # ── Staircase ────────────────────────────────────────────────────────────────
+    "staircase": [
+        ("Step 01",  STAIR_W - 0.5, 1),
+        ("Step 02",  STAIR_W - 0.5, 1),
+        ("Step 03",  STAIR_W - 0.5, 1),
+        ("Step 04",  STAIR_W - 0.5, 1),
+        ("Step 05",  STAIR_W - 0.5, 1),
+        ("Step 06",  STAIR_W - 0.5, 1),
+        ("Step 07",  STAIR_W - 0.5, 1),
+        ("Handrail", 0.3,           STAIR_H - 2.5),
+    ],
+    # ── Corridors / Foyer ────────────────────────────────────────────────────────
+    "foyer": [
+        ("Shoe Rack",      3, 1),
+        ("Console Table",  3, 1),
+        ("Coat Hanger",    1, 1),
+    ],
+    "corridor": [
+        ("Wall Art",       2, 0.2),
+    ],
+    # ── Balcony / Terrace ────────────────────────────────────────────────────────
+    "balcony": [
+        ("Outdoor Chair",  2, 2),
+        ("Outdoor Chair",  2, 2),
+        ("Outdoor Table",  2, 2),
+        ("Plant Pot",      1, 1),
+        ("Plant Pot",      1, 1),
+    ],
+    "terrace": [
+        ("Patio Sofa",     4, 2),
+        ("Patio Table",    3, 3),
+        ("Patio Chair",    2, 2),
+        ("Plant Pot",      1, 1),
+        ("BBQ Grill",      2, 1.5),
+        ("Sun Lounger",    2, 5),
+    ],
+    # ── Parking / Utility ────────────────────────────────────────────────────────
+    "parking": [
+        ("Car",            8, 16),
+        ("Storage Shelf", 4, 1),
+    ],
+    "utility": [
+        ("Washing Machine", 2, 2),
+        ("Dryer",           2, 2),
+        ("Shelf Unit",      4, 1),
+    ],
+    "landing": [
+        ("Bookshelf",      3, 1),
+        ("Bench",          3, 1.5),
+    ],
 }
 
 SWING = 3.0   # door swing radius in ft
