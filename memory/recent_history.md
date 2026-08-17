@@ -1,5 +1,11 @@
 # Recent History & Conversations
 
+## Mid-August 2026: Model Swap & E2E Audit
+- **LLM Model Migration:** Benchmarked the top 5 open-weight models on HuggingFace for architectural topology generation. DeepSeek-R1 and V4-Pro ran into token limits, but DeepSeek-V3-0324 and Qwen3-Coder-30B-A3B-Instruct scored perfectly on accuracy.
+- **Resilient Inference Chain:** Upgraded `inference.py` to use a multi-provider fallback chain: DeepSeek-V3 (HuggingFace) -> Qwen3-Coder (HuggingFace) -> gpt-oss-120b (Groq). Re-configured API calls to use the new `router.huggingface.co/v1` endpoint.
+- **E2E Project Audit:** Ran a full e2e test suite (`test_backend.py`) verifying all routes (Auth, Generate, Vastu-Fix, DXF, PDF). Corrected a `MONGO_URI` silent fallback issue to fail loudly on startup. Fixed TypeScript compilation errors (`TS6133`, `TS2451`) in `Editor.tsx` and 3D UI files to ensure the Vite production build succeeds.
+- **UI Branding:** Updated the landing page to proudly display "Powered by DeepSeek AI".
+
 ## August 2026: Architect-Drafter AI Integration & Backend Refactoring
 - **Real AI Integration**: Fixed fake endpoints. `/vastu/fix` now queries Groq (Llama-3.3-70b-versatile) with failing Vastu rules to generate a revised architectural topology, then reruns the Python Drafter for overlap-free geometry. `/regenerate-room` now handles natural-language room edit instructions via the LLM instead of a hardcoded *1.2 multiplier.
 - **Backend Modularization**: Broke the single-folder backend monolith into proper Python packages (`core/`, `db/`, `engines/`, `exporters/`, `routers/`).

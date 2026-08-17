@@ -26,9 +26,9 @@
 - **Circulation Paths:** `backend/engines/circulation.py` — BFS pathfinder on room adjacency graph, computes walking waypoints from entrance to every room.
 - **Furniture Placement:** `backend/engines/architectural_layout.py:inject_furniture()` — catalog-based, no LLM call. Door-swing exclusion zones respected.
 - **Vastu Scoring:** `backend/engines/vastu_engine.py` — rule-based scorer (10 rules, 3×3 compass grid).
-- **LLM Provider:** **Groq** (`api.groq.com/openai/v1`) — NOT Hugging Face.
-- **LLM Model:** `llama-3.3-70b-versatile`
-- **API Key:** `GROQ_API_KEY` in `backend/.env`
+- **LLM Provider:** **HuggingFace Inference Router** (`router.huggingface.co/v1`) with Groq fallback.
+- **LLM Models:** Fallback chain: `deepseek-ai/DeepSeek-V3-0324` (HF) → `Qwen/Qwen3-Coder-30B-A3B-Instruct` (HF) → `openai/gpt-oss-120b` (Groq).
+- **API Keys:** `HF_API_KEY` and `GROQ_API_KEY` in `backend/.env`
 
 ## API Endpoints (key)
 | Method | Endpoint | Auth | Description |

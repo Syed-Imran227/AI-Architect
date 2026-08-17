@@ -40,7 +40,7 @@ export default function Landing() {
       <main ref={heroRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '6rem 2rem 4rem', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(138,255,196,0.1)', border: '1px solid rgba(138,255,196,0.2)', borderRadius: '20px', padding: '0.4rem 1rem', marginBottom: '2rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0070f3', display: 'inline-block' }} />
-          Powered by Groq AI · MongoDB Atlas
+          Powered by DeepSeek AI · MongoDB Atlas
         </div>
 
         <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 5.5rem)', lineHeight: 1.05, marginBottom: '1.5rem', maxWidth: '900px', fontWeight: 800, letterSpacing: '-0.03em' }}>
@@ -121,7 +121,7 @@ export default function Landing() {
         </div>
         <div ref={featuresRef} style={{ maxWidth: '1100px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
           {[
-            { icon: '🤖', title: 'AI Layout Engine', desc: 'Powered by LLaMA-3 70B, calculating mathematically precise room coordinates from your requirements.', color: '#0070f3' },
+            { icon: '🤖', title: 'AI Layout Engine', desc: 'Powered by DeepSeek-V3, calculating mathematically precise room coordinates from your requirements.', color: '#0070f3' },
             { icon: '⛩️', title: 'Vastu Compliance', desc: 'Auto-aligns Master Bedroom (SW), Kitchen (SE), and Entry for perfect Vastu Shastra harmony.', color: '#7928ca' },
             { icon: '📐', title: 'AutoCAD Export', desc: 'One-click .DXF export ready to drop into AutoCAD. Your engineers will thank you.', color: '#00c896' },
             { icon: '🖱️', title: 'Drag & Drop Editor', desc: 'Click and drag rooms in the interactive SVG blueprint. Edits sync to the JSON in real-time.', color: '#f59e0b' },
