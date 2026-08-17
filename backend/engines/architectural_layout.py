@@ -40,7 +40,7 @@ MIN_ROOM_H = 8    # ft generic minimum room depth
 def default_topology(bedrooms: int, bathrooms: int) -> Any:
     """Returns a sensible default TopologyResponse when the LLM is unavailable."""
     # Import here to avoid circular imports
-    from inference import TopologyResponse, TopologyBody, LeftBayTopology, RightBayTopology, SpineTopology
+    from engines.inference import TopologyResponse, TopologyBody, LeftBayTopology, RightBayTopology, SpineTopology
 
     left_beds  = math.ceil(bedrooms / 2)
     right_beds = bedrooms - left_beds
@@ -467,16 +467,12 @@ def _build_upper_floor(
 # ── Legacy build_layout shim (keeps old callers working) ─────────────────────
 
 def build_layout(
-    length: float, width: float,
-    bedrooms: int, bathrooms: int, floors: int,
-    balcony: int, terrace: int, lift: int,
-    vastu: bool, entry_dir: str,
+    length: float, width: float, bedrooms: int, bathrooms: int,
+    floors: int = 1, balcony: int = 0, terrace: int = 0, lift: int = 0,
+    vastu: bool = False, entry_dir: str = "East"
 ) -> dict:
-    """
-    Backward-compat shim used by tests.
-    Generates a default topology and runs the Drafter.
-    """
-    from inference import TopologyResponse, TopologyBody, LeftBayTopology, RightBayTopology, SpineTopology
+    """Legacy shim for tests/fallback that don't have an LLM topology yet."""
+    from engines.inference import LeftBayTopology, RightBayTopology, SpineTopology, TopologyBody, TopologyResponse
 
     left_beds  = math.ceil(bedrooms / 2)
     right_beds = bedrooms - left_beds
@@ -563,17 +559,7 @@ FURNITURE_CATALOG: dict[str, list[tuple]] = {
         ("Pedestal Sink",  2, 1.5),
         ("Shower",         2.5, 2.5),
     ],
-    # ── Staircase ────────────────────────────────────────────────────────────────
-    "staircase": [
-        ("Step 01",  STAIR_W - 0.5, 1),
-        ("Step 02",  STAIR_W - 0.5, 1),
-        ("Step 03",  STAIR_W - 0.5, 1),
-        ("Step 04",  STAIR_W - 0.5, 1),
-        ("Step 05",  STAIR_W - 0.5, 1),
-        ("Step 06",  STAIR_W - 0.5, 1),
-        ("Step 07",  STAIR_W - 0.5, 1),
-        ("Handrail", 0.3,           STAIR_H - 2.5),
-    ],
+
     # ── Corridors / Foyer ────────────────────────────────────────────────────────
     "foyer": [
         ("Shoe Rack",      3, 1),
@@ -620,11 +606,20 @@ SWING = 3.0   # door swing radius in ft
 
 def inject_furniture(layout: dict) -> dict:
     """
-    Place furniture inside rooms with 1.5 ft wall margin.
-    Respects a 3x3 ft door-swing exclusion zone.
-    Uses row-based packing; advances row height by max item in that row.
+    Place furniture using wall-hugging strategy (architecturally correct):
+      - Beds:    against the wall opposite the door, centred.
+      - Sofas:   against the back wall, facing toward the room centre.
+      - Counters: against the walls (L-shape for kitchen).
+      - Tables:  centred in the room with chairs arranged around.
+      - WC/Bath: against walls adjacent to plumbing (rear/side).
+      - Wardrobes: against the side wall next to the bed.
+    Falls back to margin-based row packing for any item that doesn't fit.
     """
-    MARGIN = 1.5
+    MARGIN = 1.2
+
+    def _door_wall(room: dict) -> str:
+        doors = room.get("doors", [])
+        return doors[0].get("wall", "right") if doors else "right"
 
     def _swing_zones(room: dict) -> list[tuple]:
         zones = []
@@ -632,21 +627,158 @@ def inject_furniture(layout: dict) -> dict:
         for door in room.get("doors", []):
             wall = door.get("wall", "")
             pos  = door.get("position", 0)
-            if wall == "bottom":  zones.append((pos, 0,        pos + SWING, SWING))
-            elif wall == "top":   zones.append((pos, rh - SWING, pos + SWING, rh))
-            elif wall == "left":  zones.append((0,  pos,       SWING, pos + SWING))
-            elif wall == "right": zones.append((rw - SWING, pos, rw, pos + SWING))
+            if wall == "bottom":  zones.append((pos, 0,           pos + SWING, SWING))
+            elif wall == "top":   zones.append((pos, rh - SWING,  pos + SWING, rh))
+            elif wall == "left":  zones.append((0,   pos,          SWING,       pos + SWING))
+            elif wall == "right": zones.append((rw - SWING, pos,  rw,          pos + SWING))
         return zones
 
     def _overlaps(fx, fy, fw, fh, zones, placed):
-        # Check door-swing zones
         for (zx0, zy0, zx1, zy1) in zones:
             if fx < zx1 and fx + fw > zx0 and fy < zy1 and fy + fh > zy0:
                 return True
-        # Check already-placed furniture
         for p in placed:
             if (fx < p["x"] + p["width"] and fx + fw > p["x"] and
                 fy < p["y"] + p["height"] and fy + fh > p["y"]):
+                return True
+        return False
+
+    def _try_place(fx, fy, fw, fh, rw, rh, zones, placed) -> bool:
+        """Return True and append to placed if the position is valid."""
+        if fx < MARGIN or fy < MARGIN:
+            return False
+        if fx + fw + MARGIN > rw or fy + fh + MARGIN > rh:
+            return False
+        if _overlaps(fx, fy, fw, fh, zones, placed):
+            return False
+        placed.append({"name": "", "x": round(fx, 1), "y": round(fy, 1),
+                        "width": fw, "height": fh})
+        return True
+
+    def _wall_place(fname, fw, fh, rw, rh, dwall, zones, placed) -> bool:
+        """Try to hug a wall appropriate for this furniture type."""
+        n = fname.lower()
+        cx = rw / 2
+        cy = rh / 2
+
+        # Compute wall-hugged positions for each cardinal wall
+        candidates: list[tuple[float, float]] = []
+
+        # Bed: opposite wall to door, centred horizontally
+        if any(k in n for k in ('bed', 'king', 'double', 'single')):
+            opp = {"right": "left", "left": "right", "top": "bottom", "bottom": "top"}.get(dwall, "left")
+            if opp == "left":    candidates = [(MARGIN,          cy - fh / 2)]
+            elif opp == "right": candidates = [(rw - fw - MARGIN, cy - fh / 2)]
+            elif opp == "top":   candidates = [(cx - fw / 2,      MARGIN)]
+            else:                candidates = [(cx - fw / 2,      rh - fh - MARGIN)]
+
+        # Sofa: back wall (opposite door), centred
+        elif any(k in n for k in ('sofa', 'couch')):
+            if dwall == "bottom": candidates = [(cx - fw/2, MARGIN)]
+            elif dwall == "top":  candidates = [(cx - fw/2, rh - fh - MARGIN)]
+            elif dwall == "left": candidates = [(rw - fw - MARGIN, cy - fh/2)]
+            else:                 candidates = [(MARGIN, cy - fh/2)]
+
+        # TV unit: wall opposite sofa (same as door wall side)
+        elif 'tv' in n:
+            if dwall == "bottom": candidates = [(cx - fw/2, rh - fh - MARGIN)]
+            elif dwall == "top":  candidates = [(cx - fw/2, MARGIN)]
+            elif dwall == "left": candidates = [(MARGIN, cy - fh/2)]
+            else:                 candidates = [(rw - fw - MARGIN, cy - fh/2)]
+
+        # Counter/island/sink: back wall or side wall
+        elif any(k in n for k in ('counter', 'island', 'sink', 'oven', 'refrigerator', 'fridge')):
+            candidates = [
+                (MARGIN, rh - fh - MARGIN),          # back wall
+                (rw - fw - MARGIN, rh - fh - MARGIN), # right-back corner
+                (MARGIN, MARGIN),                      # front wall
+                (rw - fw - MARGIN, MARGIN),
+            ]
+
+        # WC / toilet: corner of bathroom
+        elif any(k in n for k in ('wc', 'toilet')):
+            candidates = [
+                (MARGIN, MARGIN),
+                (rw - fw - MARGIN, MARGIN),
+                (MARGIN, rh - fh - MARGIN),
+                (rw - fw - MARGIN, rh - fh - MARGIN),
+            ]
+
+        # Bathtub: long wall
+        elif any(k in n for k in ('bathtub', 'bath tub')):
+            if rw >= rh:  # wider room → along bottom or top
+                candidates = [(MARGIN, rh - fh - MARGIN), (MARGIN, MARGIN)]
+            else:
+                candidates = [(rw - fw - MARGIN, MARGIN), (MARGIN, MARGIN)]
+
+        # Shower: corner
+        elif 'shower' in n:
+            candidates = [
+                (rw - fw - MARGIN, rh - fh - MARGIN),
+                (MARGIN, rh - fh - MARGIN),
+                (rw - fw - MARGIN, MARGIN),
+            ]
+
+        # Wardrobe: side wall
+        elif any(k in n for k in ('wardrobe', 'cabinet', 'bookshelf', 'shelf')):
+            candidates = [
+                (rw - fw - MARGIN, MARGIN),
+                (MARGIN, MARGIN),
+                (rw - fw - MARGIN, rh - fh - MARGIN),
+            ]
+
+        # Dining/coffee table: centred
+        elif 'table' in n:
+            candidates = [(cx - fw/2, cy - fh/2)]
+
+        # Chairs: around dining table (inferred from placed items)
+        elif 'chair' in n:
+            tbl = next((p for p in placed if 'table' in p.get('name','').lower()), None)
+            if tbl:
+                tx, ty, tw, th = tbl['x'], tbl['y'], tbl['width'], tbl['height']
+                candidates = [
+                    (tx + tw/2 - fw/2, ty - fh - 0.5),           # top
+                    (tx + tw/2 - fw/2, ty + th + 0.5),            # bottom
+                    (tx - fw - 0.5,    ty + th/2 - fh/2),         # left
+                    (tx + tw + 0.5,    ty + th/2 - fh/2),         # right
+                ]
+            else:
+                candidates = [(cx - fw/2, cy - fh/2)]
+
+        # Desk: side wall
+        elif any(k in n for k in ('desk', 'dressing', 'console', 'vanity', 'sideboard', 'bench', 'shoe rack', 'coat')):
+            candidates = [
+                (MARGIN, MARGIN),
+                (rw - fw - MARGIN, MARGIN),
+                (MARGIN, rh - fh - MARGIN),
+            ]
+
+        # Car: centred
+        elif 'car' in n:
+            candidates = [(cx - fw/2, cy - fh/2)]
+
+        # Plant / Floor lamp: corners
+        elif any(k in n for k in ('plant', 'pot', 'lamp', 'floor lamp')):
+            candidates = [
+                (rw - fw - MARGIN, MARGIN),
+                (MARGIN, MARGIN),
+                (rw - fw - MARGIN, rh - fh - MARGIN),
+                (MARGIN, rh - fh - MARGIN),
+            ]
+
+        else:
+            candidates = [
+                (MARGIN, MARGIN),
+                (cx - fw/2, MARGIN),
+                (rw - fw - MARGIN, MARGIN),
+            ]
+
+        for (fx, fy) in candidates:
+            fx, fy = round(fx, 1), round(fy, 1)
+            if (fx >= MARGIN and fy >= MARGIN and
+                    fx + fw + MARGIN <= rw and fy + fh + MARGIN <= rh and
+                    not _overlaps(fx, fy, fw, fh, zones, placed)):
+                placed.append({"name": fname, "x": fx, "y": fy, "width": fw, "height": fh})
                 return True
         return False
 
@@ -660,28 +792,30 @@ def inject_furniture(layout: dict) -> dict:
                     catalog = FURNITURE_CATALOG[key]
                     break
 
+            dwall      = _door_wall(room)
             swing_zones = _swing_zones(room)
             placed: list[dict] = []
-            x_cur, y_cur, row_h = MARGIN, MARGIN, 0
 
             for (fname, fw, fh) in catalog:
-                # Try current position
-                attempts = 0
-                while attempts < 6:
+                # Try architectural wall-hugging placement first
+                if _wall_place(fname, fw, fh, rw, rh, dwall, swing_zones, placed):
+                    continue
+                # Fallback: row-based scan
+                x_cur, y_cur, row_h = MARGIN, MARGIN, 0
+                for _ in range(8):
                     if x_cur + fw + MARGIN > rw:
                         x_cur  = MARGIN
-                        y_cur += row_h + 1.0
+                        y_cur += row_h + 0.8
                         row_h  = 0
                     if y_cur + fh + MARGIN > rh:
-                        break  # no more vertical space
+                        break
                     if not _overlaps(x_cur, y_cur, fw, fh, swing_zones, placed):
                         placed.append({"name": fname, "x": round(x_cur, 1), "y": round(y_cur, 1),
-                                       "width": fw, "height": fh})
+                                        "width": fw, "height": fh})
                         row_h  = max(row_h, fh)
-                        x_cur += fw + 1.0
+                        x_cur += fw + 0.8
                         break
-                    x_cur += fw + 1.0
-                    attempts += 1
+                    x_cur += fw + 0.8
 
             room["furniture"] = placed
 

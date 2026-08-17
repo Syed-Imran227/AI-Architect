@@ -59,14 +59,13 @@ export default function Editor() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    // Basic redirect if not logged in
-    if (!localStorage.getItem("token")) {
+    if (!authLoading && !user) {
       navigate('/login');
     }
-  }, [navigate]);
+  }, [authLoading, user, navigate]);
 
   const openPlan = (plan: Plan) => {
     setActivePlan(plan);
@@ -171,11 +170,18 @@ export default function Editor() {
         rooms: updatedRooms,
         ...(imageUrl ? { imageUrl } : {}),
       };
+      
+      setActivePlan(prevPlan => prevPlan ? {
+        ...prevPlan,
+        layout: {
+          ...prevPlan.layout,
+          floors: newFloors
+        },
+        ...(imageUrl ? { imageUrl } : {})
+      } : prevPlan);
+      
       return newFloors;
     });
-    if (imageUrl) {
-      setActivePlan(prev => prev ? { ...prev, imageUrl } : prev);
-    }
   }, []);
 
   const handleExportDxf = async () => {
@@ -289,7 +295,6 @@ export default function Editor() {
         justifyContent: 'space-between',
         alignItems: 'center',
         background: 'var(--nav-bg)',
-        backdropFilter: 'blur(16px)',
         borderBottom: '1px solid var(--nav-border)',
         position: 'sticky',
         top: 0,
@@ -416,7 +421,8 @@ export default function Editor() {
                   className={`history-item ${activePlan?.id === p.id ? 'active' : ''}`}
                   onClick={() => openPlan(p)}
                 >
-                  {p.id}
+                  <span style={{ fontWeight: 500 }}>{formData.bedrooms}BHK · {formData.entryDir.charAt(0).toUpperCase() + formData.entryDir.slice(1)} · {formData.length}×{formData.width}ft</span>
+                  <span style={{ fontSize: '0.65rem', opacity: 0.6, marginLeft: '0.5rem' }}>{p.id.slice(0, 8)}</span>
                 </button>
               ))}
             </div>

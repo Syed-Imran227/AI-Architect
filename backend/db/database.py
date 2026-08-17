@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 import certifi
 
 load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise ValueError("MONGO_URI is missing. Please add it to backend/.env")
 
 # Global client
 client = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where())

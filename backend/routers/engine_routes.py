@@ -91,8 +91,12 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         )
 
     ground_rooms = floor_list[0].get("rooms", [])
+    vastu_rooms = list(ground_rooms)
+    if len(floor_list) > 1:
+        vastu_rooms.extend(floor_list[1].get("rooms", []))
+
     vastu_result = score_vastu(
-        rooms    = ground_rooms,
+        rooms    = vastu_rooms,
         plot_w   = req.length,
         plot_h   = req.width,
         entry_dir = req.entryDir,
@@ -186,6 +190,9 @@ class VastuFixRequest(BaseModel):
     bedrooms: int = 2
     bathrooms: int = 2
     floors: int = 1
+    balcony: int = 0
+    terrace: int = 0
+    lift: int = 0
     # The current vastu_result so we can score before/after
     vastu_result: dict = Field(default_factory=dict)
 
@@ -222,6 +229,9 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             entry_dir=req.entry_dir,
             violated_rules=violated,
             max_retries=2,
+            balcony=req.balcony,
+            terrace=req.terrace,
+            lift=req.lift,
         )
 
         if not result["converged"] or result["layout"] is None:
@@ -233,12 +243,23 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
         new_layout = result["layout"]
         ground_rooms = new_layout["floors"][0]["rooms"]
 
+        vastu_rooms = list(ground_rooms)
+        if len(new_layout["floors"]) > 1:
+            vastu_rooms.extend(new_layout["floors"][1]["rooms"])
+
         # Re-score the corrected layout
         new_vastu = score_vastu(
-            rooms=ground_rooms,
+            rooms=vastu_rooms,
             plot_w=req.plot_width,
             plot_h=req.plot_height,
             entry_dir=req.entry_dir,
+        )
+
+        new_nbc = score_nbc(
+            rooms=ground_rooms,
+            plot_w=req.plot_width,
+            plot_h=req.plot_height,
+            num_floors=req.floors,
         )
 
         png_bytes = render_floor_plan(ground_rooms, unit_label="Vastu-Optimised Plan")
@@ -250,11 +271,13 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             "before_score": before_score,
             "after_score": new_vastu["score"],
             "new_vastu_result": new_vastu,
+            "new_nbc_result": new_nbc,
             "design_rationale": result["design_rationale"],
             "converged": True,
             # fixed_layout is the full rooms list so the frontend can replace the floor
             "fixed_layout": ground_rooms,
             "imageUrl": image_url,
+            "full_layout": new_layout,
         }
     except HTTPException:
         raise
@@ -274,6 +297,9 @@ class RegenerateRoomRequest(BaseModel):
     bedrooms: int = 2
     bathrooms: int = 2
     floors: int = 1
+    balcony: int = 0
+    terrace: int = 0
+    lift: int = 0
 
 @router.post("/regenerate-room")
 def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get_current_user)):
@@ -292,6 +318,9 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
             bathrooms=req.bathrooms,
             floors=req.floors,
             entry_dir=req.entry_dir,
+            balcony=req.balcony,
+            terrace=req.terrace,
+            lift=req.lift,
         )
 
         if result["converged"] and result["layout"] is not None:

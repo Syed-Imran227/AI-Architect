@@ -3,12 +3,14 @@ inference.py
 ============
 Phase 1 — Architect-Drafter Hybrid Model
 
-The LLM (Llama-3.3-70b-versatile) acts as the Lead Architect:
-  - It ONLY produces a topology/zoning JSON — never raw x,y,w,h coordinates.
-  - The output is validated against TopologyResponse (Pydantic) before use.
-  - On schema mismatch the system retries once, then falls back to a default topology.
+LLM Fallback Chain (tried in order):
+  1. deepseek-ai/DeepSeek-V3-0324  via HuggingFace Inference Router (primary)
+  2. Qwen/Qwen3-Coder-30B-A3B-Instruct via HuggingFace (HF backup)
+  3. openai/gpt-oss-120b            via Groq (final backup)
 
-The Python Drafter (architectural_layout.py) turns that topology into exact coordinates.
+All three scored 20/20 on accuracy. DeepSeek-V3 is primary for best reasoning.
+The LLM ONLY produces topology/zoning JSON — never raw x,y,w,h coordinates.
+The Python Drafter (architectural_layout.py) turns topology into exact coordinates.
 """
 
 from __future__ import annotations
@@ -21,18 +23,29 @@ from pydantic import BaseModel, ValidationError
 from engines.architectural_layout import build_layout_from_topology, inject_furniture, default_topology
 from engines.layout_validator import boundary_check_only
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+HF_API_KEY   = os.getenv("HF_API_KEY")
 
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is missing. Please add it to backend/.env")
+if not HF_API_KEY:
+    raise ValueError("HF_API_KEY is missing. Please add it to backend/.env")
 
-llm_client = OpenAI(
-    api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1",
-)
+_hf_client   = OpenAI(api_key=HF_API_KEY,   base_url="https://router.huggingface.co/v1")
+_groq_client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
 
-MODEL = "llama-3.3-70b-versatile"
+# Fallback chain: tried in order until one succeeds
+# (model_id, client, label)
+_MODEL_CHAIN: list[tuple[str, OpenAI, str]] = [
+    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF primary)"),
+    ("Qwen/Qwen3-Coder-30B-A3B-Instruct",       _hf_client,   "Qwen3-Coder (HF backup)"),
+    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq backup)"),
+]
+
+# Legacy aliases kept for FloorPlanGenerator.model attribute
+llm_client = _groq_client
+MODEL = "openai/gpt-oss-120b"
 
 
 # ── Phase 1: Topology Pydantic Schema ────────────────────────────────────────
@@ -126,41 +139,59 @@ You are the Lead AI Architect. Design the optimal zoning topology for a floor pl
 
 # ── LLM call + validation ─────────────────────────────────────────────────────
 
+def _clean_llm_raw(raw: str) -> str:
+    """Strip DeepSeek <think> blocks and markdown fences from LLM output."""
+    # Strip <think>...</think> reasoning blocks (DeepSeek-R1 style)
+    if "<think>" in raw and "</think>" in raw:
+        raw = raw[raw.rfind("</think>") + 8:].strip()
+    # Strip ```json ... ``` markdown fences
+    import re
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
+    if fence:
+        raw = fence.group(1).strip()
+    return raw
+
+
 def _call_architect_llm(prompt: str, retries: int = 1) -> Optional[TopologyResponse]:
-    """Call the LLM, parse and validate the topology JSON. Returns None on failure."""
-    for attempt in range(retries + 1):
-        try:
-            response = llm_client.chat.completions.create(
-                model=MODEL,
-                messages=[
-                    {"role": "system", "content": _ARCHITECT_SYSTEM},
-                    {"role": "user",   "content": prompt},
-                ],
-                max_tokens=1200,
-                temperature=0.4 + attempt * 0.1,  # slightly more random on retry
-            )
-            raw = response.choices[0].message.content.strip()
+    """
+    Try each model in _MODEL_CHAIN until one returns a valid TopologyResponse.
+    Falls back to the next model on any error. Returns None if all fail.
+    """
+    for model_id, client, label in _MODEL_CHAIN:
+        for attempt in range(retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": _ARCHITECT_SYSTEM},
+                        {"role": "user",   "content": prompt},
+                    ],
+                    max_tokens=1200,
+                    temperature=0.4 + attempt * 0.1,
+                )
+                raw = (response.choices[0].message.content or "").strip()
+                raw = _clean_llm_raw(raw)
 
-            # Strip markdown fences if present
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
+                start = raw.find("{")
+                end   = raw.rfind("}")
+                if start == -1 or end == -1:
+                    print(f"[architect:{label}] Attempt {attempt+1}: No JSON found.")
+                    continue
 
-            start = raw.find("{")
-            end   = raw.rfind("}")
-            if start == -1 or end == -1:
-                print(f"[architect] Attempt {attempt+1}: No JSON found in response.")
-                continue
+                obj = json.loads(raw[start:end+1])
+                topology = TopologyResponse(**obj)
+                print(f"[architect:{label}] Topology OK: {topology.design_rationale}")
+                return topology
 
-            obj = json.loads(raw[start:end+1])
-            topology = TopologyResponse(**obj)
-            print(f"[architect] Topology OK: {topology.design_rationale}")
-            return topology
+            except (json.JSONDecodeError, ValidationError) as e:
+                print(f"[architect:{label}] Attempt {attempt+1}: Parse error — {e}")
+            except Exception as e:
+                print(f"[architect:{label}] Attempt {attempt+1}: API error — {e}")
+                break  # don't retry on API errors, move to next model
 
-        except (json.JSONDecodeError, ValidationError, Exception) as e:
-            print(f"[architect] Attempt {attempt+1} failed: {e}")
+        print(f"[architect:{label}] All attempts failed — trying next model.")
 
+    print("[architect] All models in chain failed. Returning None.")
     return None
 
 
@@ -321,6 +352,9 @@ def fix_vastu_topology(
     entry_dir: str,
     violated_rules: list[dict],
     max_retries: int = 2,
+    balcony: int = 0,
+    terrace: int = 0,
+    lift: int = 0,
 ) -> dict:
     """
     Use the LLM to correct Vastu violations via topology changes, then rerun the Drafter.
@@ -357,9 +391,9 @@ def fix_vastu_topology(
                 bedrooms=bedrooms,
                 bathrooms=bathrooms,
                 floors=floors,
-                balcony=0,
-                terrace=0,
-                lift=0,
+                balcony=balcony,
+                terrace=terrace,
+                lift=lift,
                 vastu=True,
                 entry_dir=entry_dir,
             )
@@ -455,6 +489,9 @@ def fix_room_topology(
     bathrooms: int,
     floors: int,
     entry_dir: str,
+    balcony: int = 0,
+    terrace: int = 0,
+    lift: int = 0,
 ) -> dict:
     """
     Use the LLM to update the topology to honour a natural-language room edit,
@@ -490,9 +527,9 @@ def fix_room_topology(
             bedrooms=bedrooms,
             bathrooms=bathrooms,
             floors=floors,
-            balcony=0,
-            terrace=0,
-            lift=0,
+            balcony=balcony,
+            terrace=terrace,
+            lift=lift,
             vastu=False,
             entry_dir=entry_dir,
         )

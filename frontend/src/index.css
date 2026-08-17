@@ -1,82 +1,90 @@
 /* ════════════════════════════════════════════
-   DARK MODE (Nebula Glass Dark)
+   DARK MODE — Linear.app Aesthetic
+   Deep blacks, crisp edges, muted violet accent
 ════════════════════════════════════════════ */
 :root,
 [data-theme="dark"] {
-  --font-primary: 'Outfit', system-ui, sans-serif;
-  --bg-primary: #060a12;
-  --bg-secondary: #0b0f19;
-  --bg-card: rgba(11, 15, 25, 0.6);
+  --font-primary: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Roboto Mono', monospace;
 
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-hover: rgba(255, 255, 255, 0.12);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.40);
+  --bg-primary:    #0a0a0a;
+  --bg-secondary:  #111111;
+  --bg-card:       #161616;
 
-  --text-primary: #f0f6fc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --glass-bg:      #161616;
+  --glass-border:  #2a2a2a;
+  --glass-hover:   #1e1e1e;
+  --glass-shadow:  0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px #2a2a2a;
 
-  --accent-color: #8affc4;
-  --accent-purple: #8affc4;
-  --accent-gradient: linear-gradient(135deg, #8affc4, #22d3ee);
-  --accent-glow: 0 4px 20px rgba(138, 255, 196, 0.25);
+  --text-primary:   #f0f0f0;
+  --text-secondary: #888888;
+  --text-muted:     #555555;
 
-  --input-bg: rgba(0, 0, 0, 0.25);
-  --input-border: rgba(255, 255, 255, 0.10);
+  /* Linear's signature indigo-violet accent */
+  --accent-color:    #5e6ad2;
+  --accent-purple:   #5e6ad2;
+  --accent-gradient: linear-gradient(135deg, #6c77dc 0%, #5e6ad2 100%);
+  --accent-glow:     0 0 0 3px rgba(94, 106, 210, 0.2);
 
-  --nav-bg: rgba(6, 10, 18, 0.75);
-  --nav-border: rgba(255, 255, 255, 0.08);
+  --input-bg:     #111111;
+  --input-border: #2a2a2a;
 
-  --toggle-off-bg: #1e293b;
+  --nav-bg:     #0a0a0a;
+  --nav-border: #2a2a2a;
 
-  --success: #2e7d32;
-  --error: #c70036;
-  --success-text: #8affc4;
+  --toggle-off-bg: #2a2a2a;
 
-  --scrollbar-track: #060a12;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.20);
+  --success:      #4ade80;
+  --error:        #f87171;
+  --success-text: #4ade80;
+
+  --scrollbar-track: #0a0a0a;
+  --scrollbar-thumb: #2a2a2a;
 
   color-scheme: dark;
 }
 
 /* ════════════════════════════════════════════
-   LIGHT MODE (Genesis Soil Light)
+   LIGHT MODE — Rayon.design Aesthetic
+   Pure white, subtle gray borders, blue accent
 ════════════════════════════════════════════ */
 [data-theme="light"] {
-  --font-primary: 'IBM Plex Sans', system-ui, sans-serif;
-  --bg-primary: #eef2fa;
-  --bg-secondary: #e2e8f0;
-  --bg-card: rgba(255, 255, 255, 0.8);
+  --font-primary: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Roboto Mono', monospace;
 
-  --glass-bg: rgba(255, 255, 255, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.8);
-  --glass-hover: rgba(255, 255, 255, 0.65);
-  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+  --bg-primary:   #f5f5f5;
+  --bg-secondary: #eeeeee;
+  --bg-card:      #ffffff;
 
-  --text-primary: #111827;
-  --text-secondary: #374151;
-  --text-muted: rgba(17, 24, 39, 0.50);
+  --glass-bg:     #ffffff;
+  --glass-border: #e0e0e0;
+  --glass-hover:  #f7f7f7;
+  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px #e0e0e0;
 
-  --accent-color: #4f46e5;
-  --accent-purple: #4f46e5;
-  --accent-gradient: linear-gradient(135deg, #4f46e5, #818cf8);
-  --accent-glow: 0 4px 20px rgba(79, 70, 229, 0.25);
+  --text-primary:   #111111;
+  --text-secondary: #555555;
+  --text-muted:     #999999;
 
-  --input-bg: rgba(255, 255, 255, 0.60);
-  --input-border: rgba(17, 24, 39, 0.15);
+  /* Rayon's clean blue accent */
+  --accent-color:    #2563eb;
+  --accent-purple:   #2563eb;
+  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --accent-glow:     0 0 0 3px rgba(37, 99, 235, 0.15);
 
-  --nav-bg: rgba(255, 255, 255, 0.45);
-  --nav-border: rgba(255, 255, 255, 0.6);
+  --input-bg:     #ffffff;
+  --input-border: #d4d4d4;
 
-  --toggle-off-bg: #cbd5e1;
+  --nav-bg:     #ffffff;
+  --nav-border: #e0e0e0;
 
-  --success: #16a34a;
-  --error: #dc2626;
+  --toggle-off-bg: #d4d4d4;
+
+  --success:      #16a34a;
+  --error:        #dc2626;
   --success-text: #16a34a;
 
-  --scrollbar-track: #f9fbff;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-track: #f5f5f5;
+  --scrollbar-thumb: #d4d4d4;
 
   color-scheme: light;
 }
@@ -105,72 +113,33 @@ body {
 
 body {
   background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(circle at 15% 50%, rgba(138, 255, 196, 0.06), transparent 28%),
-    radial-gradient(circle at 85% 30%, rgba(34, 211, 238, 0.06), transparent 28%);
-  background-attachment: fixed;
   color: var(--text-primary);
-  transition: background-color 0.35s ease, color 0.35s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-[data-theme="light"] body {
-  background-image:
-    radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.07), transparent 28%),
-    radial-gradient(circle at 85% 30%, rgba(129, 140, 248, 0.06), transparent 28%);
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+h1, h2, h3, h4, h5, h6 {
   margin-top: 0;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   color: var(--text-primary);
 }
 
 button {
   font-family: var(--font-primary);
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
-input,
-select {
+input, select {
   font-family: var(--font-primary);
 }
 
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-::-webkit-scrollbar-track {
-  background: var(--scrollbar-track);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  opacity: 0.8;
-}
-
-/* Smooth theme transition on key elements */
-div,
-header,
-nav,
-aside,
-main,
-section,
-footer,
-button,
-input,
-select,
-a {
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
+/* Smooth theme transition */
+div, header, nav, aside, main, section, footer, button, input, select, a {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
 }

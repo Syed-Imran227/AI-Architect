@@ -18,7 +18,7 @@ export default function Landing() {
       <FloatingOrbs />
 
       {/* Nav */}
-      <header style={{ padding: '1.5rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 10, background: 'var(--nav-bg)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--nav-border)' }}>
+      <header style={{ padding: '1.5rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 10, background: 'var(--nav-bg)', borderBottom: '1px solid var(--nav-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span style={{ fontSize: '1.6rem', background: 'linear-gradient(135deg, var(--accent-color), #22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>⬡</span>
           <span style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>AI Architect</span>
@@ -40,7 +40,7 @@ export default function Landing() {
       <main ref={heroRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '6rem 2rem 4rem', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(138,255,196,0.1)', border: '1px solid rgba(138,255,196,0.2)', borderRadius: '20px', padding: '0.4rem 1rem', marginBottom: '2rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0070f3', display: 'inline-block' }} />
-          Powered by Meta LLaMA-3 · MongoDB Atlas
+          Powered by Groq AI · MongoDB Atlas
         </div>
 
         <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 5.5rem)', lineHeight: 1.05, marginBottom: '1.5rem', maxWidth: '900px', fontWeight: 800, letterSpacing: '-0.03em' }}>

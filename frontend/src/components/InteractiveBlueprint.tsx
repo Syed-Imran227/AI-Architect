@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
 import type { Room, FloorCirculation } from '../services/api';
 import CirculationOverlay from './CirculationOverlay';
 
@@ -12,29 +12,35 @@ interface Props {
 }
 
 // Professional 2D architectural color scheme per room type
-function getRoomStyle(name: string): { fill: string; labelColor: string; icon: string } {
+function getRoomStyle(name: string): { fill: string; stroke: string; labelColor: string; icon: string } {
   const n = name.toLowerCase();
   if (n.includes('master') || (n.includes('bedroom') && n.includes('1')))
-    return { fill: '#e8f0f7', labelColor: '#1a3a5c', icon: '🛏' };
+    return { fill: '#e4eef8', stroke: '#7a9ec0', labelColor: '#1a3a5c', icon: '\uD83D\uDECF' };
   if (n.includes('bedroom'))
-    return { fill: '#edf2f8', labelColor: '#1e3a5c', icon: '🛏' };
+    return { fill: '#eaf2ea', stroke: '#7ab07a', labelColor: '#1e4a1e', icon: '\uD83D\uDECF' };
   if (n.includes('bath') || n.includes('toilet') || n.includes('wc'))
-    return { fill: '#e0f4f7', labelColor: '#0c4a6e', icon: '🚿' };
+    return { fill: '#dff2f5', stroke: '#6aaabb', labelColor: '#0c4a6e', icon: '\uD83D\uDEB0' };
   if (n.includes('kitchen'))
-    return { fill: '#fff4e6', labelColor: '#7c3400', icon: '🍳' };
+    return { fill: '#fff0d8', stroke: '#d4a060', labelColor: '#7c3400', icon: '\uD83C\uDF73' };
   if (n.includes('living') || n.includes('lounge'))
-    return { fill: '#ece9f7', labelColor: '#3b0764', icon: '🛋' };
+    return { fill: '#ede8f8', stroke: '#9a84d0', labelColor: '#3b0764', icon: '\uD83D\uDECB' };
   if (n.includes('dining'))
-    return { fill: '#fce7f3', labelColor: '#831843', icon: '🍽' };
+    return { fill: '#fce8f4', stroke: '#c07098', labelColor: '#831843', icon: '\uD83C\uDF7D' };
   if (n.includes('balcony') || n.includes('terrace'))
-    return { fill: '#e2f7ef', labelColor: '#065f46', icon: '🌿' };
+    return { fill: '#e0f5e8', stroke: '#70b480', labelColor: '#065f46', icon: '\uD83C\uDF3F' };
+  if (n.includes('stair'))
+    return { fill: '#f5f0e0', stroke: '#c0aa70', labelColor: '#5a4400', icon: '\u25E4' };
   if (n.includes('parking') || n.includes('garage'))
-    return { fill: '#f1f1f1', labelColor: '#374151', icon: '🚗' };
+    return { fill: '#efefef', stroke: '#aaaaaa', labelColor: '#374151', icon: '\uD83D\uDE97' };
   if (n.includes('hall') || n.includes('lobby') || n.includes('foyer') || n.includes('entrance'))
-    return { fill: '#fef9e7', labelColor: '#78350f', icon: '🚪' };
+    return { fill: '#fefae8', stroke: '#d0b060', labelColor: '#78350f', icon: '\uD83D\uDEAA' };
+  if (n.includes('corridor'))
+    return { fill: '#f8f8f8', stroke: '#cccccc', labelColor: '#4b5563', icon: '' };
   if (n.includes('store') || n.includes('utility') || n.includes('laundry'))
-    return { fill: '#f5f5f5', labelColor: '#4b5563', icon: '📦' };
-  return { fill: '#f3f4f6', labelColor: '#374151', icon: '◻' };
+    return { fill: '#f0f0f0', stroke: '#b4b4b4', labelColor: '#4b5563', icon: '\uD83D\uDCE6' };
+  if (n.includes('landing'))
+    return { fill: '#f8f6f0', stroke: '#c8c0a8', labelColor: '#555', icon: '' };
+  return { fill: '#f3f4f6', stroke: '#aaaaaa', labelColor: '#374151', icon: '\u25FB' };
 }
 
 // Draw a simple furniture symbol inside a room
@@ -129,15 +135,18 @@ function FurnitureSymbol({ room, cx, cy }: { room: Room; cx: number; cy: number 
 // Color palette per furniture type — defined outside component to avoid recreation
 function getFurnFill(name: string): string {
   const n = name.toLowerCase();
-  if (n.includes('bed'))         return 'rgba(186,214,255,0.55)';
-  if (n.includes('sofa') || n.includes('couch')) return 'rgba(200,190,255,0.55)';
-  if (n.includes('table'))       return 'rgba(255,220,160,0.55)';
-  if (n.includes('wardrobe') || n.includes('cabinet')) return 'rgba(210,230,210,0.55)';
-  if (n.includes('toilet') || n.includes('bath') || n.includes('shower')) return 'rgba(180,240,248,0.55)';
-  if (n.includes('island') || n.includes('counter')) return 'rgba(255,235,180,0.55)';
-  if (n.includes('desk') || n.includes('chair')) return 'rgba(220,240,200,0.55)';
-  if (n.includes('tv'))          return 'rgba(50,60,80,0.55)';
-  return 'rgba(210,218,230,0.45)';
+  if (n.includes('bed'))                                      return '#c8daf0';
+  if (n.includes('sofa') || n.includes('couch'))             return '#c4baf2';
+  if (n.includes('dining table') || n.includes('coffee table')) return '#f0d8a0';
+  if (n.includes('wardrobe') || n.includes('cabinet'))       return '#c0d4b8';
+  if (n.includes('toilet') || n.includes('bath') || n.includes('shower')) return '#b0d8e8';
+  if (n.includes('island') || n.includes('counter'))         return '#f0e0b0';
+  if (n.includes('desk') || n.includes('study chair'))       return '#d0e8c0';
+  if (n.includes('tv'))                                       return '#303840';
+  if (n.includes('car'))                                      return '#b0c0d8';
+  if (n.includes('plant') || n.includes('pot'))              return '#a0d0a0';
+  if (n.includes('shelf') || n.includes('bookshelf'))        return '#c8b888';
+  return '#d4dce8';
 }
 
 // ── LLM-Coordinate Furniture Renderer ────────────────────────────────────────
@@ -389,7 +398,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       width="100%"
       height="100%"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ display: 'block', background: '#f8f9fb' }}
+      style={{ display: 'block', background: 'var(--bg-secondary, #f0f2f5)' }}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
@@ -413,9 +422,9 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       </defs>
 
       {/* Paper background */}
-      <rect x={minX} y={minY} width={vbW} height={vbH} fill="#fafbfc" />
-      {/* Grid */}
-      <rect x={minX} y={minY} width={vbW} height={vbH} fill="url(#coarsegrid)" />
+      <rect x={minX} y={minY} width={vbW} height={vbH} fill="#fafcfd" />
+      {/* Subtle grid */}
+      <rect x={minX} y={minY} width={vbW} height={vbH} fill="url(#coarsegrid)" opacity={0.7} />
 
       {/* Title block */}
       <text x={minX + PAD * 0.5} y={minY + PAD * 0.6}
@@ -449,7 +458,9 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
 
       {/* Rooms */}
       {displayRooms.map((room, i) => {
-        const { fill, labelColor } = getRoomStyle(room.name);
+        const style = getRoomStyle(room.name);
+        const { fill, labelColor } = style;
+
         const isSelected = selectedRoom?.name === room.name;
         const cx = room.x + room.width / 2;
         const cy = room.y + room.height / 2;
@@ -467,17 +478,17 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
               x={room.x} y={room.y}
               width={room.width} height={room.height}
               fill={fill}
-              stroke={isSelected ? '#2563eb' : '#64748b'}
-              strokeWidth={isSelected ? WALL * 0.9 : WALL * 0.55}
+              stroke={isSelected ? '#2563eb' : style.stroke}
+              strokeWidth={isSelected ? WALL * 0.9 : WALL * 0.65}
             />
 
-            {/* Thick wall overlay (inset rectangle for wall effect) */}
+            {/* Inner wall shadow inset */}
             <rect
-              x={room.x + WALL * 0.2} y={room.y + WALL * 0.2}
-              width={room.width - WALL * 0.4} height={room.height - WALL * 0.4}
+              x={room.x + WALL * 0.35} y={room.y + WALL * 0.35}
+              width={room.width - WALL * 0.7} height={room.height - WALL * 0.7}
               fill="none"
-              stroke={isSelected ? '#93c5fd' : 'rgba(100,116,139,0.15)'}
-              strokeWidth={0.1}
+              stroke={isSelected ? '#93c5fd' : 'rgba(80,100,130,0.12)'}
+              strokeWidth={0.08}
             />
 
             {/* Selection highlight */}
@@ -592,11 +603,11 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
               LEGEND
             </text>
             {uniqueTypes.map((name, idx) => {
-              const { fill, labelColor } = getRoomStyle(name);
+              const { fill, labelColor, stroke } = getRoomStyle(name);
               return (
                 <g key={name} transform={`translate(0, ${idx * 1.4 + 1.0})`}>
                   <rect x={0} y={-0.45} width={0.8} height={0.7}
-                    fill={fill} stroke="#94a3b8" strokeWidth={0.1} />
+                    fill={fill} stroke={stroke} strokeWidth={0.1} />
                   <text x={1.1} y={0.1}
                     fill={labelColor} fontSize={0.62}
                     fontFamily="Inter, sans-serif">
