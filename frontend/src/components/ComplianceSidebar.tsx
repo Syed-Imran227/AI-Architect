@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Room, VastuResult, NbcResult, VastuFixResult } from '../services/api';
+import type { Room, VastuResult, NbcResult, EnergyResult, VastuFixResult } from '../services/api';
 import { vastuFix } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -16,6 +16,7 @@ interface ComplianceSidebarProps {
   vastuScore: number;
   vastuResult?: VastuResult;
   nbcResult?: NbcResult;
+  energyResult?: EnergyResult;
   layout: Record<string, unknown>;
   plotContext: PlotContext;
   onLayoutUpdate: (newRooms: Room[], imageUrl?: string) => void;
@@ -26,6 +27,7 @@ export default function ComplianceSidebar({
   vastuScore,
   vastuResult,
   nbcResult,
+  energyResult,
   layout,
   plotContext,
   onLayoutUpdate,
@@ -33,6 +35,7 @@ export default function ComplianceSidebar({
 }: ComplianceSidebarProps) {
   const [vastuOpen, setVastuOpen] = useState(false);
   const [nbcOpen, setNbcOpen] = useState(false);
+  const [energyOpen, setEnergyOpen] = useState(false);
   const [vastuFixing, setVastuFixing] = useState(false);
   const [lastFixResult, setLastFixResult] = useState<VastuFixResult | null>(null);
 
@@ -158,6 +161,43 @@ export default function ComplianceSidebar({
             <div className="vastu-panel-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {nbcResult.rules.map((r, i) => {
+                  if (r.max === 0) return null;
+                  const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
+                  const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
+                  return (
+                    <div key={i} className="vastu-rule-card" style={{ border: `1px solid ${clr}40` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', alignItems: 'center' }}>
+                        <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span>{icon}</span>{r.rule}</strong>
+                        <span style={{ color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>
+                      </div>
+                      <div style={{ opacity: 0.7, lineHeight: 1.3, fontSize: '0.72rem' }}>{r.detail}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Energy / Sun Path Panel */}
+      {energyResult && energyResult.rules.length > 0 && (
+        <div className="vastu-panel" style={{ marginTop: '0' }}>
+          <div className="vastu-panel-header" onClick={() => setEnergyOpen(!energyOpen)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+              <span style={{ fontSize: '1.2rem' }}>☀️</span> Energy & Sun Path
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span className={`vastu-badge ${energyResult.score >= 80 ? 'pass' : energyResult.score >= 60 ? 'warn' : 'fail'}`}>
+                {energyResult.grade} ({energyResult.score}/100)
+              </span>
+              <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{energyOpen ? '▲' : '▼'}</span>
+            </div>
+          </div>
+          {energyOpen && (
+            <div className="vastu-panel-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {energyResult.rules.map((r, i) => {
                   if (r.max === 0) return null;
                   const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
                   const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';

@@ -57,6 +57,18 @@ export interface VastuFixResult {
   imageUrl?: string;
 }
 
+export interface NbcFixResult {
+  status: string;
+  before_score: number;
+  after_score: number;
+  new_nbc_result?: NbcResult;
+  fixed_layout: Room[];
+  design_rationale?: string;
+  converged?: boolean;
+  message?: string;
+  imageUrl?: string;
+}
+
 export interface NbcRule {
   rule: string;
   status: 'pass' | 'warn' | 'fail';
@@ -69,6 +81,20 @@ export interface NbcResult {
   score: number;
   grade: string;
   rules: NbcRule[];
+}
+
+export interface EnergyRule {
+  rule: string;
+  status: 'pass' | 'warn' | 'fail';
+  points: number;
+  max: number;
+  detail: string;
+}
+
+export interface EnergyResult {
+  score: number;
+  grade: string;
+  rules: EnergyRule[];
 }
 
 export interface CirculationPath {
@@ -238,6 +264,36 @@ export const vastuFix = async (
     }),
   });
   if (!res.ok) throw new Error(`Vastu fix failed: ${await res.text()}`);
+  return res.json();
+};
+
+export const nbcFix = async (
+  layout: Record<string, unknown>,
+  nbcResult: NbcResult | undefined,
+  plotContext: {
+    plotWidth: number;
+    plotHeight: number;
+    entryDir: string;
+    bedrooms: number;
+    bathrooms: number;
+    floors: number;
+  }
+): Promise<NbcFixResult> => {
+  const res = await fetch(`${API_BASE_URL}/nbc/fix`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      layout,
+      nbc_result: nbcResult ?? { score: 0, grade: "N/A", rules: [] },
+      plot_width: plotContext.plotWidth,
+      plot_height: plotContext.plotHeight,
+      entry_dir: plotContext.entryDir,
+      bedrooms: plotContext.bedrooms,
+      bathrooms: plotContext.bathrooms,
+      floors: plotContext.floors,
+    }),
+  });
+  if (!res.ok) throw new Error(`NBC fix failed: ${await res.text()}`);
   return res.json();
 };
 

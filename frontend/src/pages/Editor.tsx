@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import '../App.css';
-import { generatePlans, exportDxf, exportReport, saveProject, getProjectById } from '../services/api';
+import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, nbcFix, regenerateRoom } from '../services/api';
 import toast from 'react-hot-toast';
-import type { Room, VastuResult, NbcResult, FloorCirculation } from '../services/api';
+import type { Room, VastuResult, NbcResult, EnergyResult, FloorCirculation } from '../services/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
 import FloorPlan3D from '../components/FloorPlan3D';
 import RoomEditor from '../components/RoomEditor';
@@ -26,6 +26,7 @@ interface Plan {
   vastuScore: number;
   vastuResult?: VastuResult;
   nbcResult?: NbcResult;
+  energyResult?: EnergyResult;
   circulationWarnings?: string[];
   validationReport?: string[];
 }
@@ -43,6 +44,9 @@ export default function Editor() {
   const [dxfLoading, setDxfLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [nbcFixLoading, setNbcFixLoading] = useState(false);
+  const [copilotInput, setCopilotInput] = useState('');
+  const [copilotLoading, setCopilotLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
@@ -233,6 +237,64 @@ export default function Editor() {
       toast.error(`Report failed: ${err.message}`, { id: 'report-gen' });
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  const handleNBCFix = async () => {
+    if (!activePlan || !floors.length) return;
+    setNbcFixLoading(true);
+    toast.loading('🏗️ Auto-Fixing NBC Compliance...', { id: 'nbc-fix' });
+    try {
+      const res = await nbcFix(activePlan.layout, activePlan.nbcResult, plotContext);
+      
+      if (res.status === 'already_optimal') {
+        toast.success(res.message || 'Already NBC Compliant!', { id: 'nbc-fix', duration: 4000 });
+        return;
+      }
+      
+      if (res.converged) {
+        toast.success(
+          `✅ NBC Fixed! Score: ${res.before_score} ➔ ${res.after_score}\n${res.design_rationale}`,
+          { id: 'nbc-fix', duration: 6000 }
+        );
+        handleLayoutUpdate(res.fixed_layout, res.imageUrl);
+        setActivePlan(prev => prev ? {
+          ...prev,
+          nbcResult: res.new_nbc_result,
+        } : prev);
+      } else {
+        toast.error('Failed to converge on a valid NBC solution.', { id: 'nbc-fix' });
+      }
+    } catch (e: unknown) {
+      const err = e as Error;
+      toast.error(`NBC Fix failed: ${err.message}`, { id: 'nbc-fix' });
+    } finally {
+      setNbcFixLoading(false);
+    }
+  };
+
+  const handleCopilotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!copilotInput.trim() || !activePlan || !floors.length) return;
+    
+    setCopilotLoading(true);
+    toast.loading('🤖 Copilot is redesigning...', { id: 'copilot' });
+    try {
+      // Pass 'General' as the room name to let the LLM handle global topology changes based on instruction
+      const res = await regenerateRoom(currentRooms, 'General', copilotInput, plotContext);
+      
+      if (res.rooms) {
+        toast.success(`✅ Copilot updated layout!\n${res.design_rationale || ''}`, { id: 'copilot', duration: 5000 });
+        handleLayoutUpdate(res.rooms, res.imageUrl);
+        setCopilotInput('');
+      } else {
+        toast.error('Copilot failed to generate a valid layout.', { id: 'copilot' });
+      }
+    } catch (e: unknown) {
+      const err = e as Error;
+      toast.error(`Copilot error: ${err.message}`, { id: 'copilot' });
+    } finally {
+      setCopilotLoading(false);
     }
   };
 
@@ -514,6 +576,7 @@ export default function Editor() {
                 vastuScore={activePlan.vastuScore}
                 vastuResult={activePlan.vastuResult}
                 nbcResult={activePlan.nbcResult}
+                energyResult={activePlan.energyResult}
                 layout={currentLayout ?? {}}
                 plotContext={plotContext}
                 onLayoutUpdate={handleLayoutUpdate}
@@ -525,20 +588,24 @@ export default function Editor() {
                 <button className="btn-primary" onClick={handleSaveToDatabase} disabled={saveLoading || !currentRooms.length} style={{ width: '100%', justifyContent: 'center' }}>
                   {saveLoading ? 'Saving...' : '💾 Save to My Plans'}
                 </button>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="btn-ghost" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                  <button className="btn-ghost" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
                     {dxfLoading ? '...' : '⬇ DXF'}
                   </button>
-                  <button className="btn-ghost" onClick={handleExportReport} disabled={reportLoading || !currentRooms.length} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
+                  <button className="btn-ghost" onClick={handleExportReport} disabled={reportLoading || !currentRooms.length} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
                     {reportLoading ? '...' : '📄 Report'}
                   </button>
+                  <button className="btn-ghost" onClick={handleGenerate} disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
+                    {loading ? '...' : '↻ Redraw'}
+                  </button>
+                  
                   <button
                     className="btn-ghost"
                     onClick={() => setShowCirculation(v => !v)}
                     disabled={!floorCirculation}
                     title={floorCirculation ? 'Toggle circulation path overlay' : 'Generate a plan to see paths'}
                     style={{
-                      flex: 1, justifyContent: 'center', fontSize: '0.8rem',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem',
                       background: showCirculation ? 'rgba(34,197,94,0.15)' : undefined,
                       borderColor: showCirculation ? '#22c55e' : undefined,
                       color:       showCirculation ? '#22c55e' : undefined,
@@ -550,14 +617,40 @@ export default function Editor() {
                     className="btn-ghost"
                     onClick={() => setShow3D(v => !v)}
                     disabled={!currentRooms.length}
-                    style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
                   >
                     {show3D ? '2D View' : '3D View'}
                   </button>
-                  <button className="btn-ghost" onClick={handleGenerate} disabled={loading} style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }}>
-                    {loading ? '...' : '↻ Redraw'}
+                  <button 
+                    className="btn-ghost" 
+                    onClick={handleNBCFix} 
+                    disabled={nbcFixLoading || !currentRooms.length} 
+                    style={{ 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', padding: '0.5rem',
+                      color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)'
+                    }}
+                  >
+                    {nbcFixLoading ? '...' : '🔧 Fix NBC'}
                   </button>
                 </div>
+              </div>
+
+              {/* Copilot Chat UI */}
+              <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
+                <p className="panel-label" style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent)' }}>✨ AI Copilot</p>
+                <form onSubmit={handleCopilotSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={copilotInput}
+                    onChange={e => setCopilotInput(e.target.value)}
+                    placeholder="e.g. Make kitchen larger..."
+                    disabled={copilotLoading || !currentRooms.length}
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-sub)' }}
+                  />
+                  <button type="submit" className="btn-primary" disabled={copilotLoading || !copilotInput.trim()} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                    {copilotLoading ? '...' : 'Send'}
+                  </button>
+                </form>
               </div>
 
               {/* Room Editor — slides in below actions when a room is selected */}

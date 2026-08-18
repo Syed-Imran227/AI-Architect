@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Box, Cylinder, Edges, Text } from '@react-three/drei';
+import { OrbitControls, Box, Cylinder, Edges, Text, Sky, Environment } from '@react-three/drei';
 import type { Room } from '../services/api';
 
 interface FloorPlan3DProps {
@@ -28,78 +28,100 @@ function getRoomColor(name: string): { floor: string; wall: string } {
 
 // ── Staircase — architecturally correct U-shape flight ────────────────────────
 // A standard stair: steps climb from y=0 (bottom/entry) to y=room.height (top).
-// Steps are placed in world space (no centering group).
+// Steps are placed in world space.
 function Stairs3D({ room }: { room: Room }) {
-  const numSteps = 12;
-  const stepH    = ROOM_HEIGHT / numSteps;          // height gained per step
-  const stepD    = (room.height - 0.8) / numSteps;  // depth (plan) per step
-  const stepW    = room.width - 0.6;                // tread width (leave 0.3 each side)
-  const ox       = room.x + room.width  / 2;       // world center X
-  const startZ   = room.y;                          // bottom of stair in world
+  const numStepsHalf = 8;
+  const stepH    = ROOM_HEIGHT / (numStepsHalf * 2);
+  const stepD    = (room.height * 0.75) / numStepsHalf; // 75% depth for steps, 25% for landing
+  const stepW    = (room.width - 0.6) / 2; // two flights side by side with gap
+  
+  const startZ   = room.y;
+  const landingZ = startZ + room.height * 0.75;
+  const landingD = room.height * 0.25;
+  const leftX    = room.x + 0.25 + stepW / 2;
+  const rightX   = room.x + room.width - 0.25 - stepW / 2;
 
-  // Handrail on the right side
-  const hrX = room.x + room.width - 0.3;
-
-  return (
-    <group>
-      {/* Treads — climb from front (startZ) towards rear */}
-      {Array.from({ length: numSteps }).map((_, i) => (
-        <Box
-          key={i}
-          args={[stepW, stepH * 1.05, stepD]}
-          position={[ox, i * stepH + stepH / 2, startZ + i * stepD + stepD / 2]}
-        >
+  // Flight 1 (Left side, going UP from front to back)
+  const flight1 = Array.from({ length: numStepsHalf }).map((_, i) => {
+    const y = i * stepH;
+    const z = startZ + i * stepD;
+    return (
+      <group key={`f1_${i}`}>
+        <Box castShadow receiveShadow args={[stepW, stepH * 1.05, stepD]} position={[leftX, y + stepH / 2, z + stepD / 2]}>
           <meshStandardMaterial color={i % 2 === 0 ? '#d6cbaf' : '#c2b898'} />
           <Edges color="#8a7a60" />
         </Box>
-      ))}
-
-      {/* Riser nosing edge — visible front lip on each tread */}
-      {Array.from({ length: numSteps }).map((_, i) => (
-        <Box
-          key={`n${i}`}
-          args={[stepW + 0.1, 0.08, 0.15]}
-          position={[ox, i * stepH + stepH, startZ + i * stepD]}
-        >
+        <Box castShadow receiveShadow args={[stepW + 0.1, 0.08, 0.15]} position={[leftX, y + stepH, z]}>
           <meshStandardMaterial color="#9a8a6a" />
         </Box>
-      ))}
+      </group>
+    );
+  });
 
-      {/* Handrail posts — 4 evenly spaced verticals on right side */}
-      {[0, 0.33, 0.66, 1.0].map((t, i) => (
-        <Cylinder
-          key={i}
-          args={[0.05, 0.05, ROOM_HEIGHT, 8]}
-          position={[hrX, ROOM_HEIGHT / 2, startZ + t * room.height]}
-        >
-          <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
-        </Cylinder>
-      ))}
-
-      {/* Handrail — diagonal bar following stair slope */}
-      <Box
-        args={[0.07, 0.07, room.height]}
-        position={[hrX, ROOM_HEIGHT - 0.5, startZ + room.height / 2]}
-      >
-        <meshStandardMaterial color="#6a5020" metalness={0.25} roughness={0.6} />
+  // Landing
+  const landingY = numStepsHalf * stepH;
+  const landing = (
+    <group>
+      <Box castShadow receiveShadow args={[room.width - 0.4, stepH * 1.05, landingD]} position={[room.x + room.width / 2, landingY - stepH / 2, landingZ + landingD / 2]}>
+        <meshStandardMaterial color="#c2b898" />
+        <Edges color="#8a7a60" />
       </Box>
+    </group>
+  );
 
-      {/* Left guardrail posts */}
-      {[0, 0.5, 1.0].map((t, i) => (
-        <Cylinder
-          key={`l${i}`}
-          args={[0.05, 0.05, ROOM_HEIGHT, 8]}
-          position={[room.x + 0.3, ROOM_HEIGHT / 2, startZ + t * room.height]}
-        >
-          <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
-        </Cylinder>
-      ))}
-      <Box
-        args={[0.07, 0.07, room.height]}
-        position={[room.x + 0.3, ROOM_HEIGHT - 0.5, startZ + room.height / 2]}
-      >
-        <meshStandardMaterial color="#6a5020" metalness={0.25} roughness={0.6} />
-      </Box>
+  // Flight 2 (Right side, going UP from back to front)
+  const flight2 = Array.from({ length: numStepsHalf }).map((_, i) => {
+    const y = landingY + i * stepH;
+    const z = landingZ - (i + 1) * stepD;
+    return (
+      <group key={`f2_${i}`}>
+        <Box castShadow receiveShadow args={[stepW, stepH * 1.05, stepD]} position={[rightX, y + stepH / 2, z + stepD / 2]}>
+          <meshStandardMaterial color={i % 2 === 0 ? '#d6cbaf' : '#c2b898'} />
+          <Edges color="#8a7a60" />
+        </Box>
+        <Box castShadow receiveShadow args={[stepW + 0.1, 0.08, 0.15]} position={[rightX, y + stepH, z + stepD]}>
+          <meshStandardMaterial color="#9a8a6a" />
+        </Box>
+      </group>
+    );
+  });
+
+  // Railings
+  // Flight 1 inner railing (Right side of left flight)
+  const r1X = room.x + 0.25 + stepW;
+  const r1 = [0, 0.5, 1.0].map((t, i) => (
+    <Cylinder castShadow receiveShadow key={`r1_${i}`} args={[0.04, 0.04, ROOM_HEIGHT/2, 8]} position={[r1X, ROOM_HEIGHT/4, startZ + t * (landingZ - startZ)]}>
+      <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
+    </Cylinder>
+  ));
+  const handrail1 = (
+    <Box castShadow receiveShadow args={[0.06, 0.06, landingZ - startZ]} position={[r1X, ROOM_HEIGHT/2, startZ + (landingZ - startZ)/2]} rotation={[Math.atan2(landingY, landingZ - startZ), 0, 0]}>
+      <meshStandardMaterial color="#6a5020" metalness={0.25} roughness={0.6} />
+    </Box>
+  );
+  
+  // Flight 2 inner railing (Left side of right flight)
+  const r2X = room.x + room.width - 0.25 - stepW;
+  const r2 = [0, 0.5, 1.0].map((t, i) => (
+    <Cylinder castShadow receiveShadow key={`r2_${i}`} args={[0.04, 0.04, ROOM_HEIGHT/2, 8]} position={[r2X, ROOM_HEIGHT/2 + ROOM_HEIGHT/4, landingZ - t * (landingZ - startZ)]}>
+      <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
+    </Cylinder>
+  ));
+  const handrail2 = (
+    <Box castShadow receiveShadow args={[0.06, 0.06, landingZ - startZ]} position={[r2X, ROOM_HEIGHT, startZ + (landingZ - startZ)/2]} rotation={[-Math.atan2(ROOM_HEIGHT - landingY, landingZ - startZ), 0, 0]}>
+      <meshStandardMaterial color="#6a5020" metalness={0.25} roughness={0.6} />
+    </Box>
+  );
+
+  return (
+    <group>
+      {flight1}
+      {landing}
+      {flight2}
+      {r1}
+      {handrail1}
+      {r2}
+      {handrail2}
     </group>
   );
 }
@@ -127,26 +149,26 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     return (
       <group position={[wx, 0, wz]}>
         {/* Frame */}
-        <Box args={[fw, 0.4, fd]} position={[0, 0.2, 0]}>
+        <Box castShadow receiveShadow args={[fw, 0.4, fd]} position={[0, 0.2, 0]}>
           <meshStandardMaterial color={frameColor} roughness={0.5} />
         </Box>
         {/* Mattress */}
-        <Box args={[fw - 0.2, 1.0, fd - 0.2]} position={[0, 0.9, 0]}>
+        <Box castShadow receiveShadow args={[fw - 0.2, 1.0, fd - 0.2]} position={[0, 0.9, 0]}>
           <meshStandardMaterial color={mattressColor} roughness={0.8} />
         </Box>
         {/* Pillows */}
-        <Box args={[(fw - 0.4) / 2 - 0.1, 0.25, fd * 0.2]} position={[-fw * 0.2, 1.52, -fd * 0.36]}>
+        <Box castShadow receiveShadow args={[(fw - 0.4) / 2 - 0.1, 0.25, fd * 0.2]} position={[-fw * 0.2, 1.52, -fd * 0.36]}>
           <meshStandardMaterial color={pillowColor} roughness={0.9} />
         </Box>
-        <Box args={[(fw - 0.4) / 2 - 0.1, 0.25, fd * 0.2]} position={[fw * 0.2, 1.52, -fd * 0.36]}>
+        <Box castShadow receiveShadow args={[(fw - 0.4) / 2 - 0.1, 0.25, fd * 0.2]} position={[fw * 0.2, 1.52, -fd * 0.36]}>
           <meshStandardMaterial color={pillowColor} roughness={0.9} />
         </Box>
         {/* Headboard */}
-        <Box args={[fw, headboardH, 0.2]} position={[0, headboardH / 2, -fd / 2 + 0.12]}>
+        <Box castShadow receiveShadow args={[fw, headboardH, 0.2]} position={[0, headboardH / 2, -fd / 2 + 0.12]}>
           <meshStandardMaterial color={frameColor} roughness={0.5} />
         </Box>
         {/* Footboard */}
-        <Box args={[fw, 1.2, 0.15]} position={[0, 0.6, fd / 2 - 0.1]}>
+        <Box castShadow receiveShadow args={[fw, 1.2, 0.15]} position={[0, 0.6, fd / 2 - 0.1]}>
           <meshStandardMaterial color={frameColor} roughness={0.5} />
         </Box>
       </group>
@@ -157,17 +179,17 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('side') && n.includes('table')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 2.2, fd]} position={[0, 1.1, 0]}>
+        <Box castShadow receiveShadow args={[fw, 2.2, fd]} position={[0, 1.1, 0]}>
           <meshStandardMaterial color="#b8922a" roughness={0.4} />
         </Box>
-        <Box args={[fw + 0.04, 0.06, fd + 0.04]} position={[0, 2.23, 0]}>
+        <Box castShadow receiveShadow args={[fw + 0.04, 0.06, fd + 0.04]} position={[0, 2.23, 0]}>
           <meshStandardMaterial color="#c8a030" />
         </Box>
         {/* Lamp */}
-        <Cylinder args={[0.04, 0.04, 0.8, 8]} position={[0, 2.23 + 0.4, 0]}>
+        <Cylinder castShadow receiveShadow args={[0.04, 0.04, 0.8, 8]} position={[0, 2.23 + 0.4, 0]}>
           <meshStandardMaterial color="#888" metalness={0.6} />
         </Cylinder>
-        <Cylinder args={[0.25, 0.12, 0.35, 12]} position={[0, 2.23 + 0.9, 0]}>
+        <Cylinder castShadow receiveShadow args={[0.25, 0.12, 0.35, 12]} position={[0, 2.23 + 0.9, 0]}>
           <meshStandardMaterial color="#fffde0" emissive="#fffde0" emissiveIntensity={0.3} />
         </Cylinder>
       </group>
@@ -180,23 +202,23 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     const backC = '#4a5c82';
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 1.1, fd * 0.55]} position={[0, 0.55, fd * 0.12]}>
+        <Box castShadow receiveShadow args={[fw, 1.1, fd * 0.55]} position={[0, 0.55, fd * 0.12]}>
           <meshStandardMaterial color={sofaC} roughness={0.7} />
         </Box>
         {/* Back */}
-        <Box args={[fw, 2.1, fd * 0.18]} position={[0, 1.05, -fd * 0.4]}>
+        <Box castShadow receiveShadow args={[fw, 2.1, fd * 0.18]} position={[0, 1.05, -fd * 0.4]}>
           <meshStandardMaterial color={backC} roughness={0.7} />
         </Box>
         {/* Armrests */}
-        <Box args={[fw * 0.12, 1.8, fd * 0.72]} position={[-fw / 2 + fw * 0.06, 0.9, -fd * 0.12]}>
+        <Box castShadow receiveShadow args={[fw * 0.12, 1.8, fd * 0.72]} position={[-fw / 2 + fw * 0.06, 0.9, -fd * 0.12]}>
           <meshStandardMaterial color={backC} roughness={0.7} />
         </Box>
-        <Box args={[fw * 0.12, 1.8, fd * 0.72]} position={[fw / 2 - fw * 0.06, 0.9, -fd * 0.12]}>
+        <Box castShadow receiveShadow args={[fw * 0.12, 1.8, fd * 0.72]} position={[fw / 2 - fw * 0.06, 0.9, -fd * 0.12]}>
           <meshStandardMaterial color={backC} roughness={0.7} />
         </Box>
         {/* Cushion seams */}
         {[-fw * 0.22, fw * 0.22].map((ox, i) => (
-          <Box key={i} args={[0.05, 1.15, fd * 0.5]} position={[ox, 0.55, fd * 0.14]}>
+          <Box castShadow receiveShadow key={i} args={[0.05, 1.15, fd * 0.5]} position={[ox, 0.55, fd * 0.14]}>
             <meshStandardMaterial color={backC} />
           </Box>
         ))}
@@ -208,16 +230,16 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('armchair') || (n.includes('chair') && !n.includes('dining') && !n.includes('study') && !n.includes('patio') && !n.includes('outdoor'))) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 1.0, fd * 0.6]} position={[0, 0.5, fd * 0.1]}>
+        <Box castShadow receiveShadow args={[fw, 1.0, fd * 0.6]} position={[0, 0.5, fd * 0.1]}>
           <meshStandardMaterial color="#6e7eb0" roughness={0.7} />
         </Box>
-        <Box args={[fw, 1.9, fd * 0.2]} position={[0, 0.95, -fd * 0.38]}>
+        <Box castShadow receiveShadow args={[fw, 1.9, fd * 0.2]} position={[0, 0.95, -fd * 0.38]}>
           <meshStandardMaterial color="#5a6a9e" roughness={0.7} />
         </Box>
-        <Box args={[fw * 0.2, 1.55, fd * 0.8]} position={[-fw / 2 + fw * 0.1, 0.78, 0]}>
+        <Box castShadow receiveShadow args={[fw * 0.2, 1.55, fd * 0.8]} position={[-fw / 2 + fw * 0.1, 0.78, 0]}>
           <meshStandardMaterial color="#5a6a9e" />
         </Box>
-        <Box args={[fw * 0.2, 1.55, fd * 0.8]} position={[fw / 2 - fw * 0.1, 0.78, 0]}>
+        <Box castShadow receiveShadow args={[fw * 0.2, 1.55, fd * 0.8]} position={[fw / 2 - fw * 0.1, 0.78, 0]}>
           <meshStandardMaterial color="#5a6a9e" />
         </Box>
       </group>
@@ -229,11 +251,11 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     const h = n.includes('coffee') ? 1.4 : 2.9;
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 0.12, fd]} position={[0, h, 0]}>
+        <Box castShadow receiveShadow args={[fw, 0.12, fd]} position={[0, h, 0]}>
           <meshStandardMaterial color="#a87820" roughness={0.4} />
         </Box>
         {([[-1,-1],[1,-1],[-1,1],[1,1]] as [number,number][]).map(([sx,sz],i) => (
-          <Box key={i} args={[0.09, h, 0.09]} position={[sx*(fw/2-0.12), h/2, sz*(fd/2-0.12)]}>
+          <Box castShadow receiveShadow key={i} args={[0.09, h, 0.09]} position={[sx*(fw/2-0.12), h/2, sz*(fd/2-0.12)]}>
             <meshStandardMaterial color="#7a5c10" roughness={0.5} />
           </Box>
         ))}
@@ -245,14 +267,14 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('dining chair') || n.includes('study chair') || n.includes('patio chair') || n.includes('outdoor chair')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 0.07, fd]} position={[0, 1.8, 0]}>
+        <Box castShadow receiveShadow args={[fw, 0.07, fd]} position={[0, 1.8, 0]}>
           <meshStandardMaterial color="#906020" roughness={0.5} />
         </Box>
-        <Box args={[fw, 1.5, 0.1]} position={[0, 0.9, -fd/2+0.05]}>
+        <Box castShadow receiveShadow args={[fw, 1.5, 0.1]} position={[0, 0.9, -fd/2+0.05]}>
           <meshStandardMaterial color="#7a5010" roughness={0.5} />
         </Box>
         {([[-1,-1],[1,-1],[-1,1],[1,1]] as [number,number][]).map(([sx,sz],i) => (
-          <Box key={i} args={[0.07,1.8,0.07]} position={[sx*(fw/2-0.1),0.9,sz*(fd/2-0.1)]}>
+          <Box castShadow receiveShadow key={i} args={[0.07,1.8,0.07]} position={[sx*(fw/2-0.1),0.9,sz*(fd/2-0.1)]}>
             <meshStandardMaterial color="#7a5010" />
           </Box>
         ))}
@@ -265,17 +287,17 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     const wh = 7.5;
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, wh, fd]} position={[0, wh/2, 0]}>
+        <Box castShadow receiveShadow args={[fw, wh, fd]} position={[0, wh/2, 0]}>
           <meshStandardMaterial color="#6a4e28" roughness={0.4} />
           <Edges color="#4a2e10" />
         </Box>
         {/* Panel seam */}
-        <Box args={[0.05, wh-0.2, fd+0.02]} position={[0, wh/2, 0]}>
+        <Box castShadow receiveShadow args={[0.05, wh-0.2, fd+0.02]} position={[0, wh/2, 0]}>
           <meshStandardMaterial color="#4a2e10" />
         </Box>
         {/* Handles */}
         {[-fw*0.25, fw*0.25].map((ox,i) => (
-          <Box key={i} args={[0.06,0.6,0.06]} position={[ox, wh/2, fd/2+0.04]}>
+          <Box castShadow receiveShadow key={i} args={[0.06,0.6,0.06]} position={[ox, wh/2, fd/2+0.04]}>
             <meshStandardMaterial color="#c8a040" metalness={0.8} roughness={0.2} />
           </Box>
         ))}
@@ -287,10 +309,10 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('sideboard')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 3, fd]} position={[0, 1.5, 0]}>
+        <Box castShadow receiveShadow args={[fw, 3, fd]} position={[0, 1.5, 0]}>
           <meshStandardMaterial color="#7a5c2a" roughness={0.4} />
         </Box>
-        <Box args={[fw+0.04, 0.06, fd+0.04]} position={[0, 3.03, 0]}>
+        <Box castShadow receiveShadow args={[fw+0.04, 0.06, fd+0.04]} position={[0, 3.03, 0]}>
           <meshStandardMaterial color="#8a6c3a" />
         </Box>
       </group>
@@ -301,11 +323,11 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('desk') || n.includes('dressing') || n.includes('console')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 0.1, fd]} position={[0, 2.9, 0]}>
+        <Box castShadow receiveShadow args={[fw, 0.1, fd]} position={[0, 2.9, 0]}>
           <meshStandardMaterial color="#b09030" roughness={0.4} />
         </Box>
         {([[-1,-1],[1,-1],[-1,1],[1,1]] as [number,number][]).map(([sx,sz],i) => (
-          <Box key={i} args={[0.08,2.9,0.08]} position={[sx*(fw/2-0.1),1.45,sz*(fd/2-0.1)]}>
+          <Box castShadow receiveShadow key={i} args={[0.08,2.9,0.08]} position={[sx*(fw/2-0.1),1.45,sz*(fd/2-0.1)]}>
             <meshStandardMaterial color="#7a6020" roughness={0.5} />
           </Box>
         ))}
@@ -317,10 +339,10 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('counter') || n.includes('kitchen island')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 3.2, fd]} position={[0, 1.6, 0]}>
+        <Box castShadow receiveShadow args={[fw, 3.2, fd]} position={[0, 1.6, 0]}>
           <meshStandardMaterial color="#ddd8c0" roughness={0.3} />
         </Box>
-        <Box args={[fw+0.08, 0.1, fd+0.08]} position={[0, 3.25, 0]}>
+        <Box castShadow receiveShadow args={[fw+0.08, 0.1, fd+0.08]} position={[0, 3.25, 0]}>
           <meshStandardMaterial color="#b8b4a0" roughness={0.2} />
         </Box>
       </group>
@@ -331,11 +353,11 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('refrigerator') || n.includes('fridge')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 7.0, fd]} position={[0, 3.5, 0]}>
+        <Box castShadow receiveShadow args={[fw, 7.0, fd]} position={[0, 3.5, 0]}>
           <meshStandardMaterial color="#d8d8d8" roughness={0.2} />
           <Edges color="#b8b8b8" />
         </Box>
-        <Box args={[0.05, 3.0, 0.05]} position={[fw/2-0.12, 3.5, fd/2+0.03]}>
+        <Box castShadow receiveShadow args={[0.05, 3.0, 0.05]} position={[fw/2-0.12, 3.5, fd/2+0.03]}>
           <meshStandardMaterial color="#b0902a" metalness={0.7} />
         </Box>
       </group>
@@ -346,16 +368,16 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('oven')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 3.6, fd]} position={[0, 1.8, 0]}>
+        <Box castShadow receiveShadow args={[fw, 3.6, fd]} position={[0, 1.8, 0]}>
           <meshStandardMaterial color="#222222" roughness={0.3} />
           <Edges color="#444" />
         </Box>
-        <Box args={[fw-0.2, 1.8, 0.08]} position={[0, 1.5, fd/2+0.05]}>
+        <Box castShadow receiveShadow args={[fw-0.2, 1.8, 0.08]} position={[0, 1.5, fd/2+0.05]}>
           <meshStandardMaterial color="#111" />
         </Box>
         {/* Burners on top */}
         {([-fw*0.22, fw*0.22] as number[]).map((ox,i) => (
-          <Cylinder key={i} args={[0.4, 0.4, 0.08, 16]} position={[ox, 3.64, 0]} rotation={[Math.PI/2, 0, 0]}>
+          <Cylinder castShadow receiveShadow key={i} args={[0.4, 0.4, 0.08, 16]} position={[ox, 3.64, 0]} rotation={[Math.PI/2, 0, 0]}>
             <meshStandardMaterial color="#333" metalness={0.6} />
           </Cylinder>
         ))}
@@ -367,18 +389,18 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('sink') || n.includes('vanity')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 3.1, fd]} position={[0, 1.55, 0]}>
+        <Box castShadow receiveShadow args={[fw, 3.1, fd]} position={[0, 1.55, 0]}>
           <meshStandardMaterial color="#efefef" roughness={0.3} />
         </Box>
-        <Box args={[fw-0.1, 0.08, fd-0.1]} position={[0, 3.14, 0]}>
+        <Box castShadow receiveShadow args={[fw-0.1, 0.08, fd-0.1]} position={[0, 3.14, 0]}>
           <meshStandardMaterial color="#d8dce0" />
         </Box>
         {/* Basin */}
-        <Box args={[fw-0.35, 0.5, fd-0.3]} position={[0, 3.44, 0]}>
+        <Box castShadow receiveShadow args={[fw-0.35, 0.5, fd-0.3]} position={[0, 3.44, 0]}>
           <meshStandardMaterial color="#a8d0de" opacity={0.8} transparent />
         </Box>
         {/* Tap */}
-        <Cylinder args={[0.05, 0.05, 1.0, 8]} position={[0, 3.64+0.5, 0]}>
+        <Cylinder castShadow receiveShadow args={[0.05, 0.05, 1.0, 8]} position={[0, 3.64+0.5, 0]}>
           <meshStandardMaterial color="#c0c0c0" metalness={0.9} roughness={0.1} />
         </Cylinder>
       </group>
@@ -390,16 +412,16 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     return (
       <group position={[wx, 0, wz]}>
         {/* Cistern */}
-        <Box args={[fw, 2.6, fd*0.28]} position={[0, 1.3, -fd*0.35]}>
+        <Box castShadow receiveShadow args={[fw, 2.6, fd*0.28]} position={[0, 1.3, -fd*0.35]}>
           <meshStandardMaterial color="#f5f5f5" roughness={0.3} />
         </Box>
         {/* Pan */}
-        <Box args={[fw, 1.6, fd*0.65]} position={[0, 0.8, fd*0.12]}>
+        <Box castShadow receiveShadow args={[fw, 1.6, fd*0.65]} position={[0, 0.8, fd*0.12]}>
           <meshStandardMaterial color="#f0f0f0" roughness={0.3} />
           <Edges color="#d0d0d0" />
         </Box>
         {/* Seat */}
-        <Box args={[fw-0.1, 0.1, fd*0.6]} position={[0, 1.65, fd*0.12]}>
+        <Box castShadow receiveShadow args={[fw-0.1, 0.1, fd*0.6]} position={[0, 1.65, fd*0.12]}>
           <meshStandardMaterial color="#e8e8e8" />
         </Box>
       </group>
@@ -410,15 +432,15 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('bathtub') || n.includes('bath tub')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 2.0, fd]} position={[0, 1.0, 0]}>
+        <Box castShadow receiveShadow args={[fw, 2.0, fd]} position={[0, 1.0, 0]}>
           <meshStandardMaterial color="#f4f4f4" roughness={0.25} />
           <Edges color="#d0d0d0" />
         </Box>
         {/* Water */}
-        <Box args={[fw-0.2, 1.3, fd-0.2]} position={[0, 1.05, 0]}>
+        <Box castShadow receiveShadow args={[fw-0.2, 1.3, fd-0.2]} position={[0, 1.05, 0]}>
           <meshStandardMaterial color="#a0c8dc" opacity={0.55} transparent />
         </Box>
-        <Cylinder args={[0.07, 0.07, 0.9, 8]} position={[fw/2-0.25, 2.5, -fd/4]}>
+        <Cylinder castShadow receiveShadow args={[0.07, 0.07, 0.9, 8]} position={[fw/2-0.25, 2.5, -fd/4]}>
           <meshStandardMaterial color="#c0c0c0" metalness={0.9} roughness={0.1} />
         </Cylinder>
       </group>
@@ -429,21 +451,21 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('shower')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 0.18, fd]} position={[0, 0.09, 0]}>
+        <Box castShadow receiveShadow args={[fw, 0.18, fd]} position={[0, 0.09, 0]}>
           <meshStandardMaterial color="#c4dcc4" roughness={0.3} />
         </Box>
         {/* Glass walls */}
-        <Box args={[fw, ROOM_HEIGHT*0.78, 0.05]} position={[0, ROOM_HEIGHT*0.39, fd/2]}>
+        <Box castShadow receiveShadow args={[fw, ROOM_HEIGHT*0.78, 0.05]} position={[0, ROOM_HEIGHT*0.39, fd/2]}>
           <meshStandardMaterial color="#90b8c8" opacity={0.22} transparent />
         </Box>
-        <Box args={[0.05, ROOM_HEIGHT*0.78, fd]} position={[-fw/2, ROOM_HEIGHT*0.39, 0]}>
+        <Box castShadow receiveShadow args={[0.05, ROOM_HEIGHT*0.78, fd]} position={[-fw/2, ROOM_HEIGHT*0.39, 0]}>
           <meshStandardMaterial color="#90b8c8" opacity={0.22} transparent />
         </Box>
         {/* Shower head */}
-        <Cylinder args={[0.18, 0.18, 0.07, 16]} position={[0, ROOM_HEIGHT*0.76, -fd*0.3]} rotation={[Math.PI/2, 0, 0]}>
+        <Cylinder castShadow receiveShadow args={[0.18, 0.18, 0.07, 16]} position={[0, ROOM_HEIGHT*0.76, -fd*0.3]} rotation={[Math.PI/2, 0, 0]}>
           <meshStandardMaterial color="#c8c8c8" metalness={0.85} roughness={0.15} />
         </Cylinder>
-        <Cylinder args={[0.04, 0.04, 0.7, 8]} position={[0, ROOM_HEIGHT*0.4+0.5, -fd/2+0.2]}>
+        <Cylinder castShadow receiveShadow args={[0.04, 0.04, 0.7, 8]} position={[0, ROOM_HEIGHT*0.4+0.5, -fd/2+0.2]}>
           <meshStandardMaterial color="#b0b0b0" metalness={0.8} roughness={0.2} />
         </Cylinder>
       </group>
@@ -455,15 +477,15 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     return (
       <group position={[wx, 0, wz]}>
         {/* Cabinet */}
-        <Box args={[fw, 1.6, fd]} position={[0, 0.8, 0]}>
+        <Box castShadow receiveShadow args={[fw, 1.6, fd]} position={[0, 0.8, 0]}>
           <meshStandardMaterial color="#2a2a2a" roughness={0.4} />
         </Box>
         {/* TV screen */}
-        <Box args={[fw-0.15, 3.2, 0.12]} position={[0, 1.6+1.6, -fd/2-0.07]}>
+        <Box castShadow receiveShadow args={[fw-0.15, 3.2, 0.12]} position={[0, 1.6+1.6, -fd/2-0.07]}>
           <meshStandardMaterial color="#0a0a14" />
         </Box>
         {/* Screen glow */}
-        <Box args={[fw-0.3, 2.9, 0.05]} position={[0, 1.6+1.6, -fd/2-0.1]}>
+        <Box castShadow receiveShadow args={[fw-0.3, 2.9, 0.05]} position={[0, 1.6+1.6, -fd/2-0.1]}>
           <meshStandardMaterial color="#0a0a28" emissive="#080816" emissiveIntensity={0.5} />
         </Box>
       </group>
@@ -474,12 +496,12 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('bookshelf') || n.includes('shelf')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 6.5, fd]} position={[0, 3.25, 0]}>
+        <Box castShadow receiveShadow args={[fw, 6.5, fd]} position={[0, 3.25, 0]}>
           <meshStandardMaterial color="#7a5a2a" roughness={0.4} />
           <Edges color="#5a3a10" />
         </Box>
         {[1.3, 2.7, 4.1, 5.4].map((sh, i) => (
-          <Box key={i} args={[fw-0.1, 0.07, fd-0.05]} position={[0, sh, 0]}>
+          <Box castShadow receiveShadow key={i} args={[fw-0.1, 0.07, fd-0.05]} position={[0, sh, 0]}>
             <meshStandardMaterial color="#5a3a10" />
           </Box>
         ))}
@@ -491,11 +513,11 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('washing machine') || n.includes('dryer')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, fd*2.2, fd]} position={[0, fd*1.1, 0]}>
+        <Box castShadow receiveShadow args={[fw, fd*2.2, fd]} position={[0, fd*1.1, 0]}>
           <meshStandardMaterial color="#e8e8e8" roughness={0.3} />
           <Edges color="#c8c8c8" />
         </Box>
-        <Cylinder args={[fd*0.32, fd*0.32, 0.12, 20]} position={[0, fd*2.05, fd/2+0.07]} rotation={[Math.PI/2, 0, 0]}>
+        <Cylinder castShadow receiveShadow args={[fd*0.32, fd*0.32, 0.12, 20]} position={[0, fd*2.05, fd/2+0.07]} rotation={[Math.PI/2, 0, 0]}>
           <meshStandardMaterial color="#9ab0c0" roughness={0.3} />
         </Cylinder>
       </group>
@@ -506,10 +528,10 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('plant') || n.includes('pot')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Cylinder args={[fw/2*0.65, fw/2, fd, 12]} position={[0, fd/2, 0]}>
+        <Cylinder castShadow receiveShadow args={[fw/2*0.65, fw/2, fd, 12]} position={[0, fd/2, 0]}>
           <meshStandardMaterial color="#8b4513" roughness={0.8} />
         </Cylinder>
-        <Cylinder args={[fw/2*1.1, fw/2*0.8, fw*0.7, 10]} position={[0, fd+fw*0.35, 0]}>
+        <Cylinder castShadow receiveShadow args={[fw/2*1.1, fw/2*0.8, fw*0.7, 10]} position={[0, fd+fw*0.35, 0]}>
           <meshStandardMaterial color="#228b22" roughness={0.9} />
         </Cylinder>
       </group>
@@ -520,15 +542,15 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('car')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 2.0, fd]} position={[0, 1.0, 0]}>
+        <Box castShadow receiveShadow args={[fw, 2.0, fd]} position={[0, 1.0, 0]}>
           <meshStandardMaterial color="#3355a0" roughness={0.4} />
         </Box>
-        <Box args={[fw*0.7, 1.6, fd*0.52]} position={[0, 2.8, -fd*0.06]}>
+        <Box castShadow receiveShadow args={[fw*0.7, 1.6, fd*0.52]} position={[0, 2.8, -fd*0.06]}>
           <meshStandardMaterial color="#2a4490" roughness={0.4} />
         </Box>
         {/* Wheels */}
         {([[-fw/2+1.1,-fd/2+1.1],[fw/2-1.1,-fd/2+1.1],[-fw/2+1.1,fd/2-1.1],[fw/2-1.1,fd/2-1.1]] as [number,number][]).map(([lx,lz],i) => (
-          <Cylinder key={i} args={[0.7, 0.7, 0.5, 16]} rotation={[Math.PI/2, 0, 0]} position={[lx, 0.7, lz]}>
+          <Cylinder castShadow receiveShadow key={i} args={[0.7, 0.7, 0.5, 16]} rotation={[Math.PI/2, 0, 0]} position={[lx, 0.7, lz]}>
             <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
           </Cylinder>
         ))}
@@ -540,11 +562,11 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   if (n.includes('bench') || n.includes('lounger')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box args={[fw, 0.25, fd]} position={[0, 1.3, 0]}>
+        <Box castShadow receiveShadow args={[fw, 0.25, fd]} position={[0, 1.3, 0]}>
           <meshStandardMaterial color="#c0a070" roughness={0.6} />
         </Box>
         {([[-fw/2+0.15,-fd/2+0.15],[fw/2-0.15,-fd/2+0.15],[-fw/2+0.15,fd/2-0.15],[fw/2-0.15,fd/2-0.15]] as [number,number][]).map(([lx,lz],i) => (
-          <Box key={i} args={[0.1, 1.3, 0.1]} position={[lx, 0.65, lz]}>
+          <Box castShadow receiveShadow key={i} args={[0.1, 1.3, 0.1]} position={[lx, 0.65, lz]}>
             <meshStandardMaterial color="#9a7840" roughness={0.6} />
           </Box>
         ))}
@@ -554,7 +576,7 @@ function FurnitureItem3D({ item, roomX, roomY }: {
 
   // ── Generic fallback ──────────────────────────────────────────────────────
   return (
-    <Box args={[Math.max(fw, 0.5), 1.0, Math.max(fd, 0.5)]} position={[wx, 0.5, wz]}>
+    <Box castShadow receiveShadow args={[Math.max(fw, 0.5), 1.0, Math.max(fd, 0.5)]} position={[wx, 0.5, wz]}>
       <meshStandardMaterial color="#b0b8c4" opacity={0.6} transparent />
     </Box>
   );
@@ -600,22 +622,22 @@ function Room3D({ room }: { room: Room }) {
 
       {/* Walls — 4 faces */}
       {/* North */}
-      <Box args={[room.width + WALL_T*2, ROOM_HEIGHT, WALL_T]} position={[cx, ROOM_HEIGHT/2, room.y]}>
+      <Box castShadow receiveShadow args={[room.width + WALL_T*2, ROOM_HEIGHT, WALL_T]} position={[cx, ROOM_HEIGHT/2, room.y]}>
         <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
         <Edges color="#9aa0a8" />
       </Box>
       {/* South */}
-      <Box args={[room.width + WALL_T*2, ROOM_HEIGHT, WALL_T]} position={[cx, ROOM_HEIGHT/2, room.y + room.height]}>
+      <Box castShadow receiveShadow args={[room.width + WALL_T*2, ROOM_HEIGHT, WALL_T]} position={[cx, ROOM_HEIGHT/2, room.y + room.height]}>
         <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
         <Edges color="#9aa0a8" />
       </Box>
       {/* West */}
-      <Box args={[WALL_T, ROOM_HEIGHT, room.height]} position={[room.x, ROOM_HEIGHT/2, cz]}>
+      <Box castShadow receiveShadow args={[WALL_T, ROOM_HEIGHT, room.height]} position={[room.x, ROOM_HEIGHT/2, cz]}>
         <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
         <Edges color="#9aa0a8" />
       </Box>
       {/* East */}
-      <Box args={[WALL_T, ROOM_HEIGHT, room.height]} position={[room.x + room.width, ROOM_HEIGHT/2, cz]}>
+      <Box castShadow receiveShadow args={[WALL_T, ROOM_HEIGHT, room.height]} position={[room.x + room.width, ROOM_HEIGHT/2, cz]}>
         <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
         <Edges color="#9aa0a8" />
       </Box>
@@ -660,7 +682,8 @@ export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
         shadows
         gl={{ antialias: true }}
       >
-        <color attach="background" args={['#0d1117']} />
+        <Sky sunPosition={[centerX + 50, maxDim * 1.5, centerZ + 50]} turbidity={0.2} rayleigh={0.1} />
+        <Environment preset="city" />
         <ambientLight intensity={0.6} />
         <directionalLight
           position={[centerX + maxDim * 0.7, maxDim * 1.4, centerZ + maxDim * 0.7]}
@@ -677,6 +700,12 @@ export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
         <group>
           {rooms.map((room, i) => <Room3D key={i} room={room} />)}
         </group>
+        
+        {/* Grass / Ground */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.1, centerZ]} receiveShadow>
+          <planeGeometry args={[maxDim * 4, maxDim * 4]} />
+          <meshStandardMaterial color="#4ade80" roughness={0.9} />
+        </mesh>
 
         <OrbitControls
           target={[centerX, ROOM_HEIGHT / 2, centerZ]}

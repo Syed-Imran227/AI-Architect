@@ -274,6 +274,44 @@ export default function Landing() {
       flip: true,
     },
     {
+      eyebrow: "AI Copilot",
+      title: "Conversational Editing.",
+      copy: "Don't like the layout? Just type 'Make the kitchen larger' or 'Swap the Master Bedroom with the Living Room'. The Copilot safely resolves the topology without overlaps.",
+      visual: (
+        <div style={{ background: isDark ? "#252220" : "#c8c8c0", border: `1px solid ${P.border}`, borderRadius: 8, padding: 20, width: "100%", minHeight: 200, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ background: isDark ? "#1a1614" : "#b8b8b0", padding: "10px 14px", borderRadius: 8, alignSelf: "flex-end", maxWidth: "85%" }}>
+            <span style={{ fontSize: 13, color: P.text }}>Make the kitchen 20% larger and push it to the rear.</span>
+          </div>
+          <div style={{ background: isDark ? "rgba(94,106,210,0.15)" : "rgba(37,99,235,0.1)", border: `1px solid ${P.accent}40`, padding: "10px 14px", borderRadius: 8, alignSelf: "flex-start", maxWidth: "85%" }}>
+            <span style={{ fontSize: 13, color: P.text }}>✅ Topology revised. Drafter rebuilt geometry.</span>
+          </div>
+        </div>
+      ),
+      flip: false,
+    },
+    {
+      eyebrow: "Sun Path & Energy",
+      title: "Thermal Efficiency Engine.",
+      copy: "Calculates the physical orientation of your plot. Scores layouts based on morning light utilization (East) and shielding living areas from harsh afternoon heat (West).",
+      visual: (
+        <div style={{ background: isDark ? "#252220" : "#c8c8c0", border: `1px solid ${P.border}`, borderRadius: 8, overflow: "hidden", width: "100%", minHeight: 200 }}>
+          <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${P.border}` }}>
+            <span style={{ fontSize: 28 }}>☀️</span>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: P.text }}>Grade A</div>
+              <div style={{ fontSize: 12, color: P.textMuted }}>Thermal Efficiency</div>
+            </div>
+          </div>
+          <div style={{ padding: "16px 20px", fontSize: 13, color: P.text, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>East Sun Utilization</span><span style={{ color: "#4caf50" }}>Optimal</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>West Heat Shielding</span><span style={{ color: "#4caf50" }}>Excellent</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>South Buffer Zone</span><span style={{ color: "#ffa726" }}>Acceptable</span></div>
+          </div>
+        </div>
+      ),
+      flip: true,
+    },
+    {
       eyebrow: "Export Suite",
       title: "Files engineers actually open.",
       copy: "Multi-layer DXF at 1 ft = 304.8 mm. Separate WALLS, DOORS, WINDOWS, FURNITURE, and DIMENSIONS layers. Drop it into AutoCAD or ZWCAD unchanged.",

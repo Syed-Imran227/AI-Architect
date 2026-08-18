@@ -624,13 +624,17 @@ def inject_furniture(layout: dict) -> dict:
     def _swing_zones(room: dict) -> list[tuple]:
         zones = []
         rw, rh = room["width"], room["height"]
+        n = room.get("name", "").lower()
+        # Increased clearance for bedrooms and bathrooms
+        swing_dist = 5.0 if ("bed" in n or "bath" in n or "toilet" in n or "wc" in n) else 3.0
+        
         for door in room.get("doors", []):
             wall = door.get("wall", "")
             pos  = door.get("position", 0)
-            if wall == "bottom":  zones.append((pos, 0,           pos + SWING, SWING))
-            elif wall == "top":   zones.append((pos, rh - SWING,  pos + SWING, rh))
-            elif wall == "left":  zones.append((0,   pos,          SWING,       pos + SWING))
-            elif wall == "right": zones.append((rw - SWING, pos,  rw,          pos + SWING))
+            if wall == "bottom":  zones.append((pos - 1.5, 0,               pos + swing_dist, swing_dist))
+            elif wall == "top":   zones.append((pos - 1.5, rh - swing_dist, pos + swing_dist, rh))
+            elif wall == "left":  zones.append((0,         pos - 1.5,       swing_dist,       pos + swing_dist))
+            elif wall == "right": zones.append((rw - swing_dist, pos - 1.5, rw,               pos + swing_dist))
         return zones
 
     def _overlaps(fx, fy, fw, fh, zones, placed):

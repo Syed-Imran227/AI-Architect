@@ -415,6 +415,128 @@ def fix_vastu_topology(
     }
 
 
+def _build_nbc_fix_prompt(
+    length: float, width: float,
+    bedrooms: int, bathrooms: int,
+    violated_rules: list[dict],
+    current_rationale: str,
+) -> str:
+    """Build a prompt asking the LLM to fix specific NBC violations via topology changes."""
+    rule_lines = "\n".join(
+        f"  - {r['rule']}: {r['detail']} (currently {r['points']}/{r['max']})"
+        for r in violated_rules
+    )
+    return f"""
+You are the Lead AI Architect performing an NBC compliance correction.
+
+# Current Layout
+- Plot: {length} ft wide x {width} ft deep
+- Bedrooms: {bedrooms}, Bathrooms: {bathrooms}
+- Current design rationale: {current_rationale}
+
+# NBC Violations to Fix
+{rule_lines}
+
+# Your Task
+Revise the topology to address these violations. You MUST:
+1. Keep the 3-bay structure (left_bay, spine, right_bay) — do NOT output coordinates.
+2. Address the specific failing rules above. For NBC compliance, setbacks and area ratios are critical. 
+3. You can reduce room counts or move rooms to different bays to satisfy area requirements.
+4. Total bathrooms_allocated across both bays must sum to {bathrooms}.
+
+# Output Schema (ONLY this JSON, no wrapping, no explanations):
+{{
+  "topology": {{
+    "left_bay": {{
+      "rooms": ["Master Bedroom"],
+      "bathrooms_allocated": 1
+    }},
+    "right_bay": {{
+      "rooms": ["Living Room", "Dining Room", "Kitchen"],
+      "open_plan_living_dining": true,
+      "kitchen_position": "rear"
+    }},
+    "spine": {{
+      "rooms": ["Foyer", "Corridor", "Staircase"]
+    }}
+  }},
+  "design_rationale": "One sentence explaining the NBC corrections made."
+}}
+"""
+
+
+def fix_nbc_topology(
+    length: float,
+    width: float,
+    bedrooms: int,
+    bathrooms: int,
+    floors: int,
+    entry_dir: str,
+    violated_rules: list[dict],
+    max_retries: int = 2,
+    balcony: int = 0,
+    terrace: int = 0,
+    lift: int = 0,
+) -> dict:
+    """
+    Use the LLM to correct NBC violations via topology changes, then rerun the Drafter.
+
+    Returns:
+        {
+          "layout": dict,
+          "converged": bool,
+          "attempts": int,
+          "design_rationale": str,
+        }
+    """
+
+    best_layout: Optional[dict] = None
+    best_rationale = ""
+
+    current_violations = violated_rules
+    for attempt in range(1, max_retries + 1):
+        prompt = _build_nbc_fix_prompt(
+            length, width, bedrooms, bathrooms,
+            current_violations, best_rationale or "No prior rationale."
+        )
+        topology = _call_architect_llm(prompt, retries=1)
+
+        if topology is None:
+            print(f"[nbc-fix] Attempt {attempt}: LLM returned no topology — skipping.")
+            continue
+
+        try:
+            layout = build_layout_from_topology(
+                topology=topology,
+                length=length,
+                width=width,
+                bedrooms=bedrooms,
+                bathrooms=bathrooms,
+                floors=floors,
+                balcony=balcony,
+                terrace=terrace,
+                lift=lift,
+                vastu=False, # NBC fixes shouldn't enforce vastu
+                entry_dir=entry_dir,
+            )
+            layout = inject_furniture(layout)
+            layout = _run_boundary_check(layout, length, width)
+            best_layout = layout
+            best_rationale = topology.design_rationale
+            print(f"[nbc-fix] Attempt {attempt}: topology applied. Rationale: {best_rationale}")
+            break
+        except Exception as e:
+            print(f"[nbc-fix] Attempt {attempt}: Drafter failed — {e}")
+            continue
+
+    return {
+        "layout": best_layout,
+        "converged": best_layout is not None,
+        "attempts": attempt,
+        "design_rationale": best_rationale,
+    }
+
+
 # ── Fix 2: LLM-driven single-room topology regeneration ──────────────────────
 
 _ROOM_SIZE_VOCAB = {

@@ -7,11 +7,12 @@ import base64
 import traceback
 
 from core.auth import get_current_user
-from engines.inference import FloorPlanGenerator, fix_vastu_topology, fix_room_topology
+from engines.inference import FloorPlanGenerator, fix_vastu_topology, fix_room_topology, fix_nbc_topology
 from exporters.dxf_exporter import export_to_dxf
 from exporters.floor_renderer import render_floor_plan
 from engines.vastu_engine import score_vastu
 from engines.nbc_engine import score_nbc
+from engines.energy_engine import score_energy
 from engines.bom_engine import compute_bom
 from exporters.pdf_report import generate_report_pdf
 
@@ -109,6 +110,13 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         num_floors = req.floors,
     )
 
+    energy_result = score_energy(
+        rooms     = ground_rooms,
+        plot_w    = req.length,
+        plot_h    = req.width,
+        entry_dir = req.entryDir,
+    )
+
     return {
         "status": "success",
         "candidates": [
@@ -119,6 +127,7 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
                 "vastuScore":           vastu_result["score"],
                 "vastuResult":          vastu_result,
                 "nbcResult":            nbc_result,
+                "energyResult":         energy_result,
                 "validationReport":     json_layout.get("validation_report", []),
                 "circulationWarnings":  json_layout.get("circulation_warnings", []),
             }
@@ -275,6 +284,101 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             "design_rationale": result["design_rationale"],
             "converged": True,
             # fixed_layout is the full rooms list so the frontend can replace the floor
+            "fixed_layout": ground_rooms,
+            "imageUrl": image_url,
+            "full_layout": new_layout,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Auto-fix failed: {str(e)}")
+
+
+class NbcFixRequest(BaseModel):
+    layout: dict
+    plot_width: float = 40.0
+    plot_height: float = 30.0
+    entry_dir: str = "east"
+    bedrooms: int = 2
+    bathrooms: int = 2
+    floors: int = 1
+    balcony: int = 0
+    terrace: int = 0
+    lift: int = 0
+    nbc_result: dict = Field(default_factory=dict)
+
+@router.post("/nbc/fix")
+def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
+    try:
+        current_rules = req.nbc_result.get("rules", [])
+        before_score = req.nbc_result.get("score", 0)
+        violated = [r for r in current_rules if r.get("status") in ("fail", "warn")]
+
+        if not violated:
+            return {
+                "status": "already_optimal",
+                "message": "No NBC violations found — layout is already compliant.",
+                "before_score": before_score,
+                "after_score": before_score,
+                "fixed_layout": req.layout.get("rooms") or (
+                    req.layout.get("floors", [{}])[0].get("rooms", [])
+                ),
+            }
+
+        result = fix_nbc_topology(
+            length=req.plot_width,
+            width=req.plot_height,
+            bedrooms=req.bedrooms,
+            bathrooms=req.bathrooms,
+            floors=req.floors,
+            entry_dir=req.entry_dir,
+            violated_rules=violated,
+            max_retries=2,
+            balcony=req.balcony,
+            terrace=req.terrace,
+            lift=req.lift,
+        )
+
+        if not result["converged"] or result["layout"] is None:
+            raise HTTPException(
+                status_code=500,
+                detail="NBC fix failed: LLM could not produce a valid revised topology after 2 attempts."
+            )
+
+        new_layout = result["layout"]
+        ground_rooms = new_layout["floors"][0]["rooms"]
+
+        vastu_rooms = list(ground_rooms)
+        if len(new_layout["floors"]) > 1:
+            vastu_rooms.extend(new_layout["floors"][1]["rooms"])
+
+        new_vastu = score_vastu(
+            rooms=vastu_rooms,
+            plot_w=req.plot_width,
+            plot_h=req.plot_height,
+            entry_dir=req.entry_dir,
+        )
+
+        new_nbc = score_nbc(
+            rooms=ground_rooms,
+            plot_w=req.plot_width,
+            plot_h=req.plot_height,
+            num_floors=req.floors,
+        )
+
+        png_bytes = render_floor_plan(ground_rooms, unit_label="NBC-Optimised Plan")
+        b64_str = base64.b64encode(png_bytes).decode("utf-8")
+        image_url = f"data:image/png;base64,{b64_str}"
+
+        return {
+            "status": "success",
+            "before_score": before_score,
+            "after_score": new_nbc["score"],
+            "new_vastu_result": new_vastu,
+            "new_nbc_result": new_nbc,
+            "design_rationale": result["design_rationale"],
+            "converged": True,
             "fixed_layout": ground_rooms,
             "imageUrl": image_url,
             "full_layout": new_layout,
