@@ -52,9 +52,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the `backend` directory and add your Groq API key:
+Create a `.env` file in the `backend` directory and add your required environment variables:
 ```env
 GROQ_API_KEY=gsk_your_api_key_here
+HF_API_KEY=hf_your_huggingface_token
+JWT_SECRET=your_super_secret_jwt_key
+MONGO_URI=mongodb://localhost:27017/ai_architect
 ```
 
 Start the backend server:

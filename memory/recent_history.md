@@ -1,5 +1,12 @@
 # Recent History & Conversations
 
+## Late August 2026: E2E Audit Remediation & Documentation Polish
+- **Test Suite Establishment:** Authored an isolated `test_drafter.py` pytest suite in the user's root Downloads directory to strictly verify the mathematical integrity of the deterministic drafter (zero overlapping rectangles, boundary clamp correctness) without cluttering the main codebase.
+- **Dependency & Config Fortification:** Ran a strict `pip freeze` to completely replace unpinned dependencies in `requirements.txt` with exact versions to eliminate upstream regressions. 
+- **Security & Error Sanitization:** Scoured `engine_routes.py` for raw Python exceptions being sent to the client (e.g. `HTTP 500: ... {str(e)}`) and sanitized them into secure, generic frontend messages while preserving raw stack traces (`traceback.print_exc()`) on the backend console.
+- **Startup Integrity:** Identified that Hugging Face (`HF_API_KEY`) was being used for the primary LLM inference but not checked on boot. Updated `main.py` lifespan to enforce its presence.
+- **Documentation Overhaul:** Updated the startup instructions in `README.md` to properly document all critical environment variables (`GROQ_API_KEY`, `HF_API_KEY`, `JWT_SECRET`, `MONGO_URI`).
+
 ## Mid-August 2026: Model Swap & E2E Audit
 - **LLM Model Migration:** Benchmarked the top 5 open-weight models on HuggingFace for architectural topology generation. DeepSeek-R1 and V4-Pro ran into token limits, but DeepSeek-V3-0324 and Qwen3-Coder-30B-A3B-Instruct scored perfectly on accuracy.
 - **Resilient Inference Chain:** Upgraded `inference.py` to use a multi-provider fallback chain: DeepSeek-V3 (HuggingFace) -> Qwen3-Coder (HuggingFace) -> gpt-oss-120b (Groq). Re-configured API calls to use the new `router.huggingface.co/v1` endpoint.

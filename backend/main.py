@@ -16,6 +16,8 @@ async def lifespan(app: FastAPI):
         raise ValueError("CRITICAL: JWT_SECRET environment variable is missing. Cannot boot securely.")
     if not os.getenv("GROQ_API_KEY"):
         raise ValueError("CRITICAL: GROQ_API_KEY environment variable is missing. Cannot generate AI layouts.")
+    if not os.getenv("HF_API_KEY"):
+        raise ValueError("CRITICAL: HF_API_KEY environment variable is missing. Cannot generate AI layouts via HuggingFace.")
     yield  # App is live
 
 app = FastAPI(title="AI Architect API", lifespan=lifespan)

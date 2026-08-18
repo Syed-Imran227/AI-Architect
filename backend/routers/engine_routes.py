@@ -188,7 +188,7 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF Report: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate PDF Report due to an internal server error.")
 
 
 class VastuFixRequest(BaseModel):
@@ -292,7 +292,7 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Auto-fix failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Auto-fix failed due to an internal server error.")
 
 
 class NbcFixRequest(BaseModel):
@@ -387,7 +387,7 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Auto-fix failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Auto-fix failed due to an internal server error.")
 
 
 class RegenerateRoomRequest(BaseModel):
@@ -449,4 +449,4 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Regeneration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Regeneration failed due to an internal server error.")
