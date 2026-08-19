@@ -116,6 +116,37 @@ const getAuthHeaders = () => {
   };
 };
 
+// Wraps fetch with an AbortController timeout to prevent infinite hangs.
+// AI generation calls can be slow; 120s for those, 30s for data calls.
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = 30_000,
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal });
+    return res;
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s. The server may be overloaded.`, { cause: err });
+    }
+    throw err;
+  } finally {
+    clearTimeout(timerId);
+  }
+};
+
+const authFetch = async (input: RequestInfo | URL, init?: RequestInit, timeoutMs = 30_000) => {
+  const res = await fetchWithTimeout(input, init, timeoutMs);
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  }
+  return res;
+};
+
 export const register = async (data: Record<string, unknown>) => {
   const res = await fetch(`${API_BASE_URL}/auth/register`, {
     method: "POST",
@@ -137,7 +168,7 @@ export const login = async (data: Record<string, unknown>) => {
 };
 
 export const fetchMe = async () => {
-  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+  const res = await authFetch(`${API_BASE_URL}/auth/me`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Not authenticated");
@@ -146,19 +177,19 @@ export const fetchMe = async () => {
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 export const getProjects = async () => {
-  const res = await fetch(`${API_BASE_URL}/projects`, { headers: getAuthHeaders() });
+  const res = await authFetch(`${API_BASE_URL}/projects`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error("Failed to fetch projects");
   return res.json();
 };
 
 export const getProjectById = async (id: string) => {
-  const res = await fetch(`${API_BASE_URL}/projects/${id}`, { headers: getAuthHeaders() });
+  const res = await authFetch(`${API_BASE_URL}/projects/${id}`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error("Failed to fetch project");
   return res.json();
 };
 
 export const saveProject = async (data: Record<string, unknown>) => {
-  const res = await fetch(`${API_BASE_URL}/projects`, {
+  const res = await authFetch(`${API_BASE_URL}/projects`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
@@ -168,7 +199,7 @@ export const saveProject = async (data: Record<string, unknown>) => {
 };
 
 export const deleteProject = async (id: string) => {
-  const res = await fetch(`${API_BASE_URL}/projects/${id}`, {
+  const res = await authFetch(`${API_BASE_URL}/projects/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
@@ -178,17 +209,17 @@ export const deleteProject = async (id: string) => {
 
 // ── Generation ───────────────────────────────────────────────────────────────
 export const generatePlans = async (data: Record<string, unknown>): Promise<{ candidates: unknown[] }> => {
-  const res = await fetch(`${API_BASE_URL}/generate`, {
+  const res = await authFetch(`${API_BASE_URL}/generate`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
-  });
+  }, 120_000);  // AI generation can take up to 2 min
   if (!res.ok) throw new Error(`Generation failed: ${await res.text()}`);
   return res.json();
 };
 
 export const exportDxf = async (rooms: Room[], planId: string): Promise<void> => {
-  const res = await fetch(`${API_BASE_URL}/export/dxf`, {
+  const res = await authFetch(`${API_BASE_URL}/export/dxf`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ rooms, plan_id: planId }),
@@ -218,7 +249,7 @@ export const regenerateRoom = async (
     floors: number;
   }
 ): Promise<{ rooms: Room[]; imageUrl?: string; llm_called: boolean; design_rationale?: string }> => {
-  const res = await fetch(`${API_BASE_URL}/regenerate-room`, {
+  const res = await authFetch(`${API_BASE_URL}/regenerate-room`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
@@ -232,7 +263,7 @@ export const regenerateRoom = async (
       bathrooms: plotContext.bathrooms,
       floors: plotContext.floors,
     }),
-  });
+  }, 120_000);  // AI regeneration can be slow
   if (!res.ok) throw new Error(`AI editing failed: ${await res.text()}`);
   return res.json();
 };
@@ -249,12 +280,12 @@ export const vastuFix = async (
     floors: number;
   }
 ): Promise<VastuFixResult> => {
-  const res = await fetch(`${API_BASE_URL}/vastu/fix`, {
+  const res = await authFetch(`${API_BASE_URL}/vastu/fix`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
       layout,
-      vastu_result: vastuResult ?? { score: 0, grade: "N/A", rules: [] },
+      vastu_result: vastuResult ?? {},
       plot_width: plotContext.plotWidth,
       plot_height: plotContext.plotHeight,
       entry_dir: plotContext.entryDir,
@@ -262,7 +293,7 @@ export const vastuFix = async (
       bathrooms: plotContext.bathrooms,
       floors: plotContext.floors,
     }),
-  });
+  }, 120_000);  // LLM topology fix can be slow
   if (!res.ok) throw new Error(`Vastu fix failed: ${await res.text()}`);
   return res.json();
 };
@@ -279,12 +310,12 @@ export const nbcFix = async (
     floors: number;
   }
 ): Promise<NbcFixResult> => {
-  const res = await fetch(`${API_BASE_URL}/nbc/fix`, {
+  const res = await authFetch(`${API_BASE_URL}/nbc/fix`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
       layout,
-      nbc_result: nbcResult ?? { score: 0, grade: "N/A", rules: [] },
+      nbc_result: nbcResult ?? {},
       plot_width: plotContext.plotWidth,
       plot_height: plotContext.plotHeight,
       entry_dir: plotContext.entryDir,
@@ -292,7 +323,7 @@ export const nbcFix = async (
       bathrooms: plotContext.bathrooms,
       floors: plotContext.floors,
     }),
-  });
+  }, 120_000);  // LLM topology fix can be slow
   if (!res.ok) throw new Error(`NBC fix failed: ${await res.text()}`);
   return res.json();
 };
@@ -303,7 +334,7 @@ export const exportReport = async (
   planId: string,
   projectMeta: Record<string, unknown>
 ): Promise<void> => {
-  const res = await fetch(`${API_BASE_URL}/export/pdf`, {
+  const res = await authFetch(`${API_BASE_URL}/export/pdf`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({

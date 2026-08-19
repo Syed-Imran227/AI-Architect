@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { Room } from '../services/api';
 import { regenerateRoom } from '../services/api';
 
@@ -37,17 +37,15 @@ const RoomEditor: React.FC<Props> = ({ room, allRooms, plotContext, onRoomUpdate
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiSuccess, setAiSuccess] = useState(false);
 
-  // Sync local state when the selected room prop changes — must be a useEffect,
-  // never call setState directly in the render body (causes infinite re-render loop).
-  useEffect(() => {
-    if (room.name !== prevRoomName) {
-      setPrevRoomName(room.name);
-      setLocal({ ...room });
-      setInstruction('');
-      setAiError(null);
-      setAiSuccess(false);
-    }
-  }, [room, prevRoomName]);
+  // Sync local state when the selected room prop changes using the during-render pattern
+  // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
+  if (room.name !== prevRoomName) {
+    setPrevRoomName(room.name);
+    setLocal({ ...room });
+    setInstruction('');
+    setAiError(null);
+    setAiSuccess(false);
+  }
 
   const handleFieldChange = (field: NumericRoomKey, val: number) => {
     setLocal(prev => ({ ...prev, [field]: val }));

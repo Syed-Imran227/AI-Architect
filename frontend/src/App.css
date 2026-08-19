@@ -95,8 +95,9 @@ button {
 /* Primary button — CTAs */
 .btn-primary {
   background: var(--accent-color);
-  color: #fff;
+  color: var(--accent-fg);
   border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 0.55rem 1.25rem;
   font-weight: 600;
@@ -118,9 +119,10 @@ button {
 
 /* Ghost button — secondary actions */
 .btn-ghost {
-  background: transparent;
+  background: var(--glass-bg);
   color: var(--text-secondary);
-  border: 1px solid var(--glass-border);
+  border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 0.55rem 1.25rem;
   font-weight: 500;
@@ -134,7 +136,8 @@ button {
 .btn-ghost:hover:not(:disabled) {
   background: var(--glass-hover);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  
+  box-shadow: var(--input-shadow);
 }
 
 .btn-ghost:disabled {
@@ -144,9 +147,10 @@ button {
 
 /* Danger button — delete, destructive */
 .btn-danger {
-  background: transparent;
+  background: var(--glass-bg);
   color: var(--error);
-  border: 1px solid var(--error);
+  border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 0.4rem 0.7rem;
   font-weight: 500;
@@ -159,6 +163,7 @@ button {
 
 .btn-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--error) 12%, transparent);
+  box-shadow: var(--input-shadow);
 }
 
 /* ── Form Inputs ── */
@@ -167,6 +172,7 @@ button {
   border-radius: 10px;
   border: 1px solid var(--input-border);
   background: var(--input-bg);
+  box-shadow: var(--input-shadow);
   color: var(--text-primary);
   font-size: 0.95rem;
   outline: none;
@@ -180,9 +186,10 @@ button {
 
 /* Back / breadcrumb button */
 .back-btn {
-  background: transparent;
+  background: var(--glass-bg);
   color: var(--text-secondary);
-  border: 1px solid var(--glass-border);
+  border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 0.4rem 0.875rem;
   font-weight: 500;
@@ -197,13 +204,15 @@ button {
 .back-btn:hover {
   background: var(--glass-hover);
   color: var(--text-primary);
+  box-shadow: var(--input-shadow);
 }
 
 /* Action bar buttons (Editor) */
 .action-btn {
   background: var(--glass-bg);
   color: var(--text-secondary);
-  border: 1px solid var(--glass-border);
+  border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 0.45rem 0.875rem;
   cursor: pointer;
@@ -218,7 +227,8 @@ button {
 .action-btn:hover:not(:disabled) {
   background: var(--glass-hover);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  
+  box-shadow: var(--input-shadow);
 }
 
 .action-btn:disabled {
@@ -233,13 +243,15 @@ button {
 
 .action-btn.success:hover:not(:disabled) {
   background: color-mix(in srgb, var(--success) 10%, transparent);
+  box-shadow: var(--input-shadow);
 }
 
 /* Legacy alias */
 .primary-btn {
   background: var(--accent-color);
-  color: white;
+  color: var(--accent-fg);
   border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 0.65rem 1.25rem;
   font-weight: 600;
@@ -280,6 +292,7 @@ select {
   width: 100%;
   padding: 0.6rem 0.75rem;
   background: var(--input-bg);
+  box-shadow: var(--input-shadow);
   border: 1px solid var(--input-border);
   border-radius: 6px;
   color: var(--text-primary);
@@ -331,7 +344,7 @@ select:focus {
   display: inline-block;
   width: var(--button-width);
   height: var(--button-height);
-  background-color: var(--color-grey);
+  background-color: color-mix(in srgb, var(--text-primary) 15%, transparent);
   border-radius: calc(var(--button-height) / 2);
   position: relative;
   transition: 0.2s all ease-in-out;
@@ -348,7 +361,7 @@ select:focus {
   display: inline-block;
   width: var(--toggle-diameter);
   height: var(--toggle-diameter);
-  background-color: #fff;
+  background-color: var(--bg-primary);
   border-radius: calc(var(--toggle-diameter) / 2);
   position: absolute;
   top: var(--button-toggle-offset);
@@ -359,13 +372,13 @@ select:focus {
 }
 
 .toggle-label input:checked+.toggle-track {
-  background-color: var(--color-green);
+  background-color: var(--text-primary);
 }
 
 .toggle-label input:checked+.toggle-track::after {
   transform: translateX(calc(var(--button-width) - var(--toggle-diameter) - var(--button-toggle-offset)));
   box-shadow: calc(var(--toggle-shadow-offset) * -1) 0 calc(var(--toggle-shadow-offset) * 4) rgba(0, 0, 0, 0.1);
-  background-color: #fff;
+  background-color: var(--bg-primary);
 }
 
 .toggle-label input:active+.toggle-track::after {
@@ -406,7 +419,7 @@ select:focus {
 
 .plan-img {
   height: 180px;
-  background: #000;
+  background: var(--bg-secondary);
 }
 
 .plan-info {
@@ -421,9 +434,9 @@ select:focus {
   font-weight: 600;
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
-  background: rgba(76, 175, 80, 0.1);
-  color: #4caf50;
-  border: 1px solid rgba(76, 175, 80, 0.2);
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--text-primary);
 }
 
 /* ── Specific Overrides for Auth/Dashboard ── */
@@ -433,9 +446,6 @@ select:focus {
   align-items: center;
   height: 100vh;
   background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(circle at 15% 50%, rgba(138, 255, 196, 0.05), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(34, 211, 238, 0.05), transparent 25%);
 }
 
 .auth-card {
@@ -453,7 +463,7 @@ select:focus {
 .auth-card input {
   background: rgba(0, 0, 0, 0.2) !important;
   border: 1px solid var(--glass-border) !important;
-  color: white !important;
+  color: var(--text-primary) !important;
 }
 
 .auth-card input::placeholder {
@@ -501,7 +511,7 @@ select:focus {
 
 .history-item.active {
   background: var(--accent-gradient);
-  color: #fff;
+  color: var(--accent-fg);
   border-color: var(--accent-color);
   font-weight: 600;
   box-shadow: var(--accent-glow);
@@ -510,7 +520,9 @@ select:focus {
 /* ── Vastu Analysis Panel — theme-aware ── */
 .vastu-panel {
   background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  border: none;
+  box-shadow: var(--glass-shadow);
+  margin-bottom: 0.5rem;
   border-radius: 6px;
   overflow: hidden;
 }
@@ -535,11 +547,13 @@ select:focus {
 }
 
 .vastu-panel-body {
-  padding: 0 1rem 1rem;
+  padding: 0.75rem 1rem 1rem;
 }
 
 .vastu-rule-card {
-  background: var(--glass-bg);
+  background: var(--input-bg);
+  box-shadow: var(--input-shadow);
+  border: none !important;
   border-radius: 6px;
   padding: 0.5rem;
   font-size: 0.75rem;
@@ -554,28 +568,29 @@ select:focus {
 }
 
 .vastu-pill--high {
-  background: rgba(76, 175, 80, 0.18);
-  color: #4caf50;
-  border: 1px solid rgba(76, 175, 80, 0.4);
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--text-primary);
 }
 
 .vastu-pill--med {
-  background: rgba(255, 167, 38, 0.18);
-  color: #ffa726;
-  border: 1px solid rgba(255, 167, 38, 0.4);
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--text-secondary);
 }
 
 .vastu-pill--low {
-  background: rgba(239, 83, 80, 0.18);
-  color: #ef5350;
-  border: 1px solid rgba(239, 83, 80, 0.4);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--text-muted);
 }
 
 /* ── Room Editor Overlay ── */
 .room-editor {
   width: 100%;
   background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  border: none;
+  box-shadow: var(--glass-shadow);
   border-radius: 6px;
   padding: 1.25rem;
   color: var(--text-primary);
@@ -641,8 +656,9 @@ select:focus {
 }
 
 .close-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  border: none;
+  box-shadow: var(--glass-shadow);
   color: var(--text-secondary);
   font-size: 1rem;
   width: 30px;
@@ -656,9 +672,9 @@ select:focus {
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
   transform: rotate(90deg);
 }
 
@@ -685,6 +701,7 @@ select:focus {
   padding: 0.5rem;
   font-size: 0.85rem;
   background: var(--input-bg);
+  box-shadow: var(--input-shadow);
   border: 1px solid var(--glass-border);
   border-radius: 6px;
   color: var(--text-primary);
@@ -696,7 +713,7 @@ select:focus {
 }
 
 .nl-section {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-secondary);
   border: 1px solid var(--glass-border);
   padding: 1rem;
   border-radius: 12px;
@@ -712,6 +729,7 @@ select:focus {
   flex: 1;
   padding: 0.6rem;
   background: var(--input-bg);
+  box-shadow: var(--input-shadow);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   color: var(--text-primary);
@@ -720,7 +738,7 @@ select:focus {
 
 .ai-btn {
   background: var(--accent-gradient);
-  color: white;
+  color: var(--accent-fg);
   border: none;
   border-radius: 8px;
   padding: 0 1rem;
@@ -734,7 +752,7 @@ select:focus {
 }
 
 .nl-error {
-  color: #ef4444;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   margin: 0 0 0.5rem 0;
 }

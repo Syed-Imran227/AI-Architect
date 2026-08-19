@@ -54,76 +54,8 @@ const CSS = `
 `;
 
 /* ─── Canvas Hero ──────────────────────────────────────────────────── */
-function PixelCanvas({ isDark }: { isDark: boolean }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouse = useRef({ x: 0, y: 0 });
-  const raf = useRef(0);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const CELL = 28;
-    const cols = () => Math.ceil(canvas.width / CELL) + 1;
-    const rows = () => Math.ceil(canvas.height / CELL) + 1;
-
-    const dotColor = isDark ? "rgba(255,255,255," : "rgba(0,0,0,";
-    const bgColor = isDark ? "#0a0a0a" : "#f5f5f5";
-
-    let W = 0, H = 0;
-    const resize = () => {
-      W = canvas.width = canvas.offsetWidth;
-      H = canvas.height = canvas.offsetHeight;
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-
-    let t = 0;
-    const draw = () => {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, W, H);
-      const mx = mouse.current.x, my = mouse.current.y;
-      const c = cols(), r = rows();
-      for (let row = 0; row < r; row++) {
-        for (let col = 0; col < c; col++) {
-          const x = col * CELL, y = row * CELL;
-          const dx = x - mx, dy = y - my;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const wave = Math.sin(t * 0.018 + col * 0.35 + row * 0.35) * 0.4;
-          const proximity = Math.max(0, 1 - dist / 220);
-          const alpha = Math.max(0.04, Math.min(0.35, 0.06 + wave * 0.12 + proximity * 0.55));
-          const size = 2 + proximity * 3;
-          ctx.fillStyle = `${dotColor}${alpha.toFixed(2)})`;
-          ctx.fillRect(x - size / 2, y - size / 2, size, size);
-        }
-      }
-      t++;
-      raf.current = requestAnimationFrame(draw);
-    };
-    draw();
-
-    const onMove = (e: MouseEvent) => {
-      const r = canvas.getBoundingClientRect();
-      mouse.current = { x: e.clientX - r.left, y: e.clientY - r.top };
-    };
-    canvas.addEventListener("mousemove", onMove);
-    return () => {
-      cancelAnimationFrame(raf.current);
-      ro.disconnect();
-      canvas.removeEventListener("mousemove", onMove);
-    };
-  }, [isDark]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
-      aria-hidden="true"
-    />
-  );
+function PixelCanvas() {
+  return null;
 }
 
 /* ─── Section fade wrapper ─────────────────────────────────────────── */
@@ -162,8 +94,8 @@ function Terminal({ isDark }: { isDark: boolean }) {
     success: isDark ? "#8fb87a" : "#3a6630",
   };
   return (
-    <div style={{ background: isDark ? "#0f0e0c" : "#1a1614", border: `1px solid ${P.border}`, borderRadius: 8, overflow: "hidden" }}>
-      <div style={{ background: isDark ? "#252220" : "#2a2825", padding: "10px 16px", display: "flex", gap: 6, alignItems: "center", borderBottom: `1px solid ${P.border}` }}>
+    <div style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{ background: "var(--glass-bg)", padding: "10px 16px", display: "flex", gap: 6, alignItems: "center", borderBottom: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #000" }}>
         {["#ff5f57", "#febc2e", "#28c840"].map((c, i) => (
           <div key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: c }} />
         ))}
@@ -208,7 +140,7 @@ export default function Landing() {
   const btnG: React.CSSProperties = {
     background: "transparent", color: P.text,
     padding: "8px 20px", fontSize: 14, fontWeight: 500,
-    border: `1px solid ${P.border}`, borderRadius: 9999, cursor: "pointer",
+    border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 9999, cursor: "pointer",
     textDecoration: "none", display: "inline-flex", alignItems: "center",
     fontFamily: "Inter, sans-serif",
     transition: "filter 150ms ease, transform 200ms cubic-bezier(0.34,1.56,0.64,1)",
@@ -234,11 +166,11 @@ export default function Landing() {
       title: "AI decides. Math delivers.",
       copy: "DeepSeek-V3 resolves room adjacencies in a 3-bay grid. Our Python drafter converts topology decisions into pixel-perfect geometry — no hallucinated coordinates.",
       visual: (
-        <div style={{ padding: 24, background: isDark ? "#0f0e0c" : "#1a1614", borderRadius: 8, width: "100%", minHeight: 200 }}>
+        <div style={{ padding: 24, background: "var(--glass-bg)", borderRadius: 8, width: "100%", minHeight: 200 }}>
           {[["left_bay", "Master Bed, Bath"], ["spine", "Foyer, Corridor"], ["right_bay", "Kitchen, Living"]].map(([k, v]) => (
-            <div key={k} style={{ display: "flex", gap: 16, padding: "10px 0", borderBottom: `1px solid rgba(255,255,255,0.08)`, alignItems: "center" }}>
-              <span className="al-code" style={{ color: "#909078", width: 90, flexShrink: 0, fontSize: 12 }}>{k}</span>
-              <span className="al-code" style={{ color: isDark ? "#d7d7d0" : "#c8c8c0", fontSize: 12 }}>{v}</span>
+            <div key={k} style={{ display: "flex", gap: 16, padding: "10px 0", borderBottom: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #000", alignItems: "center" }}>
+              <span className="al-code" style={{ color: "var(--text-secondary)", width: 90, flexShrink: 0, fontSize: 12 }}>{k}</span>
+              <span className="al-code" style={{ color: "var(--text-primary)", fontSize: 12 }}>{v}</span>
             </div>
           ))}
           <div style={{ marginTop: 16, fontSize: 11, color: "#606060", fontFamily: "JetBrains Mono, monospace" }}>drafter resolves x / y / w / h ↓</div>
@@ -251,14 +183,14 @@ export default function Landing() {
       title: "Rules, scored and fixed.",
       copy: "Ten geometric constraints measured on a 3x3 compass grid. Auto-Fix calls the LLM, repositions failing rooms, and re-runs the drafter in one click.",
       visual: (
-        <div style={{ background: isDark ? "#252220" : "#c8c8c0", border: `1px solid ${P.border}`, borderRadius: 8, overflow: "hidden", width: "100%", minHeight: 200 }}>
+        <div style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 8, overflow: "hidden", width: "100%", minHeight: 200 }}>
           {[
             { rule: "Master Bed SW", pass: true },
             { rule: "Kitchen SE", pass: true },
             { rule: "Entry East/North", pass: false },
             { rule: "Toilet not NE", pass: true },
           ].map(r => (
-            <div key={r.rule} style={{ display: "flex", justifyContent: "space-between", padding: "11px 20px", borderBottom: `1px solid ${P.border}`, fontSize: 13, color: P.text }}>
+            <div key={r.rule} style={{ display: "flex", justifyContent: "space-between", padding: "11px 20px", borderBottom: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #000", fontSize: 13, color: P.text }}>
               <span>{r.rule}</span>
               <span style={{ fontSize: 11, fontWeight: 600, background: r.pass ? (isDark ? "rgba(143,184,122,0.15)" : "rgba(58,102,48,0.12)") : "rgba(180,60,60,0.12)", color: r.pass ? (isDark ? "#8fb87a" : "#3a6630") : "#b43c3c", padding: "2px 10px", borderRadius: 4 }}>
                 {r.pass ? "PASS" : "FAIL"}
@@ -278,11 +210,11 @@ export default function Landing() {
       title: "Conversational Editing.",
       copy: "Don't like the layout? Just type 'Make the kitchen larger' or 'Swap the Master Bedroom with the Living Room'. The Copilot safely resolves the topology without overlaps.",
       visual: (
-        <div style={{ background: isDark ? "#252220" : "#c8c8c0", border: `1px solid ${P.border}`, borderRadius: 8, padding: 20, width: "100%", minHeight: 200, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ background: isDark ? "#1a1614" : "#b8b8b0", padding: "10px 14px", borderRadius: 8, alignSelf: "flex-end", maxWidth: "85%" }}>
-            <span style={{ fontSize: 13, color: P.text }}>Make the kitchen 20% larger and push it to the rear.</span>
+        <div style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 8, padding: 20, width: "100%", minHeight: 200, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ background: "var(--accent-color)", padding: "10px 14px", borderRadius: 8, alignSelf: "flex-end", maxWidth: "85%", boxShadow: "var(--glass-shadow)" }}>
+            <span style={{ fontSize: 13, color: "var(--accent-fg)" }}>Make the kitchen 20% larger and push it to the rear.</span>
           </div>
-          <div style={{ background: isDark ? "rgba(94,106,210,0.15)" : "rgba(37,99,235,0.1)", border: `1px solid ${P.accent}40`, padding: "10px 14px", borderRadius: 8, alignSelf: "flex-start", maxWidth: "85%" }}>
+          <div style={{ background: "var(--glass-bg)", padding: "10px 14px", borderRadius: 8, alignSelf: "flex-start", maxWidth: "85%", boxShadow: "var(--glass-shadow)" }}>
             <span style={{ fontSize: 13, color: P.text }}>✅ Topology revised. Drafter rebuilt geometry.</span>
           </div>
         </div>
@@ -294,8 +226,8 @@ export default function Landing() {
       title: "Thermal Efficiency Engine.",
       copy: "Calculates the physical orientation of your plot. Scores layouts based on morning light utilization (East) and shielding living areas from harsh afternoon heat (West).",
       visual: (
-        <div style={{ background: isDark ? "#252220" : "#c8c8c0", border: `1px solid ${P.border}`, borderRadius: 8, overflow: "hidden", width: "100%", minHeight: 200 }}>
-          <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${P.border}` }}>
+        <div style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 8, overflow: "hidden", width: "100%", minHeight: 200 }}>
+          <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #000" }}>
             <span style={{ fontSize: 28 }}>☀️</span>
             <div>
               <div style={{ fontSize: 18, fontWeight: 600, color: P.text }}>Grade A</div>
@@ -316,13 +248,13 @@ export default function Landing() {
       title: "Files engineers actually open.",
       copy: "Multi-layer DXF at 1 ft = 304.8 mm. Separate WALLS, DOORS, WINDOWS, FURNITURE, and DIMENSIONS layers. Drop it into AutoCAD or ZWCAD unchanged.",
       visual: (
-        <div style={{ background: isDark ? "#252220" : "#c8c8c0", border: `1px solid ${P.border}`, borderRadius: 8, padding: 20, width: "100%", minHeight: 200 }}>
+        <div style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 8, padding: 20, width: "100%", minHeight: 200 }}>
           {[["WALLS", 90], ["DOORS", 65], ["WINDOWS", 50], ["FURNITURE", 75], ["DIMENSIONS", 40]].map(([layer, w]) => (
             <div key={layer as string} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                 <span className="al-code" style={{ fontSize: 11, color: P.textMuted }}>{layer}</span>
               </div>
-              <div style={{ height: 4, background: isDark ? "#1a1614" : "#b8b8b0", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: 4, background: "var(--glass-bg)", borderRadius: 2, overflow: "hidden", boxShadow: "var(--input-shadow)" }}>
                 <div style={{ height: "100%", width: `${w}%`, background: P.accent, borderRadius: 2 }} />
               </div>
             </div>
@@ -358,12 +290,12 @@ export default function Landing() {
             </nav>
             <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
               <ThemeToggle />
-              <Link to="/register" className="al-btn-p" style={{ ...btnP }}>Book a demo</Link>
+              <Link to="/register" className="al-btn-p" style={{ ...btnP }}>Open Application</Link>
               <button
                 className="al-mob-btn"
                 aria-label="Menu"
                 onClick={() => setMobileOpen(o => !o)}
-                style={{ display: "none", background: "none", border: `1px solid ${P.border}`, color: P.text, cursor: "pointer", padding: 8, borderRadius: 6, minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
+                style={{ display: "none", background: "none", border: "none", boxShadow: "var(--glass-shadow)", color: P.text, cursor: "pointer", padding: 8, borderRadius: 6, minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   {mobileOpen ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></> : <><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/></>}
@@ -379,13 +311,13 @@ export default function Landing() {
             <a key={l} href={`#${l.toLowerCase().replace(/ /g, "-")}`} onClick={() => setMobileOpen(false)} style={{ fontSize: 28, color: P.text, textDecoration: "none", fontFamily: "Inter, sans-serif", fontWeight: 400 }}>{l}</a>
           ))}
           <Link to="/login" onClick={() => setMobileOpen(false)} style={{ fontSize: 28, color: P.text, textDecoration: "none", fontFamily: "Inter, sans-serif" }}>Sign in</Link>
-          <Link to="/register" className="al-btn-p" onClick={() => setMobileOpen(false)} style={{ ...btnP, fontSize: 16, padding: "12px 28px", marginTop: 8 }}>Book a demo</Link>
+          <Link to="/register" className="al-btn-p" onClick={() => setMobileOpen(false)} style={{ ...btnP, fontSize: 16, padding: "12px 28px", marginTop: 8 }}>Create Project</Link>
         </div>
 
         <main>
           {/* ── HERO ── */}
           <section style={{ position: "relative", minHeight: "100svh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "120px 24px 96px", textAlign: "center", overflow: "hidden" }}>
-            <PixelCanvas isDark={isDark} />
+            <PixelCanvas />
             <div style={{ position: "relative", zIndex: 2, maxWidth: 760 }}>
               {/* blinking cursor eyebrow */}
               <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: P.textMuted, marginBottom: 24, letterSpacing: "0.06em" }}>
@@ -399,7 +331,7 @@ export default function Landing() {
                 Describe any building. Get regulation-aware, Vastu-compliant floor plans with AutoCAD export in seconds.
               </p>
               <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-                <Link to="/register" className="al-btn-p" style={{ ...btnP, padding: "10px 28px", fontSize: 15 }}>Start for free</Link>
+                <Link to="/register" className="al-btn-p" style={{ ...btnP, padding: "10px 28px", fontSize: 15 }}>Start Designing</Link>
                 <Link to="/login" className="al-btn-g" style={{ ...btnG, padding: "10px 28px", fontSize: 15 }}>Sign in</Link>
               </div>
             </div>
@@ -460,7 +392,7 @@ export default function Landing() {
                         <span style={eyebrow}>{f.eyebrow}</span>
                         <h2 style={{ fontSize: 24, color: P.text, marginBottom: 16 }}>{f.title}</h2>
                         <p style={{ fontSize: 16, lineHeight: 1.65, color: P.textMuted, maxWidth: 400 }}>{f.copy}</p>
-                        <Link to="/register" className="al-btn-p" style={{ ...btnP, marginTop: 32, display: "inline-flex" }}>Try it free</Link>
+                        <Link to="/register" className="al-btn-p" style={{ ...btnP, marginTop: 32, display: "inline-flex" }}>Explore Engine</Link>
                       </div>
                       <div className="al-feat-vis" style={{ flex: "1 1 420px", minHeight: 240, display: "flex" }}>
                         {f.visual}
@@ -479,8 +411,8 @@ export default function Landing() {
                 <span style={{ ...eyebrow, textAlign: "center", display: "block" }}>Get started</span>
                 <h2 style={{ fontSize: 40, color: P.text, marginBottom: 16, letterSpacing: "-0.04em" }}>Production that runs itself.</h2>
                 <p style={{ fontSize: 16, color: P.textMuted, marginBottom: 40 }}>Used for final-year projects, client pitches, and real construction planning.</p>
-                <Link to="/register" className="al-btn-p" style={{ ...btnP, fontSize: 15, padding: "12px 36px" }}>Start for free</Link>
-                <div style={{ marginTop: 16, fontSize: 13, color: P.textMuted }}>Free plan · No credit card · Export up to 3 designs</div>
+                <Link to="/register" className="al-btn-p" style={{ ...btnP, fontSize: 15, padding: "12px 36px" }}>Launch Editor</Link>
+                <div style={{ marginTop: 16, fontSize: 13, color: P.textMuted }}>Academic Research Project · DeepSeek-V3 Topology · Zero Commercial Usage</div>
               </div>
             </section>
           </Fade>

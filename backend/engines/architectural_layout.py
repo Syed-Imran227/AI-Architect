@@ -647,7 +647,7 @@ def inject_furniture(layout: dict) -> dict:
                 return True
         return False
 
-    def _try_place(fx, fy, fw, fh, rw, rh, zones, placed) -> bool:
+    def _try_place(fname: str, fx: float, fy: float, fw: float, fh: float, rw: float, rh: float, zones: list, placed: list) -> bool:
         """Return True and append to placed if the position is valid."""
         if fx < MARGIN or fy < MARGIN:
             return False
@@ -655,7 +655,7 @@ def inject_furniture(layout: dict) -> dict:
             return False
         if _overlaps(fx, fy, fw, fh, zones, placed):
             return False
-        placed.append({"name": "", "x": round(fx, 1), "y": round(fy, 1),
+        placed.append({"name": fname, "x": round(fx, 1), "y": round(fy, 1),
                         "width": fw, "height": fh})
         return True
 

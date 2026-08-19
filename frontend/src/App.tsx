@@ -35,7 +35,7 @@ function ThemedToaster() {
       position="bottom-right"
       toastOptions={{
         style: isDark
-          ? { background: 'var(--bg-secondary)', color: '#fff', border: '1px solid var(--glass-border)' }
+          ? { background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)' }
           : { background: 'rgba(255,255,255,0.9)', color: '#0f172a', border: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(100,120,180,0.15)' },
       }}
     >

@@ -7,39 +7,41 @@
   --font-primary: 'Inter', system-ui, sans-serif;
   --font-mono: 'Roboto Mono', monospace;
 
-  --bg-primary:    #0a0a0a;
-  --bg-secondary:  #111111;
-  --bg-card:       #161616;
+  --bg-primary:    #2d2d2d;
+  --bg-secondary:  #2d2d2d;
+  --bg-card:       #2d2d2d;
 
-  --glass-bg:      #161616;
-  --glass-border:  #2a2a2a;
-  --glass-hover:   #1e1e1e;
-  --glass-shadow:  0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px #2a2a2a;
+  --glass-bg:      #2d2d2d;
+  --glass-border:  transparent;
+  --glass-hover:   #1a1a1a;
+  --glass-shadow:  8px 8px 16px #202020, -8px -8px 16px #3a3a3a;
 
-  --text-primary:   #f0f0f0;
-  --text-secondary: #888888;
-  --text-muted:     #555555;
+  --text-primary:   #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted:     #999999;
 
-  /* Linear's signature indigo-violet accent */
-  --accent-color:    #5e6ad2;
-  --accent-purple:   #5e6ad2;
-  --accent-gradient: linear-gradient(135deg, #6c77dc 0%, #5e6ad2 100%);
-  --accent-glow:     0 0 0 3px rgba(94, 106, 210, 0.2);
+  /* Monochromatic Accent */
+  --accent-color:    #ffffff;
+  --accent-fg:       #000000;
+  --accent-purple:   #ffffff;
+  --accent-gradient: #ffffff;
+  --accent-glow:     0 0 0 3px rgba(255, 255, 255, 0.2);
 
-  --input-bg:     #111111;
-  --input-border: #2a2a2a;
+  --input-bg:     #2d2d2d;
+  --input-shadow: inset 4px 4px 8px #202020, inset -4px -4px 8px #3a3a3a;
+  --input-border:  transparent;
 
-  --nav-bg:     #0a0a0a;
-  --nav-border: #2a2a2a;
+  --nav-bg:        #2d2d2d;
+  --nav-border:    transparent;
 
-  --toggle-off-bg: #2a2a2a;
+  --toggle-off-bg: #333333;
 
-  --success:      #4ade80;
-  --error:        #f87171;
-  --success-text: #4ade80;
+  --success:      #ffffff;
+  --error:        #ffffff;
+  --success-text: #ffffff;
 
-  --scrollbar-track: #0a0a0a;
-  --scrollbar-thumb: #2a2a2a;
+  --scrollbar-track: #000000;
+  --scrollbar-thumb: #333333;
 
   color-scheme: dark;
 }
@@ -52,39 +54,41 @@
   --font-primary: 'Inter', system-ui, sans-serif;
   --font-mono: 'Roboto Mono', monospace;
 
-  --bg-primary:   #f5f5f5;
-  --bg-secondary: #eeeeee;
-  --bg-card:      #ffffff;
+  --bg-primary:   #E0E0E0;
+  --bg-secondary: #E0E0E0;
+  --bg-card:      #E0E0E0;
 
-  --glass-bg:     #ffffff;
-  --glass-border: #e0e0e0;
-  --glass-hover:  #f7f7f7;
-  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px #e0e0e0;
+  --glass-bg:     #E0E0E0;
+  --glass-border: transparent;
+  --glass-hover:  #e5e5e5;
+  --glass-shadow: 8px 8px 16px #bebebe, -8px -8px 16px #ffffff;
 
-  --text-primary:   #111111;
+  --text-primary:   #000000;
   --text-secondary: #555555;
   --text-muted:     #999999;
 
-  /* Rayon's clean blue accent */
-  --accent-color:    #2563eb;
-  --accent-purple:   #2563eb;
-  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  --accent-glow:     0 0 0 3px rgba(37, 99, 235, 0.15);
+  /* Monochromatic Accent */
+  --accent-color:    #000000;
+  --accent-fg:       #ffffff;
+  --accent-purple:   #000000;
+  --accent-gradient: #000000;
+  --accent-glow:     0 0 0 3px rgba(0, 0, 0, 0.15);
 
-  --input-bg:     #ffffff;
-  --input-border: #d4d4d4;
+  --input-bg:     #E0E0E0;
+  --input-shadow: inset 4px 4px 8px #bebebe, inset -4px -4px 8px #ffffff;
+  --input-border: transparent;
 
-  --nav-bg:     #ffffff;
-  --nav-border: #e0e0e0;
+  --nav-bg:       #E0E0E0;
+  --nav-border:   transparent;
 
-  --toggle-off-bg: #d4d4d4;
+  --toggle-off-bg: #cccccc;
 
-  --success:      #16a34a;
-  --error:        #dc2626;
-  --success-text: #16a34a;
+  --success:      #000000;
+  --error:        #000000;
+  --success-text: #000000;
 
-  --scrollbar-track: #f5f5f5;
-  --scrollbar-thumb: #d4d4d4;
+  --scrollbar-track: #ffffff;
+  --scrollbar-thumb: #cccccc;
 
   color-scheme: light;
 }

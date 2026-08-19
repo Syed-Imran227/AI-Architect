@@ -229,40 +229,61 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
                 ),
             }
 
-        result = fix_vastu_topology(
-            length=req.plot_width,
-            width=req.plot_height,
-            bedrooms=req.bedrooms,
-            bathrooms=req.bathrooms,
-            floors=req.floors,
-            entry_dir=req.entry_dir,
-            violated_rules=violated,
-            max_retries=2,
-            balcony=req.balcony,
-            terrace=req.terrace,
-            lift=req.lift,
-        )
+        best_layout = None
+        best_vastu = None
+        best_rationale = ""
+        best_score = before_score
 
-        if not result["converged"] or result["layout"] is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Vastu fix failed: LLM could not produce a valid revised topology after 2 attempts."
+        # Loop up to 3 times to ensure the score strictly improves
+        for attempt in range(3):
+            result = fix_vastu_topology(
+                length=req.plot_width,
+                width=req.plot_height,
+                bedrooms=req.bedrooms,
+                bathrooms=req.bathrooms,
+                floors=req.floors,
+                entry_dir=req.entry_dir,
+                violated_rules=violated,
+                max_retries=1,
+                balcony=req.balcony,
+                terrace=req.terrace,
+                lift=req.lift,
             )
 
-        new_layout = result["layout"]
+            if not result["converged"] or result["layout"] is None:
+                continue
+
+            new_layout = result["layout"]
+            ground_rooms = new_layout["floors"][0]["rooms"]
+
+            vastu_rooms = list(ground_rooms)
+            if len(new_layout["floors"]) > 1:
+                vastu_rooms.extend(new_layout["floors"][1]["rooms"])
+
+            # Re-score the corrected layout
+            new_vastu = score_vastu(
+                rooms=vastu_rooms,
+                plot_w=req.plot_width,
+                plot_h=req.plot_height,
+                entry_dir=req.entry_dir,
+            )
+
+            if new_vastu["score"] > best_score:
+                best_score = new_vastu["score"]
+                best_layout = new_layout
+                best_vastu = new_vastu
+                best_rationale = result["design_rationale"]
+                break
+
+        if best_layout is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Vastu fix failed: The AI could not produce a layout that strictly improves the score."
+            )
+
+        new_layout = best_layout
         ground_rooms = new_layout["floors"][0]["rooms"]
-
-        vastu_rooms = list(ground_rooms)
-        if len(new_layout["floors"]) > 1:
-            vastu_rooms.extend(new_layout["floors"][1]["rooms"])
-
-        # Re-score the corrected layout
-        new_vastu = score_vastu(
-            rooms=vastu_rooms,
-            plot_w=req.plot_width,
-            plot_h=req.plot_height,
-            entry_dir=req.entry_dir,
-        )
+        new_vastu = best_vastu
 
         new_nbc = score_nbc(
             rooms=ground_rooms,
@@ -281,7 +302,7 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             "after_score": new_vastu["score"],
             "new_vastu_result": new_vastu,
             "new_nbc_result": new_nbc,
-            "design_rationale": result["design_rationale"],
+            "design_rationale": best_rationale,
             "converged": True,
             # fixed_layout is the full rooms list so the frontend can replace the floor
             "fixed_layout": ground_rooms,
@@ -326,28 +347,56 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
                 ),
             }
 
-        result = fix_nbc_topology(
-            length=req.plot_width,
-            width=req.plot_height,
-            bedrooms=req.bedrooms,
-            bathrooms=req.bathrooms,
-            floors=req.floors,
-            entry_dir=req.entry_dir,
-            violated_rules=violated,
-            max_retries=2,
-            balcony=req.balcony,
-            terrace=req.terrace,
-            lift=req.lift,
-        )
+        best_layout = None
+        best_nbc = None
+        best_rationale = ""
+        best_score = before_score
 
-        if not result["converged"] or result["layout"] is None:
-            raise HTTPException(
-                status_code=500,
-                detail="NBC fix failed: LLM could not produce a valid revised topology after 2 attempts."
+        # Loop up to 3 times to ensure the score strictly improves
+        for attempt in range(3):
+            result = fix_nbc_topology(
+                length=req.plot_width,
+                width=req.plot_height,
+                bedrooms=req.bedrooms,
+                bathrooms=req.bathrooms,
+                floors=req.floors,
+                entry_dir=req.entry_dir,
+                violated_rules=violated,
+                max_retries=1,
+                balcony=req.balcony,
+                terrace=req.terrace,
+                lift=req.lift,
             )
 
-        new_layout = result["layout"]
+            if not result["converged"] or result["layout"] is None:
+                continue
+
+            new_layout = result["layout"]
+            ground_rooms = new_layout["floors"][0]["rooms"]
+
+            new_nbc = score_nbc(
+                rooms=ground_rooms,
+                plot_w=req.plot_width,
+                plot_h=req.plot_height,
+                num_floors=req.floors,
+            )
+
+            if new_nbc["score"] > best_score:
+                best_score = new_nbc["score"]
+                best_layout = new_layout
+                best_nbc = new_nbc
+                best_rationale = result["design_rationale"]
+                break
+
+        if best_layout is None:
+            raise HTTPException(
+                status_code=400,
+                detail="NBC fix failed: The AI could not produce a layout that strictly improves the score."
+            )
+
+        new_layout = best_layout
         ground_rooms = new_layout["floors"][0]["rooms"]
+        new_nbc = best_nbc
 
         vastu_rooms = list(ground_rooms)
         if len(new_layout["floors"]) > 1:
@@ -360,13 +409,6 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
             entry_dir=req.entry_dir,
         )
 
-        new_nbc = score_nbc(
-            rooms=ground_rooms,
-            plot_w=req.plot_width,
-            plot_h=req.plot_height,
-            num_floors=req.floors,
-        )
-
         png_bytes = render_floor_plan(ground_rooms, unit_label="NBC-Optimised Plan")
         b64_str = base64.b64encode(png_bytes).decode("utf-8")
         image_url = f"data:image/png;base64,{b64_str}"
@@ -377,7 +419,7 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
             "after_score": new_nbc["score"],
             "new_vastu_result": new_vastu,
             "new_nbc_result": new_nbc,
-            "design_rationale": result["design_rationale"],
+            "design_rationale": best_rationale,
             "converged": True,
             "fixed_layout": ground_rooms,
             "imageUrl": image_url,

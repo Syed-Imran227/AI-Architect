@@ -582,6 +582,120 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   );
 }
 
+// ── Wall segment renderer with door/window openings ──────────────────────────
+// Renders a single wall as a series of segments with gaps for doors and windows.
+// wallLen: total length of wall, wallBase: world-space X or Z start of wall
+// isHorizontal: true for north/south walls, false for east/west
+// openings: sorted list of { pos, width, type } where pos is offset from wallBase
+function WallWithOpenings({
+  wallLen, wallBase, wallFixed, wallT, isHoriz,
+  openings, wallColor,
+}: {
+  wallLen: number; wallBase: number; wallFixed: number; wallT: number;
+  isHoriz: boolean; openings: { pos: number; width: number; type: 'door' | 'window' }[];
+  wallColor: string;
+}) {
+  const DOOR_H    = ROOM_HEIGHT * 0.82;   // door height (ft)
+  const WIN_SILL  = ROOM_HEIGHT * 0.32;   // window sill height
+  const WIN_H     = ROOM_HEIGHT * 0.38;   // window height
+  const LINTEL_H  = ROOM_HEIGHT - WIN_SILL - WIN_H;  // wall above window
+
+  const sorted = [...openings].sort((a, b) => a.pos - b.pos);
+
+  // Build list of segments: { start, end }
+  const segments: { start: number; end: number }[] = [];
+  let cursor = 0;
+  for (const op of sorted) {
+    if (op.pos > cursor) segments.push({ start: cursor, end: op.pos });
+    cursor = op.pos + op.width;
+  }
+  if (cursor < wallLen) segments.push({ start: cursor, end: wallLen });
+
+  return (
+    <group>
+      {/* Solid wall segments between openings */}
+      {segments.map((seg, i) => {
+        const segLen  = seg.end - seg.start;
+        const segMid  = wallBase + seg.start + segLen / 2;
+        const pos3: [number, number, number] = isHoriz
+          ? [segMid, ROOM_HEIGHT / 2, wallFixed]
+          : [wallFixed, ROOM_HEIGHT / 2, segMid];
+        const args3: [number, number, number] = isHoriz
+          ? [segLen, ROOM_HEIGHT, wallT]
+          : [wallT, ROOM_HEIGHT, segLen];
+        return (
+          <Box key={i} castShadow receiveShadow args={args3} position={pos3}>
+            <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+            <Edges color="#9aa0a8" />
+          </Box>
+        );
+      })}
+
+      {/* Openings: door lintel above, window lintel above & sill below */}
+      {sorted.map((op, i) => {
+        const opMid = wallBase + op.pos + op.width / 2;
+        if (op.type === 'door') {
+          // Thin lintel above door
+          const lintelH = ROOM_HEIGHT - DOOR_H;
+          const pos3: [number, number, number] = isHoriz
+            ? [opMid, DOOR_H + lintelH / 2, wallFixed]
+            : [wallFixed, DOOR_H + lintelH / 2, opMid];
+          const args3: [number, number, number] = isHoriz
+            ? [op.width, lintelH, wallT]
+            : [wallT, lintelH, op.width];
+          return (
+            <group key={`door_${i}`}>
+              <Box args={args3} position={pos3}>
+                <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+              </Box>
+              {/* Door leaf (semi-transparent, slightly open) */}
+              <Box
+                args={isHoriz ? [op.width * 0.9, DOOR_H, wallT * 0.25] : [wallT * 0.25, DOOR_H, op.width * 0.9]}
+                position={isHoriz ? [opMid, DOOR_H / 2, wallFixed + wallT * 0.4] : [wallFixed + wallT * 0.4, DOOR_H / 2, opMid]}
+              >
+                <meshStandardMaterial color="#c8a060" opacity={0.45} transparent />
+              </Box>
+            </group>
+          );
+        } else {
+          // Window: sill + glass + lintel
+          const pos3Sill: [number, number, number] = isHoriz
+            ? [opMid, WIN_SILL / 2, wallFixed]
+            : [wallFixed, WIN_SILL / 2, opMid];
+          const args3Sill: [number, number, number] = isHoriz
+            ? [op.width, WIN_SILL, wallT]
+            : [wallT, WIN_SILL, op.width];
+          const pos3Lintel: [number, number, number] = isHoriz
+            ? [opMid, WIN_SILL + WIN_H + LINTEL_H / 2, wallFixed]
+            : [wallFixed, WIN_SILL + WIN_H + LINTEL_H / 2, opMid];
+          const args3Lintel: [number, number, number] = isHoriz
+            ? [op.width, LINTEL_H, wallT]
+            : [wallT, LINTEL_H, op.width];
+          const pos3Glass: [number, number, number] = isHoriz
+            ? [opMid, WIN_SILL + WIN_H / 2, wallFixed]
+            : [wallFixed, WIN_SILL + WIN_H / 2, opMid];
+          const args3Glass: [number, number, number] = isHoriz
+            ? [op.width, WIN_H, wallT * 0.25]
+            : [wallT * 0.25, WIN_H, op.width];
+          return (
+            <group key={`win_${i}`}>
+              <Box args={args3Sill} position={pos3Sill}>
+                <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+              </Box>
+              <Box args={args3Lintel} position={pos3Lintel}>
+                <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+              </Box>
+              <Box args={args3Glass} position={pos3Glass}>
+                <meshStandardMaterial color="#a0d8ef" opacity={0.35} transparent />
+              </Box>
+            </group>
+          );
+        }
+      })}
+    </group>
+  );
+}
+
 // ── Room 3D ──────────────────────────────────────────────────────────────────
 function Room3D({ room }: { room: Room }) {
   const n      = room.name.toLowerCase();
@@ -612,6 +726,18 @@ function Room3D({ room }: { room: Room }) {
     );
   }
 
+  // Parse doors and windows per wall
+  type Opening = { pos: number; width: number; type: 'door' | 'window' };
+  const wallOpenings: Record<string, Opening[]> = { top: [], bottom: [], left: [], right: [] };
+  for (const d of (room.doors ?? [])) {
+    const wall = d.wall as string;
+    if (wallOpenings[wall]) wallOpenings[wall].push({ pos: d.position, width: d.width, type: 'door' });
+  }
+  for (const w of (room.windows ?? [])) {
+    const wall = w.wall as string;
+    if (wallOpenings[wall]) wallOpenings[wall].push({ pos: w.position, width: w.width, type: 'window' });
+  }
+
   return (
     <group>
       {/* Floor slab */}
@@ -620,27 +746,30 @@ function Room3D({ room }: { room: Room }) {
         <meshStandardMaterial color={colors.floor} />
       </mesh>
 
-      {/* Walls — 4 faces */}
-      {/* North */}
-      <Box castShadow receiveShadow args={[room.width + WALL_T*2, ROOM_HEIGHT, WALL_T]} position={[cx, ROOM_HEIGHT/2, room.y]}>
-        <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
-        <Edges color="#9aa0a8" />
-      </Box>
-      {/* South */}
-      <Box castShadow receiveShadow args={[room.width + WALL_T*2, ROOM_HEIGHT, WALL_T]} position={[cx, ROOM_HEIGHT/2, room.y + room.height]}>
-        <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
-        <Edges color="#9aa0a8" />
-      </Box>
-      {/* West */}
-      <Box castShadow receiveShadow args={[WALL_T, ROOM_HEIGHT, room.height]} position={[room.x, ROOM_HEIGHT/2, cz]}>
-        <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
-        <Edges color="#9aa0a8" />
-      </Box>
-      {/* East */}
-      <Box castShadow receiveShadow args={[WALL_T, ROOM_HEIGHT, room.height]} position={[room.x + room.width, ROOM_HEIGHT/2, cz]}>
-        <meshStandardMaterial color={colors.wall} opacity={0.48} transparent />
-        <Edges color="#9aa0a8" />
-      </Box>
+      {/* North wall (top in plan, z = room.y) — horizontal, openings offset from room.x */}
+      <WallWithOpenings
+        wallLen={room.width} wallBase={room.x} wallFixed={room.y}
+        wallT={WALL_T} isHoriz={true}
+        openings={wallOpenings.top} wallColor={colors.wall}
+      />
+      {/* South wall (bottom in plan, z = room.y + room.height) */}
+      <WallWithOpenings
+        wallLen={room.width} wallBase={room.x} wallFixed={room.y + room.height}
+        wallT={WALL_T} isHoriz={true}
+        openings={wallOpenings.bottom} wallColor={colors.wall}
+      />
+      {/* West wall (left in plan, x = room.x) — vertical, openings offset from room.y */}
+      <WallWithOpenings
+        wallLen={room.height} wallBase={room.y} wallFixed={room.x}
+        wallT={WALL_T} isHoriz={false}
+        openings={wallOpenings.left} wallColor={colors.wall}
+      />
+      {/* East wall (right in plan, x = room.x + room.width) */}
+      <WallWithOpenings
+        wallLen={room.height} wallBase={room.y} wallFixed={room.x + room.width}
+        wallT={WALL_T} isHoriz={false}
+        openings={wallOpenings.right} wallColor={colors.wall}
+      />
 
       {/* Furniture items */}
       {room.furniture && room.furniture.map((item, i) => (

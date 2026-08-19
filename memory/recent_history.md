@@ -1,5 +1,11 @@
 # Recent History & Conversations
 
+## Late August 2026: 2D/3D Architectural Parity & Full-Stack Resilience
+- **Geometry & Rendering Overhaul:** Solved the "invisible doors and windows" bug in the 3D viewer. Replaced monolithic 3D box walls with a `WallWithOpenings` segment-renderer that precisely maps `room.doors` and `room.windows` into the 3D mesh.
+- **2D Blueprint Parity:** Rewrote the 2D `WindowMarks` component to strictly read real `room.windows` data from the backend instead of injecting fake, heuristically-placed windows on every top wall. Now 2D and 3D renderings match 1:1.
+- **Furniture Logic Fix:** Fixed a critical bug in `_try_place()` (backend) that stripped furniture names (saving as `""`), which broke chair-around-table placement logic and 2D labeling. 
+- **API Resilience:** Addressed infinite loading spinners by wrapping the native `fetch()` calls in `api.ts` with a 90-120s `AbortController` timeout for all AI operations.
+- **Strict Data Integrity:** Purged hardcoded fake payloads (e.g., `nbcResult ?? { score: 0, grade: "N/A" }`) and hardcoded fallback scores (`vastuScore ?? 90`) from the frontend, ensuring the UI only renders what the deterministic engines calculate.
 ## Late August 2026: E2E Audit Remediation & Documentation Polish
 - **Test Suite Establishment:** Authored an isolated `test_drafter.py` pytest suite in the user's root Downloads directory to strictly verify the mathematical integrity of the deterministic drafter (zero overlapping rectangles, boundary clamp correctness) without cluttering the main codebase.
 - **Dependency & Config Fortification:** Ran a strict `pip freeze` to completely replace unpinned dependencies in `requirements.txt` with exact versions to eliminate upstream regressions. 

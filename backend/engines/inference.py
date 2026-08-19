@@ -38,9 +38,9 @@ _groq_client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/opena
 # Fallback chain: tried in order until one succeeds
 # (model_id, client, label)
 _MODEL_CHAIN: list[tuple[str, OpenAI, str]] = [
-    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF primary)"),
+    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq primary)"),
+    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF backup)"),
     ("Qwen/Qwen3-Coder-30B-A3B-Instruct",       _hf_client,   "Qwen3-Coder (HF backup)"),
-    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq backup)"),
 ]
 
 # Legacy aliases kept for FloorPlanGenerator.model attribute
@@ -142,8 +142,13 @@ You are the Lead AI Architect. Design the optimal zoning topology for a floor pl
 def _clean_llm_raw(raw: str) -> str:
     """Strip DeepSeek <think> blocks and markdown fences from LLM output."""
     # Strip <think>...</think> reasoning blocks (DeepSeek-R1 style)
-    if "<think>" in raw and "</think>" in raw:
-        raw = raw[raw.rfind("</think>") + 8:].strip()
+    if "<think>" in raw:
+        if "</think>" in raw:
+            raw = raw[raw.rfind("</think>") + 8:].strip()
+        else:
+            # If the output was truncated and missing </think>, we can't reliably extract JSON.
+            # However, we can try to find the last occurrence of '```json' or '{' just in case.
+            pass
     # Strip ```json ... ``` markdown fences
     import re
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
@@ -166,7 +171,7 @@ def _call_architect_llm(prompt: str, retries: int = 1) -> Optional[TopologyRespo
                         {"role": "system", "content": _ARCHITECT_SYSTEM},
                         {"role": "user",   "content": prompt},
                     ],
-                    max_tokens=1200,
+                    max_tokens=4000,
                     temperature=0.4 + attempt * 0.1,
                 )
                 raw = (response.choices[0].message.content or "").strip()
@@ -176,14 +181,23 @@ def _call_architect_llm(prompt: str, retries: int = 1) -> Optional[TopologyRespo
                 end   = raw.rfind("}")
                 if start == -1 or end == -1:
                     print(f"[architect:{label}] Attempt {attempt+1}: No JSON found.")
+                    print(f"RAW DUMP (len={len(raw)}):\n{raw[:500]}...\n...\n{raw[-500:]}")
                     continue
 
-                obj = json.loads(raw[start:end+1])
+                try:
+                    import json_repair
+                except ImportError:
+                    import sys, subprocess, importlib
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "json-repair"])
+                    importlib.invalidate_caches()
+                    import json_repair
+                
+                obj = json_repair.loads(raw[start:end+1])
                 topology = TopologyResponse(**obj)
                 print(f"[architect:{label}] Topology OK: {topology.design_rationale}")
                 return topology
 
-            except (json.JSONDecodeError, ValidationError) as e:
+            except (ValueError, ValidationError) as e:
                 print(f"[architect:{label}] Attempt {attempt+1}: Parse error — {e}")
             except Exception as e:
                 print(f"[architect:{label}] Attempt {attempt+1}: API error — {e}")

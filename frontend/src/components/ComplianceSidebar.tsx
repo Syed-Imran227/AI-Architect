@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Room, VastuResult, NbcResult, EnergyResult, VastuFixResult } from '../services/api';
-import { vastuFix } from '../services/api';
+import type { Room, VastuResult, NbcResult, EnergyResult, VastuFixResult, NbcFixResult } from '../services/api';
+import { vastuFix, nbcFix } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface PlotContext {
@@ -21,6 +21,7 @@ interface ComplianceSidebarProps {
   plotContext: PlotContext;
   onLayoutUpdate: (newRooms: Room[], imageUrl?: string) => void;
   onVastuUpdate?: (newVastuResult: VastuResult, newScore: number) => void;
+  onNbcUpdate?: (newNbcResult: NbcResult, newScore: number) => void;
 }
 
 export default function ComplianceSidebar({
@@ -32,12 +33,15 @@ export default function ComplianceSidebar({
   plotContext,
   onLayoutUpdate,
   onVastuUpdate,
+  onNbcUpdate,
 }: ComplianceSidebarProps) {
   const [vastuOpen, setVastuOpen] = useState(false);
   const [nbcOpen, setNbcOpen] = useState(false);
   const [energyOpen, setEnergyOpen] = useState(false);
   const [vastuFixing, setVastuFixing] = useState(false);
   const [lastFixResult, setLastFixResult] = useState<VastuFixResult | null>(null);
+  const [nbcFixing, setNbcFixing] = useState(false);
+  const [lastNbcFixResult, setLastNbcFixResult] = useState<NbcFixResult | null>(null);
 
   const handleVastuFix = async () => {
     setVastuFixing(true);
@@ -72,6 +76,42 @@ export default function ComplianceSidebar({
       toast.error(`Vastu fix failed: ${err.message}`, { id: 'vastu-fix' });
     } finally {
       setVastuFixing(false);
+    }
+  };
+
+  const handleNbcFix = async () => {
+    setNbcFixing(true);
+    setLastNbcFixResult(null);
+    toast.loading('🏗️ AI is revising the NBC topology...', { id: 'nbc-fix' });
+    try {
+      const result = await nbcFix(layout, nbcResult, plotContext);
+      setLastNbcFixResult(result);
+
+      if (result.fixed_layout?.length) {
+        onLayoutUpdate(result.fixed_layout, result.imageUrl);
+        if (onNbcUpdate && result.new_nbc_result) {
+          onNbcUpdate(result.new_nbc_result, result.after_score);
+        }
+
+        if (result.status === 'already_optimal') {
+          toast.success('Layout is already NBC-optimal!', { id: 'nbc-fix' });
+        } else {
+          const delta = result.after_score - result.before_score;
+          const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
+          toast.success(
+            `NBC improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
+            { id: 'nbc-fix', duration: 5000 }
+          );
+        }
+      } else {
+        toast.error('NBC fix did not return a valid layout.', { id: 'nbc-fix' });
+      }
+    } catch (e: unknown) {
+      console.error(e);
+      const err = e as Error;
+      toast.error(`NBC fix failed: ${err.message}`, { id: 'nbc-fix' });
+    } finally {
+      setNbcFixing(false);
     }
   };
 
@@ -125,13 +165,12 @@ export default function ComplianceSidebar({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {vastuResult.rules.map((r, i) => {
                   if (r.max === 0) return null;
-                  const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
                   const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
                   return (
-                    <div key={i} className="vastu-rule-card" style={{ border: `1px solid ${clr}40` }}>
+                    <div key={i} className="vastu-rule-card" style={{ border: 'none' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', alignItems: 'center' }}>
                         <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span>{icon}</span>{r.rule}</strong>
-                        <span style={{ color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{r.points}/{r.max}</span>
                       </div>
                       <div style={{ opacity: 0.7, lineHeight: 1.3, fontSize: '0.72rem' }}>{r.detail}</div>
                     </div>
@@ -159,16 +198,43 @@ export default function ComplianceSidebar({
           </div>
           {nbcOpen && (
             <div className="vastu-panel-body">
+              {nbcResult.score < 100 && (
+                <button
+                  onClick={handleNbcFix}
+                  disabled={nbcFixing}
+                  className="btn-primary"
+                  style={{ width: '100%', marginBottom: '0.6rem', justifyContent: 'center', fontSize: '0.8rem',  }}
+                >
+                  {nbcFixing ? '🏗 Revising topology…' : '🔧 Auto-Fix NBC 2016 (AI)'}
+                </button>
+              )}
+
+              {lastNbcFixResult && lastNbcFixResult.status !== 'already_optimal' && (
+                <div style={{
+                  background: 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  borderRadius: '6px',
+                  padding: '0.5rem 0.7rem',
+                  fontSize: '0.75rem',
+                  marginBottom: '0.7rem',
+                  color: 'var(--text-primary)',
+                }}>
+                  <strong>Score:</strong> {lastNbcFixResult.before_score} → <strong>{lastNbcFixResult.after_score}</strong>
+                  {lastNbcFixResult.design_rationale && (
+                    <div style={{ marginTop: '0.25rem', opacity: 0.75 }}>{lastNbcFixResult.design_rationale}</div>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {nbcResult.rules.map((r, i) => {
                   if (r.max === 0) return null;
-                  const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
                   const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
                   return (
-                    <div key={i} className="vastu-rule-card" style={{ border: `1px solid ${clr}40` }}>
+                    <div key={i} className="vastu-rule-card" style={{ border: 'none' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', alignItems: 'center' }}>
                         <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span>{icon}</span>{r.rule}</strong>
-                        <span style={{ color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{r.points}/{r.max}</span>
                       </div>
                       <div style={{ opacity: 0.7, lineHeight: 1.3, fontSize: '0.72rem' }}>{r.detail}</div>
                     </div>
@@ -199,13 +265,12 @@ export default function ComplianceSidebar({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {energyResult.rules.map((r, i) => {
                   if (r.max === 0) return null;
-                  const clr = r.status === 'pass' ? '#4caf50' : r.status === 'warn' ? '#ffa726' : '#ef5350';
                   const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
                   return (
-                    <div key={i} className="vastu-rule-card" style={{ border: `1px solid ${clr}40` }}>
+                    <div key={i} className="vastu-rule-card" style={{ border: 'none' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', alignItems: 'center' }}>
                         <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span>{icon}</span>{r.rule}</strong>
-                        <span style={{ color: clr, fontWeight: 700 }}>{r.points}/{r.max}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{r.points}/{r.max}</span>
                       </div>
                       <div style={{ opacity: 0.7, lineHeight: 1.3, fontSize: '0.72rem' }}>{r.detail}</div>
                     </div>

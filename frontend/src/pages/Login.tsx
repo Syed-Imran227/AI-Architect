@@ -36,8 +36,8 @@ export default function Login() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative', overflow: 'hidden' }}>
       {/* Ambient orbs */}
-      <div className="login-orb" style={{ position: 'absolute', top: '10%', left: '15%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(138,255,196,0.1), transparent 70%)', pointerEvents: 'none' }} />
-      <div className="login-orb" style={{ position: 'absolute', bottom: '10%', right: '10%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,211,238,0.08), transparent 70%)', pointerEvents: 'none' }} />
+      <div className="login-orb" style={{ position: 'absolute', top: '10%', left: '15%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(128,128,128,0.1), transparent 70%)', pointerEvents: 'none' }} />
+      <div className="login-orb" style={{ position: 'absolute', bottom: '10%', right: '10%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle, rgba(128,128,128,0.08), transparent 70%)', pointerEvents: 'none' }} />
 
       {/* Theme toggle top-right */}
       <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 20 }}>
@@ -45,7 +45,7 @@ export default function Login() {
       </div>
 
       <div style={{ width: '100%', maxWidth: '420px', padding: '0 1rem', position: 'relative', zIndex: 10 }}>
-        <div style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '20px', padding: '2.5rem', backdropFilter: 'blur(20px)', boxShadow: 'var(--glass-shadow)' }}>
+        <div style={{ background: 'var(--glass-bg)', border: 'none', borderRadius: '20px', padding: '2.5rem', backdropFilter: 'blur(20px)', boxShadow: 'var(--glass-shadow)' }}>
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <div style={{ fontSize: '2rem', background: 'var(--accent-gradient)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800, marginBottom: '0.5rem' }}>⬡ AI Architect</div>

@@ -40,7 +40,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchProjects();
+    setTimeout(() => fetchProjects(), 0);
   }, [fetchProjects]);
 
 
@@ -60,15 +60,13 @@ export default function Dashboard() {
   };
 
   const totalRooms = projects.reduce((acc, curr) => {
-    let count = 0;
     if (curr.layout_data?.floors) {
-      curr.layout_data.floors.forEach(f => {
-        count += (f.rooms?.length || 0);
-      });
-    } else if (curr.layout_data?.rooms) {
-      count += (curr.layout_data.rooms.length || 0);
+      return acc + curr.layout_data.floors.reduce((sum, f) => sum + (f.rooms?.length || 0), 0);
     }
-    return acc + count;
+    if (curr.layout_data?.rooms) {
+      return acc + (curr.layout_data.rooms.length || 0);
+    }
+    return acc;
   }, 0);
 
   return (
@@ -107,7 +105,7 @@ export default function Dashboard() {
             { label: 'Rooms Designed', value: totalRooms, icon: '🛏️', color: 'var(--text-secondary)' },
             { label: 'Vastu Projects', value: projects.length, icon: '⛩️', color: 'var(--success-text)' },
           ].map((stat, i) => (
-            <div key={i} className="stat-card" style={{ background: 'var(--glass-bg)', border: `1px solid var(--glass-border)`, borderRadius: '16px', padding: '1.5rem', backdropFilter: 'blur(12px)' }}>
+            <div key={i} className="stat-card" style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: "16px", padding: "1.5rem", backdropFilter: "blur(12px)" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>{stat.label}</p>
@@ -127,7 +125,7 @@ export default function Dashboard() {
         {loading ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
             {[1, 2, 3].map(i => (
-              <div key={i} style={{ height: 280, background: 'var(--glass-bg)', borderRadius: '16px', border: '1px solid var(--glass-border)', animation: 'pulse 1.5s infinite' }} />
+              <div key={i} style={{ height: 280, background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: "16px", animation: "pulse 1.5s infinite" }} />
             ))}
           </div>
         ) : projects.length === 0 ? (
@@ -146,18 +144,18 @@ export default function Dashboard() {
                 key={p.id}
                 className="project-card"
                 onClick={() => navigate(`/editor?project=${p.id}`)}
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.25s, transform 0.25s, box-shadow 0.25s' }}
+                style={{ background: 'var(--glass-bg)', border: 'none', boxShadow: 'var(--glass-shadow)', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.25s, transform 0.25s, box-shadow 0.25s' }}
                 onMouseEnter={e => {
                   const el = e.currentTarget as HTMLDivElement;
                   el.style.borderColor = 'var(--accent-color)';
                   el.style.transform = 'translateY(-4px)';
-                  el.style.boxShadow = '0 12px 40px rgba(138,255,196,0.15)';
+                  el.style.boxShadow = 'var(--input-shadow)';
                 }}
                 onMouseLeave={e => {
                   const el = e.currentTarget as HTMLDivElement;
                   el.style.borderColor = 'var(--glass-border)';
                   el.style.transform = 'translateY(0)';
-                  el.style.boxShadow = 'none';
+                  el.style.boxShadow = 'var(--glass-shadow)';
                 }}
               >
                 {/* Thumbnail */}

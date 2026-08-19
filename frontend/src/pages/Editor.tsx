@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import '../App.css';
-import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, nbcFix, regenerateRoom } from '../services/api';
+import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, regenerateRoom } from '../services/api';
 import toast from 'react-hot-toast';
 import type { Room, VastuResult, NbcResult, EnergyResult, FloorCirculation } from '../services/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
@@ -26,6 +26,7 @@ interface Plan {
   vastuScore: number;
   vastuResult?: VastuResult;
   nbcResult?: NbcResult;
+  nbcScore?: number;
   energyResult?: EnergyResult;
   circulationWarnings?: string[];
   validationReport?: string[];
@@ -44,7 +45,6 @@ export default function Editor() {
   const [dxfLoading, setDxfLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [nbcFixLoading, setNbcFixLoading] = useState(false);
   const [copilotInput, setCopilotInput] = useState('');
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -93,7 +93,7 @@ export default function Editor() {
         id: project.id,
         imageUrl: project.image_url || "",
         layout: project.layout_data || { rooms: [] },
-        vastuScore: project.layout_data?.vastuScore ?? 90,
+        vastuScore: project.layout_data?.vastuScore ?? project.layout_data?.vastuResult?.score ?? 0,
         vastuResult: project.layout_data?.vastuResult,
         nbcResult: project.layout_data?.nbcResult,
       };
@@ -107,14 +107,13 @@ export default function Editor() {
       setLoading(false);
     }
   // openPlan is a stable plain function defined above; navigate is stable from react-router
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const projectId = params.get("project");
     if (projectId) {
-      loadSavedProject(projectId);
+      setTimeout(() => loadSavedProject(projectId), 0);
     }
   }, [location.search, loadSavedProject]);
 
@@ -240,39 +239,6 @@ export default function Editor() {
     }
   };
 
-  const handleNBCFix = async () => {
-    if (!activePlan || !floors.length) return;
-    setNbcFixLoading(true);
-    toast.loading('🏗️ Auto-Fixing NBC Compliance...', { id: 'nbc-fix' });
-    try {
-      const res = await nbcFix(activePlan.layout, activePlan.nbcResult, plotContext);
-      
-      if (res.status === 'already_optimal') {
-        toast.success(res.message || 'Already NBC Compliant!', { id: 'nbc-fix', duration: 4000 });
-        return;
-      }
-      
-      if (res.converged) {
-        toast.success(
-          `✅ NBC Fixed! Score: ${res.before_score} ➔ ${res.after_score}\n${res.design_rationale}`,
-          { id: 'nbc-fix', duration: 6000 }
-        );
-        handleLayoutUpdate(res.fixed_layout, res.imageUrl);
-        setActivePlan(prev => prev ? {
-          ...prev,
-          nbcResult: res.new_nbc_result,
-        } : prev);
-      } else {
-        toast.error('Failed to converge on a valid NBC solution.', { id: 'nbc-fix' });
-      }
-    } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(`NBC Fix failed: ${err.message}`, { id: 'nbc-fix' });
-    } finally {
-      setNbcFixLoading(false);
-    }
-  };
-
   const handleCopilotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!copilotInput.trim() || !activePlan || !floors.length) return;
@@ -344,6 +310,10 @@ export default function Editor() {
 
   const handleVastuUpdate = useCallback((newVastuResult: VastuResult, newScore: number) => {
     setActivePlan(prev => prev ? { ...prev, vastuScore: newScore, vastuResult: newVastuResult } : prev);
+  }, []);
+
+  const handleNbcUpdate = useCallback((newNbcResult: NbcResult, newScore: number) => {
+    setActivePlan(prev => prev ? { ...prev, nbcResult: newNbcResult, nbcScore: newScore } : prev);
   }, []);
 
   return (
@@ -549,12 +519,12 @@ export default function Editor() {
               {/* Large Concept Sketch */}
               <div style={{ padding: '1.5rem', borderTop: '1px solid var(--glass-border)' }}>
                 <p className="panel-label" style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>Concept Sketch</p>
-                <div className="concept-img-wrapper" style={{ width: '100%', height: '70vh', minHeight: '500px', borderRadius: '12px', overflow: 'hidden', background: '#000', border: '1px solid var(--glass-border)' }}>
+                <div className="concept-img-wrapper" style={{ width: '100%', height: 'auto', maxHeight: '80vh', borderRadius: '12px', overflow: 'hidden', background: 'var(--glass-bg)', boxShadow: 'var(--glass-shadow)', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                   <img
                     src={floors[activeFloorIndex]?.imageUrl || activePlan.imageUrl}
                     alt="Concept sketch"
                     className="concept-img"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    style={{ width: '100%', height: 'auto', maxHeight: '80vh', objectFit: 'contain', display: 'block' }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
@@ -581,14 +551,15 @@ export default function Editor() {
                 plotContext={plotContext}
                 onLayoutUpdate={handleLayoutUpdate}
                 onVastuUpdate={handleVastuUpdate}
+                onNbcUpdate={handleNbcUpdate}
               />
 
               {/* Action bar */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <button className="btn-primary" onClick={handleSaveToDatabase} disabled={saveLoading || !currentRooms.length} style={{ width: '100%', justifyContent: 'center' }}>
                   {saveLoading ? 'Saving...' : '💾 Save to My Plans'}
                 </button>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                   <button className="btn-ghost" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
                     {dxfLoading ? '...' : '⬇ DXF'}
                   </button>
@@ -621,35 +592,31 @@ export default function Editor() {
                   >
                     {show3D ? '2D View' : '3D View'}
                   </button>
-                  <button 
-                    className="btn-ghost" 
-                    onClick={handleNBCFix} 
-                    disabled={nbcFixLoading || !currentRooms.length} 
-                    style={{ 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', padding: '0.5rem',
-                      color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)'
-                    }}
-                  >
-                    {nbcFixLoading ? '...' : '🔧 Fix NBC'}
-                  </button>
                 </div>
               </div>
 
               {/* Copilot Chat UI */}
-              <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
-                <p className="panel-label" style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent)' }}>✨ AI Copilot</p>
-                <form onSubmit={handleCopilotSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type="text"
+              <div style={{ background: 'var(--glass-bg)', padding: '1.25rem', borderRadius: '12px', boxShadow: 'var(--glass-shadow)', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <p className="panel-label" style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.2rem' }}>✨</span> AI Copilot
+                </p>
+                <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', border: '1px solid var(--glass-border)' }}>
+                  Describe changes to the layout. The AI will recalculate topology and generate a new blueprint.
+                </div>
+                <form onSubmit={handleCopilotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <textarea
+                    rows={3}
                     value={copilotInput}
                     onChange={e => setCopilotInput(e.target.value)}
-                    placeholder="e.g. Make kitchen larger..."
+                    placeholder="e.g. Add an attached bath to the Master Bedroom and make the kitchen larger..."
                     disabled={copilotLoading || !currentRooms.length}
-                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-sub)' }}
+                    style={{ width: '100%', padding: '0.85rem 1rem', fontSize: '0.85rem', borderRadius: '8px', border: 'none', boxShadow: 'var(--input-shadow)', background: 'var(--input-bg)', resize: 'none', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                   />
-                  <button type="submit" className="btn-primary" disabled={copilotLoading || !copilotInput.trim()} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
-                    {copilotLoading ? '...' : 'Send'}
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="submit" className="btn-primary" disabled={copilotLoading || !copilotInput.trim()} style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', borderRadius: '20px' }}>
+                      {copilotLoading ? 'Generating...' : '↑ Send'}
+                    </button>
+                  </div>
                 </form>
               </div>
 

@@ -295,19 +295,68 @@ function DoorArcs({ room }: { room: Room }) {
 }
 
 
-// Window marks on exterior walls
+// Window marks on exterior walls — driven by room.windows[] from backend.
+// Draws the standard architectural window symbol: double line (glass pane) + end ticks.
 function WindowMarks({ room }: { room: Room }) {
-  const ww = Math.min(room.width * 0.3, 3);
-  const wx = room.x + (room.width - ww) / 2;
-  const wy = room.y;
-  const tick = 0.35;
+  const wins = room.windows;
+  // No windows data → nothing to draw (no invented defaults)
+  if (!wins || wins.length === 0) return null;
+
   return (
     <g>
-      <line x1={wx} y1={wy} x2={wx + ww} y2={wy} stroke="#60a5fa" strokeWidth={0.28} />
-      <line x1={wx} y1={wy - tick} x2={wx} y2={wy + tick} stroke="#60a5fa" strokeWidth={0.2} />
-      <line x1={wx + ww} y1={wy - tick} x2={wx + ww} y2={wy + tick} stroke="#60a5fa" strokeWidth={0.2} />
-      <line x1={wx + ww / 2} y1={wy - tick * 0.6} x2={wx + ww / 2} y2={wy + tick * 0.6}
-        stroke="#60a5fa" strokeWidth={0.15} />
+      {wins.map((w, idx) => {
+        const pos = w.position ?? 0;
+        const ww  = w.width ?? 3;
+
+        // Pure declarative geometry — returns null if wall is unknown
+        const geom = (() => {
+          const TICK = 0.35;
+          const GLASS = 0.18;
+          if (w.wall === 'top') {
+            const x1 = room.x + pos, y1 = room.y, x2 = room.x + pos + ww, y2 = room.y;
+            return { x1, y1, x2, y2, gx1: x1, gy1: y1 + GLASS, gx2: x2, gy2: y2 + GLASS,
+              t1: [x1, y1 - TICK, x1, y1 + TICK] as const, t2: [x2, y2 - TICK, x2, y2 + TICK] as const };
+          }
+          if (w.wall === 'bottom') {
+            const x1 = room.x + pos, y1 = room.y + room.height, x2 = room.x + pos + ww, y2 = room.y + room.height;
+            return { x1, y1, x2, y2, gx1: x1, gy1: y1 - GLASS, gx2: x2, gy2: y2 - GLASS,
+              t1: [x1, y1 - TICK, x1, y1 + TICK] as const, t2: [x2, y2 - TICK, x2, y2 + TICK] as const };
+          }
+          if (w.wall === 'left') {
+            const x1 = room.x, y1 = room.y + pos, x2 = room.x, y2 = room.y + pos + ww;
+            return { x1, y1, x2, y2, gx1: x1 + GLASS, gy1: y1, gx2: x2 + GLASS, gy2: y2,
+              t1: [x1 - TICK, y1, x1 + TICK, y1] as const, t2: [x2 - TICK, y2, x2 + TICK, y2] as const };
+          }
+          if (w.wall === 'right') {
+            const x1 = room.x + room.width, y1 = room.y + pos, x2 = room.x + room.width, y2 = room.y + pos + ww;
+            return { x1, y1, x2, y2, gx1: x1 - GLASS, gy1: y1, gx2: x2 - GLASS, gy2: y2,
+              t1: [x1 - TICK, y1, x1 + TICK, y1] as const, t2: [x2 - TICK, y2, x2 + TICK, y2] as const };
+          }
+          return null;
+        })();
+
+        if (!geom) return null;
+        const { x1, y1, x2, y2, gx1, gy1, gx2, gy2, t1, t2 } = geom;
+
+        return (
+          <g key={`win-${room.name}-${idx}`}>
+            {/* White gap on wall (matches door gap style) */}
+            <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#fafbfc" strokeWidth={0.55} />
+            {/* Outer window line (wall face) */}
+            <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#60a5fa" strokeWidth={0.22} />
+            {/* Inner glass line */}
+            <line x1={gx1} y1={gy1} x2={gx2} y2={gy2}
+              stroke="#60a5fa" strokeWidth={0.12} strokeDasharray="0.3 0.15" />
+            {/* End ticks */}
+            <line x1={t1[0]} y1={t1[1]} x2={t1[2]} y2={t1[3]}
+              stroke="#60a5fa" strokeWidth={0.18} />
+            <line x1={t2[0]} y1={t2[1]} x2={t2[2]} y2={t2[3]}
+              stroke="#60a5fa" strokeWidth={0.18} />
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -389,7 +438,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
 
   const scaleLen = 10;
   const sbX = minX + PAD * 0.6;
-  const sbY = maxY - PAD * 0.6;
+  const sbY = maxY - PAD * 0.2;
 
   return (
     <svg
@@ -427,12 +476,12 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       <rect x={minX} y={minY} width={vbW} height={vbH} fill="url(#coarsegrid)" opacity={0.7} />
 
       {/* Title block */}
-      <text x={minX + PAD * 0.5} y={minY + PAD * 0.6}
+      <text x={minX + PAD * 0.5} y={minY + PAD * 0.35}
         fontSize={1.2} fontFamily="Inter, sans-serif" fontWeight="700"
         fill="#1e293b" letterSpacing="0.05">
         FLOOR PLAN
       </text>
-      <text x={minX + PAD * 0.5} y={minY + PAD * 0.9}
+      <text x={minX + PAD * 0.5} y={minY + PAD * 0.65}
         fontSize={0.75} fontFamily="Inter, sans-serif"
         fill="#64748b">
         Interactive Blueprint · {displayRooms.length} Rooms
@@ -578,7 +627,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       </g>
 
       {/* North arrow */}
-      <g transform={`translate(${maxX - PAD}, ${minY + PAD})`}>
+      <g transform={`translate(${maxX - PAD * 0.5}, ${minY + PAD * 0.5})`}>
         <circle r={2.2} fill="rgba(255,255,255,0.92)" stroke="#cbd5e1" strokeWidth={0.2} />
         <polygon points="0,-1.5 0.6,0.8 0,0.3 -0.6,0.8"
           fill="#1e293b" />
@@ -593,7 +642,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       {displayRooms.length > 0 && (() => {
         const uniqueTypes = [...new Set(displayRooms.map(r => r.name))].slice(0, 5);
         return (
-          <g transform={`translate(${maxX - PAD}, ${minY + PAD * 3.5})`}>
+          <g transform={`translate(${maxX - PAD * 0.8}, ${minY + PAD * 3.5})`}>
             <rect x={-0.3} y={-0.5}
               width={PAD * 0.9} height={uniqueTypes.length * 1.4 + 1}
               fill="rgba(255,255,255,0.88)" stroke="#e2e8f0" strokeWidth={0.15} rx={0.3} />
