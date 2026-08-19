@@ -1,5 +1,19 @@
 const API_BASE_URL = "http://localhost:8000";
 
+export interface RegisterPayload { email: string; password: string; name?: string; }
+export interface LoginPayload { email: string; password: string; }
+export interface SaveProjectPayload { name?: string; layout?: LayoutData; [key: string]: any; }
+export interface GeneratePlansPayload { plot_width: number; plot_height: number; bedrooms: number; bathrooms: number; floors: number; entry_dir: string; [key: string]: any; }
+export type LayoutData = { rooms?: Room[]; [key: string]: any };
+export type ProjectMeta = { name?: string; [key: string]: any };
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token
+    ? { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+    : { "Content-Type": "application/json" };
+};
+
 interface FurnitureItem {
   name: string;
   x: number;
@@ -108,6 +122,13 @@ export interface FloorCirculation {
 }
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
+export interface RegisterPayload { email: string; password: string; name?: string; }
+export interface LoginPayload { email: string; password: string; }
+export interface SaveProjectPayload { name?: string; layout?: LayoutData; [key: string]: any; }
+export interface GeneratePlansPayload { plot_width: number; plot_height: number; bedrooms: number; bathrooms: number; floors: number; entry_dir: string; [key: string]: any; }
+export type LayoutData = { rooms?: Room[]; [key: string]: any };
+export type ProjectMeta = { name?: string; [key: string]: any };
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   return {
@@ -147,7 +168,7 @@ const authFetch = async (input: RequestInfo | URL, init?: RequestInit, timeoutMs
   return res;
 };
 
-export const register = async (data: Record<string, unknown>) => {
+export const register = async (data: RegisterPayload) => {
   const res = await fetch(`${API_BASE_URL}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -157,7 +178,7 @@ export const register = async (data: Record<string, unknown>) => {
   return res.json();
 };
 
-export const login = async (data: Record<string, unknown>) => {
+export const login = async (data: LoginPayload) => {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -188,7 +209,7 @@ export const getProjectById = async (id: string) => {
   return res.json();
 };
 
-export const saveProject = async (data: Record<string, unknown>) => {
+export const saveProject = async (data: SaveProjectPayload) => {
   const res = await authFetch(`${API_BASE_URL}/projects`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -208,7 +229,7 @@ export const deleteProject = async (id: string) => {
 };
 
 // ── Generation ───────────────────────────────────────────────────────────────
-export const generatePlans = async (data: Record<string, unknown>): Promise<{ candidates: unknown[] }> => {
+export const generatePlans = async (data: GeneratePlansPayload): Promise<{ candidates: LayoutData[] }> => {
   const res = await authFetch(`${API_BASE_URL}/generate`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -269,7 +290,7 @@ export const regenerateRoom = async (
 };
 
 export const vastuFix = async (
-  layout: Record<string, unknown>,
+  layout: LayoutData,
   vastuResult: VastuResult | undefined,
   plotContext: {
     plotWidth: number;
@@ -299,7 +320,7 @@ export const vastuFix = async (
 };
 
 export const nbcFix = async (
-  layout: Record<string, unknown>,
+  layout: LayoutData,
   nbcResult: NbcResult | undefined,
   plotContext: {
     plotWidth: number;
@@ -329,10 +350,10 @@ export const nbcFix = async (
 };
 
 export const exportReport = async (
-  layout: Record<string, unknown>,
+  layout: LayoutData,
   vastuResult: VastuResult | undefined,
   planId: string,
-  projectMeta: Record<string, unknown>
+  projectMeta: ProjectMeta
 ): Promise<void> => {
   const res = await authFetch(`${API_BASE_URL}/export/pdf`, {
     method: "POST",
@@ -355,3 +376,5 @@ export const exportReport = async (
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
+
+

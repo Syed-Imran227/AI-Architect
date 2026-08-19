@@ -17,13 +17,11 @@ from __future__ import annotations
 import os
 import json
 from typing import Optional
-from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 from engines.architectural_layout import build_layout_from_topology, inject_furniture, default_topology
 from engines.layout_validator import boundary_check_only
 
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 HF_API_KEY   = os.getenv("HF_API_KEY")
 
@@ -38,9 +36,9 @@ _groq_client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/opena
 # Fallback chain: tried in order until one succeeds
 # (model_id, client, label)
 _MODEL_CHAIN: list[tuple[str, OpenAI, str]] = [
-    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq primary)"),
-    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF backup)"),
+    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF primary)"),
     ("Qwen/Qwen3-Coder-30B-A3B-Instruct",       _hf_client,   "Qwen3-Coder (HF backup)"),
+    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq backup)"),
 ]
 
 # Legacy aliases kept for FloorPlanGenerator.model attribute
@@ -686,3 +684,4 @@ def fix_room_topology(
             "design_rationale": f"Drafter error: {e}",
             "llm_called": True,
         }
+

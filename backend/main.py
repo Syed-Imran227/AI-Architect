@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,3 +48,4 @@ app.include_router(engine_router)
 @app.get("/")
 def read_root():
     return {"message": "AI Architect API — Programmatic Floor Plan Generator"}
+
