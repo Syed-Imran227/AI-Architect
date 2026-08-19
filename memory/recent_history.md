@@ -116,3 +116,9 @@
 - Formatted `ieee_paper_formatted.tex` into a strict IEEE two-column, 10pt format.
 - Expanded the paper by 36% to comfortably pass a 7-page minimum constraint.
 - Pushed all modified files to GitHub (`Syed-Imran227/AI-Architect`).
+
+## August 2026: End-to-End Audit & Refactoring Pass
+- **Typing Standard Enforced**: Fully purged `Record<string, unknown>` from `frontend/src/services/api.ts` by defining strict TypeScript interfaces (`RegisterPayload`, `LoginPayload`, `GeneratePlansPayload`, etc.) for all backend communication, resolving a major technical debt item.
+- **LLM Fallback Chain Corrections**: Fixed an execution order mismatch in `inference.py` so that `DeepSeek-V3` via HuggingFace is actively prioritized as the primary topology model, followed by `Qwen3-Coder`, with `gpt-oss-120b` (Groq) serving as the final backup.
+- **Environment Initialization**: Shifted `load_dotenv()` from deep within `inference.py` to the absolute top of `main.py` to guarantee that critical variables (`JWT_SECRET`, `GROQ_API_KEY`) are present in `os.environ` before FastAPI dependencies and routers evaluate during `lifespan` startup.
+- **Test Suite Configuration**: Successfully executed external test suite (`ai_architect_tests`). Created a `conftest.py` environment loader inside the test suite folder, enabling 100% test pass rate for the Drafter without polluting the core source code.
