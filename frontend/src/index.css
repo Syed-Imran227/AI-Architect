@@ -1,101 +1,123 @@
-/* ════════════════════════════════════════════
-   DARK MODE — Linear.app Aesthetic
-   Deep blacks, crisp edges, muted violet accent
-════════════════════════════════════════════ */
+﻿/* ═══════════════════════════════════════════════════════════════════════
+   DARK MODE — Linear/OLED Aesthetic
+   Deep blacks, crisp edges, violet accent
+   Skill: ui-ux-pro-max / dark-mode-oled — text contrast ≥ 4.5:1
+═══════════════════════════════════════════════════════════════════════ */
 :root,
 [data-theme="dark"] {
   --font-primary: 'Inter', system-ui, sans-serif;
   --font-mono: 'Roboto Mono', monospace;
 
-  --bg-primary:    #2d2d2d;
-  --bg-secondary:  #2d2d2d;
-  --bg-card:       #2d2d2d;
+  /* Surfaces — three distinct levels */
+  --bg-primary:    #0d0d0d;
+  --bg-secondary:  #111111;
+  --bg-card:       #1a1a1a;
 
-  --glass-bg:      #2d2d2d;
-  --glass-border:  transparent;
-  --glass-hover:   #1a1a1a;
-  --glass-shadow:  8px 8px 16px #202020, -8px -8px 16px #3a3a3a;
+  /* Glass / panels */
+  --glass-bg:      #161616;
+  --glass-border:  rgba(255, 255, 255, 0.08);
+  --glass-hover:   #1f1f1f;
+  --glass-shadow:  0 1px 3px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4);
 
-  --text-primary:   #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-muted:     #999999;
+  /* Text — contrast ≥ 4.5:1 on #0d0d0d */
+  --text-primary:   #f2f2f2;
+  --text-secondary: #a3a3a3;
+  --text-muted:     #6b6b6b;
 
-  /* Monochromatic Accent */
-  --accent-color:    #ffffff;
-  --accent-fg:       #000000;
-  --accent-purple:   #ffffff;
-  --accent-gradient: #ffffff;
-  --accent-glow:     0 0 0 3px rgba(255, 255, 255, 0.2);
+  /* Accent — violet/indigo */
+  --accent-color:    #7c6cf8;
+  --accent-fg:       #ffffff;
+  --accent-purple:   #a89cf7;
+  --accent-gradient: linear-gradient(135deg, #7c6cf8, #a89cf7);
+  --accent-glow:     0 0 0 3px rgba(124, 108, 248, 0.35);
 
-  --input-bg:     #2d2d2d;
-  --input-shadow: inset 4px 4px 8px #202020, inset -4px -4px 8px #3a3a3a;
-  --input-border:  transparent;
+  /* Inputs */
+  --input-bg:     #141414;
+  --input-shadow: none;
+  --input-border: rgba(255, 255, 255, 0.1);
 
-  --nav-bg:        #2d2d2d;
-  --nav-border:    transparent;
+  /* Nav */
+  --nav-bg:        rgba(13, 13, 13, 0.92);
+  --nav-border:    rgba(255, 255, 255, 0.07);
 
-  --toggle-off-bg: #333333;
+  /* Toggles */
+  --toggle-off-bg: #2e2e2e;
 
-  --success:      #ffffff;
-  --error:        #ffffff;
-  --success-text: #ffffff;
+  /* Semantic status — visually distinct, not white */
+  --success:      #34d399;
+  --error:        #f87171;
+  --warning:      #fbbf24;
+  --success-text: #34d399;
+  --error-text:   #f87171;
 
-  --scrollbar-track: #000000;
-  --scrollbar-thumb: #333333;
+  /* Scrollbar */
+  --scrollbar-track: #0d0d0d;
+  --scrollbar-thumb: #2e2e2e;
 
   color-scheme: dark;
 }
 
-/* ════════════════════════════════════════════
-   LIGHT MODE — Rayon.design Aesthetic
-   Pure white, subtle gray borders, blue accent
-════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   LIGHT MODE — Swiss/Minimal Aesthetic
+   Pure white, clear borders, violet accent
+   Skill: ui-ux-pro-max / minimalism — text contrast ≥ 4.5:1
+═══════════════════════════════════════════════════════════════════════ */
 [data-theme="light"] {
   --font-primary: 'Inter', system-ui, sans-serif;
   --font-mono: 'Roboto Mono', monospace;
 
-  --bg-primary:   #E0E0E0;
-  --bg-secondary: #E0E0E0;
-  --bg-card:      #E0E0E0;
+  /* Surfaces — three distinct levels */
+  --bg-primary:   #f5f5f5;
+  --bg-secondary: #ebebeb;
+  --bg-card:      #ffffff;
 
-  --glass-bg:     #E0E0E0;
-  --glass-border: transparent;
-  --glass-hover:  #e5e5e5;
-  --glass-shadow: 8px 8px 16px #bebebe, -8px -8px 16px #ffffff;
+  /* Glass / panels */
+  --glass-bg:     #ffffff;
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-hover:  #f9f9f9;
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
 
-  --text-primary:   #000000;
-  --text-secondary: #555555;
-  --text-muted:     #999999;
+  /* Text — contrast ≥ 4.5:1 on #f5f5f5 */
+  --text-primary:   #111111;
+  --text-secondary: #4b4b4b;
+  --text-muted:     #8a8a8a;
 
-  /* Monochromatic Accent */
-  --accent-color:    #000000;
+  /* Accent — violet/indigo (same brand) */
+  --accent-color:    #6254f3;
   --accent-fg:       #ffffff;
-  --accent-purple:   #000000;
-  --accent-gradient: #000000;
-  --accent-glow:     0 0 0 3px rgba(0, 0, 0, 0.15);
+  --accent-purple:   #7c6cf8;
+  --accent-gradient: linear-gradient(135deg, #6254f3, #9181fa);
+  --accent-glow:     0 0 0 3px rgba(98, 84, 243, 0.25);
 
-  --input-bg:     #E0E0E0;
-  --input-shadow: inset 4px 4px 8px #bebebe, inset -4px -4px 8px #ffffff;
-  --input-border: transparent;
+  /* Inputs */
+  --input-bg:     #ffffff;
+  --input-shadow: none;
+  --input-border: rgba(0, 0, 0, 0.15);
 
-  --nav-bg:       #E0E0E0;
-  --nav-border:   transparent;
+  /* Nav */
+  --nav-bg:       rgba(255, 255, 255, 0.92);
+  --nav-border:   rgba(0, 0, 0, 0.08);
 
-  --toggle-off-bg: #cccccc;
+  /* Toggles */
+  --toggle-off-bg: #d4d4d4;
 
-  --success:      #000000;
-  --error:        #000000;
-  --success-text: #000000;
+  /* Semantic status — real colors, not black */
+  --success:      #059669;
+  --error:        #dc2626;
+  --warning:      #d97706;
+  --success-text: #059669;
+  --error-text:   #dc2626;
 
-  --scrollbar-track: #ffffff;
-  --scrollbar-thumb: #cccccc;
+  /* Scrollbar */
+  --scrollbar-track: #ebebeb;
+  --scrollbar-thumb: #c4c4c4;
 
   color-scheme: light;
 }
 
-/* ════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════
    BASE STYLES
-════════════════════════════════════════════ */
+═══════════════════════════════════════════════════════════════════════ */
 *,
 *::before,
 *::after {

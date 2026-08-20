@@ -1,4 +1,4 @@
-/* ── Animations ── */
+﻿/* â”€â”€ Animations â”€â”€ */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -9,7 +9,7 @@
   }
 }
 
-/* ── Layout ── */
+/* â”€â”€ Layout â”€â”€ */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -52,7 +52,7 @@ header {
   grid-template-columns: 320px 1fr 360px;
 }
 
-/* ── UI Components (Linear / Rayon solid panels) ── */
+/* â”€â”€ UI Components (Linear / Rayon solid panels) â”€â”€ */
 .card,
 .panel-card,
 .form-pane,
@@ -85,14 +85,14 @@ header {
   border-radius: 10px;
 }
 
-/* ── Buttons — unified system ── */
+/* â”€â”€ Buttons â€” unified system â”€â”€ */
 button {
   font-family: var(--font-primary);
   transition: opacity 0.2s, transform 0.2s, background 0.2s, box-shadow 0.2s;
   letter-spacing: 0.01em;
 }
 
-/* Primary button — CTAs */
+/* Primary button â€” CTAs */
 .btn-primary {
   background: var(--accent-color);
   color: var(--accent-fg);
@@ -117,7 +117,7 @@ button {
   cursor: not-allowed;
 }
 
-/* Ghost button — secondary actions */
+/* Ghost button â€” secondary actions */
 .btn-ghost {
   background: var(--glass-bg);
   color: var(--text-secondary);
@@ -145,7 +145,7 @@ button {
   cursor: not-allowed;
 }
 
-/* Danger button — delete, destructive */
+/* Danger button â€” delete, destructive */
 .btn-danger {
   background: var(--glass-bg);
   color: var(--error);
@@ -166,7 +166,7 @@ button {
   box-shadow: var(--input-shadow);
 }
 
-/* ── Form Inputs ── */
+/* â”€â”€ Form Inputs â”€â”€ */
 .input-field {
   padding: 0.85rem 1rem;
   border-radius: 10px;
@@ -270,7 +270,7 @@ button {
 }
 
 
-/* ── Forms ── */
+/* â”€â”€ Forms â”€â”€ */
 .form-group {
   margin-bottom: 1.25rem;
 }
@@ -389,7 +389,7 @@ select:focus {
   transform: translateX(calc(var(--button-width) - var(--toggle-wider) - var(--button-toggle-offset)));
 }
 
-/* ── Blueprint & Gallery ── */
+/* â”€â”€ Blueprint & Gallery â”€â”€ */
 .blueprint-wrapper {
   background: var(--bg-secondary);
   border-radius: 6px;
@@ -439,7 +439,7 @@ select:focus {
   border: 1px solid var(--text-primary);
 }
 
-/* ── Specific Overrides for Auth/Dashboard ── */
+/* â”€â”€ Specific Overrides for Auth/Dashboard â”€â”€ */
 .auth-container {
   display: flex;
   justify-content: center;
@@ -461,7 +461,7 @@ select:focus {
 }
 
 .auth-card input {
-  background: rgba(0, 0, 0, 0.2) !important;
+  background: var(--input-bg) !important;
   border: 1px solid var(--glass-border) !important;
   color: var(--text-primary) !important;
 }
@@ -470,7 +470,7 @@ select:focus {
   color: var(--text-secondary);
 }
 
-/* ── History Strip (Current Session) ── */
+/* â”€â”€ History Strip (Current Session) â”€â”€ */
 .history-strip {
   margin-top: 1.5rem;
   background: var(--glass-bg);
@@ -493,7 +493,7 @@ select:focus {
   width: 100%;
   text-align: left;
   padding: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-secondary);
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--text-primary);
@@ -517,7 +517,7 @@ select:focus {
   box-shadow: var(--accent-glow);
 }
 
-/* ── Vastu Analysis Panel — theme-aware ── */
+/* â”€â”€ Vastu Analysis Panel â€” theme-aware â”€â”€ */
 .vastu-panel {
   background: var(--glass-bg);
   border: none;
@@ -568,24 +568,24 @@ select:focus {
 }
 
 .vastu-pill--high {
-  background: transparent;
-  color: var(--text-primary);
-  border: 1px solid var(--text-primary);
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--success);
+  border: 1px solid var(--success);
 }
 
 .vastu-pill--med {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--text-secondary);
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--warning);
+  border: 1px solid var(--warning);
 }
 
 .vastu-pill--low {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--text-muted);
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--error);
+  border: 1px solid var(--error);
 }
 
-/* ── Room Editor Overlay ── */
+/* â”€â”€ Room Editor Overlay â”€â”€ */
 .room-editor {
   width: 100%;
   background: var(--glass-bg);
