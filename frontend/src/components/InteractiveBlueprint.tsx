@@ -149,8 +149,8 @@ function getFurnFill(name: string): string {
   return '#d4dce8';
 }
 
-// ── LLM-Coordinate Furniture Renderer ────────────────────────────────────────
-// Draws furniture items from the JSON coordinates returned by Llama-3.
+// ── Coordinate Furniture Renderer ────────────────────────────────────────────
+// Draws furniture items from the JSON coordinates returned by the Engine.
 // Each item's x/y is relative to the room's own top-left corner.
 function FurnitureLayer({ room }: { room: Room }) {
   const items = room.furniture;
@@ -206,7 +206,7 @@ function FurnitureLayer({ room }: { room: Room }) {
 }
 
 
-function DoorArcs({ room }: { room: Room }) {
+function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> }) {
   if (!room.doors || room.doors.length === 0) return null;
 
   return (
@@ -225,7 +225,7 @@ function DoorArcs({ room }: { room: Room }) {
               gapX1: hx, gapY1: hy, gapX2: hx + dw, gapY2: hy,
               leafX: hx, leafY: hy + dw,
               arcEndX: hx + dw, arcEndY: hy,
-              sweepFlag: 1
+              sweepFlag: 0
             };
           }
           if (door.wall === 'bottom') {
@@ -237,7 +237,7 @@ function DoorArcs({ room }: { room: Room }) {
               gapX1: hx, gapY1: hy, gapX2: hx + dw, gapY2: hy,
               leafX: hx, leafY: hy - dw,
               arcEndX: hx + dw, arcEndY: hy,
-              sweepFlag: 0
+              sweepFlag: 1
             };
           }
           if (door.wall === 'left') {
@@ -249,7 +249,7 @@ function DoorArcs({ room }: { room: Room }) {
               gapX1: hx, gapY1: hy, gapX2: hx, gapY2: hy + dw,
               leafX: hx + dw, leafY: hy,
               arcEndX: hx, arcEndY: hy + dw,
-              sweepFlag: 1
+              sweepFlag: 0
             };
           }
           if (door.wall === 'right') {
@@ -261,7 +261,7 @@ function DoorArcs({ room }: { room: Room }) {
               gapX1: hx, gapY1: hy, gapX2: hx, gapY2: hy + dw,
               leafX: hx - dw, leafY: hy,
               arcEndX: hx, arcEndY: hy + dw,
-              sweepFlag: 0
+              sweepFlag: 1
             };
           }
           return null;
@@ -271,22 +271,38 @@ function DoorArcs({ room }: { room: Room }) {
         if (!geom || geom.dw <= 0) return null;
 
         const { hx, hy, leafX, leafY, dw, sweepFlag, arcEndX, arcEndY, gapX1, gapY1, gapX2, gapY2 } = geom;
-        const path = `M ${hx} ${hy} L ${leafX} ${leafY} A ${dw} ${dw} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}`;
+
+        // Compute exact world coordinates of the hinge
+        const hingeX = (door.wall === 'left' || door.wall === 'right') 
+          ? (door.wall === 'left' ? room.x : room.x + room.width) 
+          : hx;
+        const hingeY = (door.wall === 'top' || door.wall === 'bottom')
+          ? (door.wall === 'top' ? room.y : room.y + room.height)
+          : hy;
+        
+        const key = `${Math.round(hingeX * 10)},${Math.round(hingeY * 10)}`;
+        const isDrawn = drawnDoors.has(key);
+        drawnDoors.add(key);
 
         return (
-          <g key={`${room.name}-door-${idx}`}>
+          <g key={`door-${idx}`}>
             {/* White gap in wall = door opening */}
             <line x1={gapX1} y1={gapY1} x2={gapX2} y2={gapY2}
               stroke="#fafbfc" strokeWidth={0.65} />
-            {/* Door swing area (filled arc) */}
-            <path d={path}
-              fill="rgba(100,116,139,0.12)"
-              stroke="#64748b"
-              strokeWidth={0.12}
-              strokeDasharray="0.4 0.2" />
-            {/* Solid door leaf */}
-            <line x1={hx} y1={hy} x2={leafX} y2={leafY}
-              stroke="#475569" strokeWidth={0.24} />
+            
+            {!isDrawn && (
+              <>
+                {/* Door swing area (filled arc) */}
+                <path d={`M ${hx} ${hy} L ${leafX} ${leafY} A ${dw} ${dw} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}`}
+                  fill="none"
+                  stroke="#64748b"
+                  strokeWidth={0.12}
+                  strokeDasharray="0.4 0.2" />
+                {/* Solid door leaf */}
+                <line x1={hx} y1={hy} x2={leafX} y2={leafY}
+                  stroke="#475569" strokeWidth={0.24} />
+              </>
+            )}
           </g>
         );
       })}
@@ -346,14 +362,25 @@ function WindowMarks({ room }: { room: Room }) {
             {/* Outer window line (wall face) */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
               stroke="#60a5fa" strokeWidth={0.22} />
-            {/* Inner glass line */}
-            <line x1={gx1} y1={gy1} x2={gx2} y2={gy2}
-              stroke="#60a5fa" strokeWidth={0.12} strokeDasharray="0.3 0.15" />
-            {/* End ticks */}
-            <line x1={t1[0]} y1={t1[1]} x2={t1[2]} y2={t1[3]}
-              stroke="#60a5fa" strokeWidth={0.18} />
-            <line x1={t2[0]} y1={t2[1]} x2={t2[2]} y2={t2[3]}
-              stroke="#60a5fa" strokeWidth={0.18} />
+            <g key={`win-${idx}`}>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth={0.25} />
+              <line x1={gx1} y1={gy1} x2={gx2} y2={gy2} stroke="#93c5fd" strokeWidth={0.12} />
+              
+              {/* Plus-shaped Mullions (Crossbars) */}
+              <line 
+                x1={(x1+x2)/2} y1={Math.min(y1, gy1)} 
+                x2={(x1+x2)/2} y2={Math.max(y1, gy1)} 
+                stroke="#1e3a8a" strokeWidth={0.25} 
+              />
+              <line 
+                x1={Math.min(x1, gx1)} y1={(y1+gy1)/2} 
+                x2={Math.max(x2, gx2)} y2={(y1+gy1)/2} 
+                stroke="#1e3a8a" strokeWidth={0.25} 
+              />
+
+              <line x1={t1[0]} y1={t1[1]} x2={t1[2]} y2={t1[3]} stroke="#3b82f6" strokeWidth={0.15} />
+              <line x1={t2[0]} y1={t2[1]} x2={t2[2]} y2={t2[3]} stroke="#3b82f6" strokeWidth={0.15} />
+            </g>
           </g>
         );
       })}
@@ -370,6 +397,9 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
   const [draggingRoom, setDraggingRoom] = useState<string | null>(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Global set to deduplicate door swing drawing across adjacent rooms
+  const drawnDoorCoords = new Set<string>();
 
   const getSvgCoordinates = (clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
@@ -439,6 +469,9 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
   const scaleLen = 10;
   const sbX = minX + PAD * 0.6;
   const sbY = maxY - PAD * 0.2;
+
+  // Clear set before re-render
+  drawnDoorCoords.clear();
 
   return (
     <svg
@@ -556,7 +589,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
             <FurnitureLayer room={room} />
 
             {/* Doors */}
-            <DoorArcs room={room} />
+            <DoorArcs room={room} drawnDoors={drawnDoorCoords} />
 
             {/* Window marks */}
             <WindowMarks room={room} />

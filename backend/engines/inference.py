@@ -155,7 +155,7 @@ def _clean_llm_raw(raw: str) -> str:
     return raw
 
 
-def _call_architect_llm(prompt: str, retries: int = 1) -> Optional[TopologyResponse]:
+def _call_architect_llm(prompt: str, retries: int = 0) -> Optional[TopologyResponse]:
     """
     Try each model in _MODEL_CHAIN until one returns a valid TopologyResponse.
     Falls back to the next model on any error. Returns None if all fail.

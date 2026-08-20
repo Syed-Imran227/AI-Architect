@@ -126,6 +126,7 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
                    outline=OUTER_CLR, width=OUTER_PX)
 
     # ── Rooms ─────────────────────────────────────────────────────────────────
+    drawn_doors = set()
     for room in rooms:
         rx0 = px(room["x"])
         ry0 = py(room["y"])                    # top of room in pixels (no flip)
@@ -140,18 +141,38 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
         draw.rectangle([rx0, ry0, rx1, ry1], fill=fill)
         draw.rectangle([rx0, ry0, rx1, ry1], outline=WALL_CLR, width=WALL_PX)
 
-        # ── Door arc (bottom wall) ─────────────────────────────────────────
-        door_w = min(int(rw * 0.28), pl(3.5))
-        if door_w > pl(2) and rw > pl(5):
-            dx = rx0 + int(rw * 0.12)
-            dy = ry1
-            # Erase wall gap
-            draw.line([(dx, dy), (dx + door_w, dy)], fill=fill, width=WALL_PX + 2)
-            # Swing arc
-            draw.arc([dx, dy - door_w, dx + door_w, dy],
-                     start=180, end=270, fill=DOOR_CLR, width=1)
-            # Door panel line
-            draw.line([(dx, dy), (dx, dy - door_w)], fill=DOOR_CLR, width=1)
+        # ── Doors ─────────────────────────────────────────────────────────
+        for door in room.get("doors", []):
+            d_wall = door.get("wall", "right")
+            d_pos  = px(room["x"] + door.get("position", 0)) if d_wall in ["top", "bottom"] else py(room["y"] + door.get("position", 0))
+            d_w    = pl(door.get("width", 3))
+            if d_w < pl(1.5): continue
+            
+            hx = d_pos if d_wall in ["top", "bottom"] else (rx0 if d_wall == "left" else rx1)
+            hy = ry0 if d_wall == "top" else (ry1 if d_wall == "bottom" else d_pos)
+            key = (hx, hy)
+            is_drawn = key in drawn_doors
+            drawn_doors.add(key)
+
+            try:
+                if d_wall == "top":
+                    draw.line([(d_pos, ry0), (d_pos + d_w, ry0)], fill=fill, width=WALL_PX + 2)
+                    if not is_drawn:
+                        draw.line([(d_pos, ry0), (d_pos + int(d_w*0.8), ry0 + int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                elif d_wall == "bottom":
+                    draw.line([(d_pos, ry1), (d_pos + d_w, ry1)], fill=fill, width=WALL_PX + 2)
+                    if not is_drawn:
+                        draw.line([(d_pos, ry1), (d_pos + int(d_w*0.8), ry1 - int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                elif d_wall == "left":
+                    draw.line([(rx0, d_pos), (rx0, d_pos + d_w)], fill=fill, width=WALL_PX + 2)
+                    if not is_drawn:
+                        draw.line([(rx0, d_pos), (rx0 + int(d_w*0.8), d_pos + int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                elif d_wall == "right":
+                    draw.line([(rx1, d_pos), (rx1, d_pos + d_w)], fill=fill, width=WALL_PX + 2)
+                    if not is_drawn:
+                        draw.line([(rx1, d_pos), (rx1 - int(d_w*0.8), d_pos + int(d_w*0.8))], fill=DOOR_CLR, width=1)
+            except Exception:
+                pass
 
         # ── Window marks — data-driven from room["windows"] ───────────────
         for win in room.get("windows", []):
@@ -166,6 +187,8 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
                 wy  = ry0
                 draw.line([(wx1, wy), (wx2, wy)], fill=WIN_CLR, width=2)
                 draw.line([(wx1, wy - gap_px), (wx2, wy - gap_px)], fill=WIN_CLR, width=1)
+                draw.line([((wx1+wx2)//2, wy), ((wx1+wx2)//2, wy - gap_px)], fill=WIN_CLR, width=1)
+                draw.line([(wx1, wy - gap_px//2), (wx2, wy - gap_px//2)], fill=WIN_CLR, width=1)
                 for tx in [wx1, wx2]:
                     draw.line([(tx, wy - 5), (tx, wy + 3)], fill=WIN_CLR, width=1)
             elif wall == "bottom":
@@ -174,6 +197,8 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
                 wy  = ry1
                 draw.line([(wx1, wy), (wx2, wy)], fill=WIN_CLR, width=2)
                 draw.line([(wx1, wy + gap_px), (wx2, wy + gap_px)], fill=WIN_CLR, width=1)
+                draw.line([((wx1+wx2)//2, wy), ((wx1+wx2)//2, wy + gap_px)], fill=WIN_CLR, width=1)
+                draw.line([(wx1, wy + gap_px//2), (wx2, wy + gap_px//2)], fill=WIN_CLR, width=1)
                 for tx in [wx1, wx2]:
                     draw.line([(tx, wy - 3), (tx, wy + 5)], fill=WIN_CLR, width=1)
             elif wall == "left":
@@ -182,6 +207,8 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
                 wx  = rx0
                 draw.line([(wx, wy1), (wx, wy2)], fill=WIN_CLR, width=2)
                 draw.line([(wx - gap_px, wy1), (wx - gap_px, wy2)], fill=WIN_CLR, width=1)
+                draw.line([(wx, (wy1+wy2)//2), (wx - gap_px, (wy1+wy2)//2)], fill=WIN_CLR, width=1)
+                draw.line([(wx - gap_px//2, wy1), (wx - gap_px//2, wy2)], fill=WIN_CLR, width=1)
                 for ty in [wy1, wy2]:
                     draw.line([(wx - 5, ty), (wx + 3, ty)], fill=WIN_CLR, width=1)
             elif wall == "right":
@@ -190,39 +217,10 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
                 wx  = rx1
                 draw.line([(wx, wy1), (wx, wy2)], fill=WIN_CLR, width=2)
                 draw.line([(wx + gap_px, wy1), (wx + gap_px, wy2)], fill=WIN_CLR, width=1)
+                draw.line([(wx, (wy1+wy2)//2), (wx + gap_px, (wy1+wy2)//2)], fill=WIN_CLR, width=1)
+                draw.line([(wx + gap_px//2, wy1), (wx + gap_px//2, wy2)], fill=WIN_CLR, width=1)
                 for ty in [wy1, wy2]:
                     draw.line([(wx - 3, ty), (wx + 5, ty)], fill=WIN_CLR, width=1)
-
-        # ── Furniture ─────────────────────────────────────────────────────────
-        for furn in room.get("furniture", []):
-            fx0 = px(room["x"] + furn["x"])
-            fy0 = py(room["y"] + furn["y"])
-            fx1 = px(room["x"] + furn["x"] + furn["width"])
-            fy1 = py(room["y"] + furn["y"] + furn["height"])
-            fcx = (fx0 + fx1) // 2
-            fcy = (fy0 + fy1) // 2
-            
-            # Furniture fill + border
-            draw.rectangle([fx0, fy0, fx1, fy1], fill="#e2e8f0", outline="#94a3b8", width=1)
-            
-            # Furniture label
-            f_label = furn["name"].split(" ")[0]  # Just first word to fit
-            f_size = max(7, min(int((fx1 - fx0) * 0.15), 10))
-            ffont = _font(f_size)
-            _, _, ftw, fth = draw.textbbox((0, 0), f_label, font=ffont)
-            if ftw < (fx1 - fx0) * 0.9:
-                draw.text((fcx - ftw/2, fcy - fth/2), f_label, fill="#475569", font=ffont)
-
-        # ── Labels ────────────────────────────────────────────────────────
-        nf_size = max(11, min(int(min(rw, rh) * 0.14), 17))
-        df_size = max(8,  nf_size - 3)
-        sqft    = round(room["width"] * room["height"])
-        dim_str = f"{room['width']}' \u00d7 {room['height']}' ({sqft} sqft)"
-
-        nf = _font(nf_size, bold=True)
-        df = _font(df_size)
-        _center_text(draw, room["name"], cx_px, cy_px - nf_size,     nf, TEXT_CLR)
-        _center_text(draw, dim_str,      cx_px, cy_px + df_size // 2, df, SUB_CLR)
 
         # ── Furniture ─────────────────────────────────────────────────────
         for furn in room.get("furniture", []):
@@ -248,6 +246,17 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
                     _center_text(draw, fname, fcx, fcy, ff, (80, 100, 130))
             except Exception:
                 pass
+                
+        # ── Labels (Drawn last to stay above furniture) ───────────────────
+        nf_size = max(11, min(int(min(rw, rh) * 0.14), 17))
+        df_size = max(8,  nf_size - 3)
+        sqft    = round(room["width"] * room["height"])
+        dim_str = f"{room['width']}' \u00d7 {room['height']}' ({sqft} sqft)"
+
+        nf = _font(nf_size, bold=True)
+        df = _font(df_size)
+        _center_text(draw, room["name"], cx_px, cy_px - nf_size,     nf, TEXT_CLR)
+        _center_text(draw, dim_str,      cx_px, cy_px + df_size // 2, df, SUB_CLR)
 
         # ── Width dimension line ───────────────────────────────────────────
         if rw > pl(6):

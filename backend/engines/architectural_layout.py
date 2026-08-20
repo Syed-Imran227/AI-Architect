@@ -193,6 +193,7 @@ def _build_ground_floor(
         "name": "Foyer",
         "x": spine_x, "y": 0, "width": spine_w, "height": front_h,
         "doors": [
+            _door("top",    spine_w * 0.5),   # Main Entrance
             _door("left",   front_h * 0.4),   # to Parking
             _door("right",  front_h * 0.4),   # to Living
             _door("bottom", spine_w * 0.3),   # to Corridor

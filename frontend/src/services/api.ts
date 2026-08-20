@@ -1,18 +1,5 @@
 const API_BASE_URL = "http://localhost:8000";
 
-export interface RegisterPayload { email: string; password: string; name?: string; }
-export interface LoginPayload { email: string; password: string; }
-export interface SaveProjectPayload { name?: string; layout?: LayoutData; [key: string]: any; }
-export interface GeneratePlansPayload { plot_width: number; plot_height: number; bedrooms: number; bathrooms: number; floors: number; entry_dir: string; [key: string]: any; }
-export type LayoutData = { rooms?: Room[]; [key: string]: any };
-export type ProjectMeta = { name?: string; [key: string]: any };
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-  return token
-    ? { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
-    : { "Content-Type": "application/json" };
-};
 
 interface FurnitureItem {
   name: string;
@@ -125,7 +112,7 @@ export interface FloorCirculation {
 export interface RegisterPayload { email: string; password: string; name?: string; }
 export interface LoginPayload { email: string; password: string; }
 export interface SaveProjectPayload { name?: string; layout?: LayoutData; [key: string]: any; }
-export interface GeneratePlansPayload { plot_width: number; plot_height: number; bedrooms: number; bathrooms: number; floors: number; entry_dir: string; [key: string]: any; }
+export interface GeneratePlansPayload { length: number; width: number; bedrooms: number; bathrooms: number; floors: number; entryDir: string; [key: string]: any; }
 export type LayoutData = { rooms?: Room[]; [key: string]: any };
 export type ProjectMeta = { name?: string; [key: string]: any };
 

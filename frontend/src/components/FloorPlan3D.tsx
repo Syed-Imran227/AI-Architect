@@ -648,12 +648,12 @@ function WallWithOpenings({
               <Box args={args3} position={pos3}>
                 <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
               </Box>
-              {/* Door leaf (semi-transparent, slightly open) */}
+              {/* Door leaf (swung 90 degrees open) */}
               <Box
-                args={isHoriz ? [op.width * 0.9, DOOR_H, wallT * 0.25] : [wallT * 0.25, DOOR_H, op.width * 0.9]}
-                position={isHoriz ? [opMid, DOOR_H / 2, wallFixed + wallT * 0.4] : [wallFixed + wallT * 0.4, DOOR_H / 2, opMid]}
+                args={isHoriz ? [wallT * 0.3, DOOR_H, op.width * 0.85] : [op.width * 0.85, DOOR_H, wallT * 0.3]}
+                position={isHoriz ? [opMid - op.width * 0.42, DOOR_H / 2, wallFixed + op.width * 0.4] : [wallFixed + op.width * 0.4, DOOR_H / 2, opMid - op.width * 0.42]}
               >
-                <meshStandardMaterial color="#c8a060" opacity={0.45} transparent />
+                <meshStandardMaterial color="#8a6030" />
               </Box>
             </group>
           );
@@ -687,6 +687,18 @@ function WallWithOpenings({
               </Box>
               <Box args={args3Glass} position={pos3Glass}>
                 <meshStandardMaterial color="#a0d8ef" opacity={0.35} transparent />
+              </Box>
+              {/* Vertical Mullion */}
+              <Box 
+                args={isHoriz ? [wallT*0.15, WIN_H, wallT*0.3] : [wallT*0.3, WIN_H, wallT*0.15]} 
+                position={pos3Glass}>
+                <meshStandardMaterial color="#1e3a8a" />
+              </Box>
+              {/* Horizontal Mullion */}
+              <Box 
+                args={isHoriz ? [op.width, wallT*0.15, wallT*0.3] : [wallT*0.3, wallT*0.15, op.width]} 
+                position={pos3Glass}>
+                <meshStandardMaterial color="#1e3a8a" />
               </Box>
             </group>
           );
