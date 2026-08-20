@@ -12,8 +12,10 @@ The core innovation of AI Architect is its **Architect-Drafter Hybrid Model**, w
 ## ✨ Features
 
 - **Generative Floor Plans:** Input your plot dimensions, BHK requirements, and facing direction to instantly generate a full layout.
+- **AI Copilot Editor:** Chat directly with the AI Copilot to iteratively request modifications (e.g., "Add an attached bath", "Make the kitchen larger"). The topology is instantly recalculated.
 - **🧿 Vastu Shastra Engine:** Features a comprehensive Vastu scoring system (0-100) that evaluates room placement (e.g., Pooja room in NE, Kitchen in SE). Includes an **Auto-Fix** feature that automatically restructures the layout to improve the Vastu score.
 - **Interactive Blueprint Editor:** A fully interactive React canvas allows you to view the plan, click on rooms to edit dimensions and positions, and view real-time circulation warnings.
+- **Concept Sketch Generation:** A static, styled "Concept Sketch" rendering of the plan is generated entirely on the backend to match the frontend logic, ready for quick sharing.
 - **AutoCAD DXF Export:** Download production-ready DXF files of your generated floor plans, complete with mathematically calculated inward-swinging door arcs, wall openings, and proper layer management.
 - **Modern UI:** Built with a stunning Glassmorphism aesthetic, supporting both Nebula Dark Mode and Genesis Light Mode.
 

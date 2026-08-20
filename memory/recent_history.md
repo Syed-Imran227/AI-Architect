@@ -1,5 +1,10 @@
 # Recent History & Conversations
 
+## Late August 2026: UI Polish & Feature Adjustments
+- **AI Copilot UI:** Styled the `Editor.tsx` AI Copilot text box with distinct background, blue border, and shadow to clearly distinguish it as an interactive input field rather than a static info box.
+- **Concept Sketch Parity:** Updated `floor_renderer.py` to correctly suppress rendering door swing arcs when the door connects to a staircase, matching the Interactive Blueprint rules. Darkened the window color in the Concept Sketch export from light blue to deep blue `(35, 65, 110)` for better visibility.
+- **Double Door Removal:** Surgically removed all double-door logic across the stack (`architectural_layout.py`, `InteractiveBlueprint.tsx`, `FloorPlan3D.tsx`, and `floor_renderer.py`) based on updated project requirements, ensuring all doors generate and render as standard single doors.
+
 ## Late August 2026: 2D/3D Architectural Parity & Full-Stack Resilience
 - **Geometry & Rendering Overhaul:** Solved the "invisible doors and windows" bug in the 3D viewer. Replaced monolithic 3D box walls with a `WallWithOpenings` segment-renderer that precisely maps `room.doors` and `room.windows` into the 3D mesh.
 - **2D Blueprint Parity:** Rewrote the 2D `WindowMarks` component to strictly read real `room.windows` data from the backend instead of injecting fake, heuristically-placed windows on every top wall. Now 2D and 3D renderings match 1:1.
