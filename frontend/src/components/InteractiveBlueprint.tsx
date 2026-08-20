@@ -150,8 +150,85 @@ function getFurnFill(name: string): string {
 }
 
 // ── Coordinate Furniture Renderer ────────────────────────────────────────────
-// Draws furniture items from the JSON coordinates returned by the Engine.
-// Each item's x/y is relative to the room's own top-left corner.
+// Draws detailed top-down 2D representations of furniture
+function renderDetailedFurniture(name: string, x: number, y: number, w: number, h: number, fill: string, stroke: string) {
+  const n = name.toLowerCase();
+  const isHoriz = w > h;
+  
+  if (n.includes('bed')) {
+    const pW = isHoriz ? w * 0.15 : w * 0.35;
+    const pH = isHoriz ? h * 0.35 : h * 0.15;
+    return (
+      <g>
+        <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={0.12} rx={0.2} />
+        {isHoriz ? (
+          <line x1={x + w * 0.3} y1={y} x2={x + w * 0.3} y2={y + h} stroke={stroke} strokeWidth={0.08} />
+        ) : (
+          <line x1={x} y1={y + h * 0.3} x2={x + w} y2={y + h * 0.3} stroke={stroke} strokeWidth={0.08} />
+        )}
+        {isHoriz ? (
+          <>
+            <rect x={x + w*0.08} y={y + h*0.1} width={pW} height={pH} fill="#ffffff" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+            <rect x={x + w*0.08} y={y + h*0.55} width={pW} height={pH} fill="#ffffff" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+          </>
+        ) : (
+          <>
+            <rect x={x + w*0.1} y={y + h*0.08} width={pW} height={pH} fill="#ffffff" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+            <rect x={x + w*0.55} y={y + h*0.08} width={pW} height={pH} fill="#ffffff" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+          </>
+        )}
+      </g>
+    );
+  }
+  
+  if (n.includes('sofa') || n.includes('couch')) {
+    return (
+      <g>
+        <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={0.12} rx={0.2} />
+        {isHoriz ? (
+          <>
+            <rect x={x} y={y} width={w} height={h*0.3} fill="rgba(0,0,0,0.08)" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+            <rect x={x} y={y+h*0.3} width={w*0.15} height={h*0.7} fill="rgba(0,0,0,0.08)" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+            <rect x={x+w*0.85} y={y+h*0.3} width={w*0.15} height={h*0.7} fill="rgba(0,0,0,0.08)" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+          </>
+        ) : (
+          <>
+            <rect x={x+w*0.7} y={y} width={w*0.3} height={h} fill="rgba(0,0,0,0.08)" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+            <rect x={x} y={y} width={w*0.7} height={h*0.15} fill="rgba(0,0,0,0.08)" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+            <rect x={x} y={y+h*0.85} width={w*0.7} height={h*0.15} fill="rgba(0,0,0,0.08)" stroke={stroke} strokeWidth={0.08} rx={0.1} />
+          </>
+        )}
+      </g>
+    );
+  }
+  
+  if (n.includes('dining table')) {
+    const rx = isHoriz ? w*0.1 : h*0.1;
+    return (
+      <g>
+        {isHoriz ? (
+          <>
+            <circle cx={x + w*0.25} cy={y} r={h*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+            <circle cx={x + w*0.75} cy={y} r={h*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+            <circle cx={x + w*0.25} cy={y + h} r={h*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+            <circle cx={x + w*0.75} cy={y + h} r={h*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+          </>
+        ) : (
+          <>
+            <circle cx={x} cy={y + h*0.25} r={w*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+            <circle cx={x} cy={y + h*0.75} r={w*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+            <circle cx={x + w} cy={y + h*0.25} r={w*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+            <circle cx={x + w} cy={y + h*0.75} r={w*0.18} fill="#ffffff" stroke={stroke} strokeWidth={0.08} />
+          </>
+        )}
+        <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={0.12} rx={rx} />
+      </g>
+    );
+  }
+
+  return <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={0.12} rx={0.15} />;
+}
+
 function FurnitureLayer({ room }: { room: Room }) {
   const items = room.furniture;
 
@@ -172,18 +249,11 @@ function FurnitureLayer({ room }: { room: Room }) {
         const fcy = ay + fh / 2;
         const labelSize = Math.max(0.5, Math.min(fw, fh) * 0.15);
         const fill = getFurnFill(furn.name);
+        const stroke = "rgba(90,110,150,0.7)";
 
         return (
           <g key={idx} style={{ pointerEvents: 'none' }}>
-            {/* Furniture rectangle */}
-            <rect
-              x={ax} y={ay}
-              width={fw} height={fh}
-              fill={fill}
-              stroke="rgba(90,110,150,0.7)"
-              strokeWidth={0.12}
-              rx={0.15}
-            />
+            {renderDetailedFurniture(furn.name, ax, ay, fw, fh, fill, stroke)}
             {/* Furniture name label */}
             {fw > 2 && fh > 1.5 && (
               <text
@@ -206,7 +276,7 @@ function FurnitureLayer({ room }: { room: Room }) {
 }
 
 
-function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> }) {
+function DoorArcs({ room, doorAttributes }: { room: Room, doorAttributes: { claims: Map<string, string>, stairs: Set<string> } }) {
   if (!room.doors || room.doors.length === 0) return null;
 
   return (
@@ -225,7 +295,7 @@ function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> })
               gapX1: hx, gapY1: hy, gapX2: hx + dw, gapY2: hy,
               leafX: hx, leafY: hy + dw,
               arcEndX: hx + dw, arcEndY: hy,
-              sweepFlag: 0
+              sweepFlag: 1
             };
           }
           if (door.wall === 'bottom') {
@@ -237,7 +307,7 @@ function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> })
               gapX1: hx, gapY1: hy, gapX2: hx + dw, gapY2: hy,
               leafX: hx, leafY: hy - dw,
               arcEndX: hx + dw, arcEndY: hy,
-              sweepFlag: 1
+              sweepFlag: 0
             };
           }
           if (door.wall === 'left') {
@@ -249,7 +319,7 @@ function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> })
               gapX1: hx, gapY1: hy, gapX2: hx, gapY2: hy + dw,
               leafX: hx + dw, leafY: hy,
               arcEndX: hx, arcEndY: hy + dw,
-              sweepFlag: 0
+              sweepFlag: 1
             };
           }
           if (door.wall === 'right') {
@@ -261,7 +331,7 @@ function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> })
               gapX1: hx, gapY1: hy, gapX2: hx, gapY2: hy + dw,
               leafX: hx - dw, leafY: hy,
               arcEndX: hx, arcEndY: hy + dw,
-              sweepFlag: 1
+              sweepFlag: 0
             };
           }
           return null;
@@ -281,8 +351,8 @@ function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> })
           : hy;
         
         const key = `${Math.round(hingeX * 10)},${Math.round(hingeY * 10)}`;
-        const isDrawn = drawnDoors.has(key);
-        drawnDoors.add(key);
+        const isDrawn = doorAttributes.claims.get(key) !== room.name;
+        const isStairDoor = doorAttributes.stairs.has(key);
 
         return (
           <g key={`door-${idx}`}>
@@ -290,17 +360,11 @@ function DoorArcs({ room, drawnDoors }: { room: Room, drawnDoors: Set<string> })
             <line x1={gapX1} y1={gapY1} x2={gapX2} y2={gapY2}
               stroke="#fafbfc" strokeWidth={0.65} />
             
-            {!isDrawn && (
+            {!isDrawn && !isStairDoor && (
               <>
-                {/* Door swing area (filled arc) */}
                 <path d={`M ${hx} ${hy} L ${leafX} ${leafY} A ${dw} ${dw} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}`}
-                  fill="none"
-                  stroke="#64748b"
-                  strokeWidth={0.12}
-                  strokeDasharray="0.4 0.2" />
-                {/* Solid door leaf */}
-                <line x1={hx} y1={hy} x2={leafX} y2={leafY}
-                  stroke="#475569" strokeWidth={0.24} />
+                  fill="rgba(100,116,139,0.12)" stroke="#64748b" strokeWidth={0.12} strokeDasharray="0.4 0.2" />
+                <line x1={hx} y1={hy} x2={leafX} y2={leafY} stroke="#475569" strokeWidth={0.24} />
               </>
             )}
           </g>
@@ -362,25 +426,14 @@ function WindowMarks({ room }: { room: Room }) {
             {/* Outer window line (wall face) */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
               stroke="#60a5fa" strokeWidth={0.22} />
-            <g key={`win-${idx}`}>
-              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth={0.25} />
-              <line x1={gx1} y1={gy1} x2={gx2} y2={gy2} stroke="#93c5fd" strokeWidth={0.12} />
-              
-              {/* Plus-shaped Mullions (Crossbars) */}
-              <line 
-                x1={(x1+x2)/2} y1={Math.min(y1, gy1)} 
-                x2={(x1+x2)/2} y2={Math.max(y1, gy1)} 
-                stroke="#1e3a8a" strokeWidth={0.25} 
-              />
-              <line 
-                x1={Math.min(x1, gx1)} y1={(y1+gy1)/2} 
-                x2={Math.max(x2, gx2)} y2={(y1+gy1)/2} 
-                stroke="#1e3a8a" strokeWidth={0.25} 
-              />
-
-              <line x1={t1[0]} y1={t1[1]} x2={t1[2]} y2={t1[3]} stroke="#3b82f6" strokeWidth={0.15} />
-              <line x1={t2[0]} y1={t2[1]} x2={t2[2]} y2={t2[3]} stroke="#3b82f6" strokeWidth={0.15} />
-            </g>
+            {/* Inner glass line */}
+            <line x1={gx1} y1={gy1} x2={gx2} y2={gy2}
+              stroke="#60a5fa" strokeWidth={0.12} strokeDasharray="0.3 0.15" />
+            {/* End ticks */}
+            <line x1={t1[0]} y1={t1[1]} x2={t1[2]} y2={t1[3]}
+              stroke="#60a5fa" strokeWidth={0.18} />
+            <line x1={t2[0]} y1={t2[1]} x2={t2[2]} y2={t2[3]}
+              stroke="#60a5fa" strokeWidth={0.18} />
           </g>
         );
       })}
@@ -398,8 +451,40 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
   const dragStartPos = useRef({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Global set to deduplicate door swing drawing across adjacent rooms
-  const drawnDoorCoords = new Set<string>();
+  // Global map to deduplicate door swing drawing across adjacent rooms purely (Strict Mode safe)
+  const doorAttributes = React.useMemo(() => {
+    const claims = new Map<string, string>();
+    const stairs = new Set<string>();
+    
+    displayRooms.forEach(room => {
+      room.doors?.forEach(door => {
+        const pos = door.position || 0;
+        let hx = 0, hy = 0;
+        if (door.wall === 'top') { hx = room.x + pos; hy = room.y; }
+        else if (door.wall === 'bottom') { hx = room.x + pos; hy = room.y + room.height; }
+        else if (door.wall === 'left') { hx = room.x; hy = room.y + pos; }
+        else if (door.wall === 'right') { hx = room.x + room.width; hy = room.y + pos; }
+        
+        const hingeX = (door.wall === 'left' || door.wall === 'right') ? (door.wall === 'left' ? room.x : room.x + room.width) : hx;
+        const hingeY = (door.wall === 'top' || door.wall === 'bottom') ? (door.wall === 'top' ? room.y : room.y + room.height) : hy;
+        
+        const key = `${Math.round(hingeX * 10)},${Math.round(hingeY * 10)}`;
+        
+        // A door belongs to a staircase if its hinge touches the bounding box of any stair room
+        const touchesStair = displayRooms.some(r => {
+          if (!r.name.toLowerCase().includes('stair')) return false;
+          const rx1 = r.x, rx2 = r.x + r.width, ry1 = r.y, ry2 = r.y + r.height;
+          // Add a tiny epsilon to account for floating point matching
+          return (hingeX >= rx1 - 0.1 && hingeX <= rx2 + 0.1 && hingeY >= ry1 - 0.1 && hingeY <= ry2 + 0.1);
+        });
+        
+        if (touchesStair) stairs.add(key);
+        
+        if (!claims.has(key)) claims.set(key, room.name);
+      });
+    });
+    return { claims, stairs };
+  }, [displayRooms]);
 
   const getSvgCoordinates = (clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
@@ -469,9 +554,6 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
   const scaleLen = 10;
   const sbX = minX + PAD * 0.6;
   const sbY = maxY - PAD * 0.2;
-
-  // Clear set before re-render
-  drawnDoorCoords.clear();
 
   return (
     <svg
@@ -585,16 +667,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
               />
             )}
 
-            {/* Furniture (bottom layer) */}
             <FurnitureLayer room={room} />
 
-            {/* Doors */}
-            <DoorArcs room={room} drawnDoors={drawnDoorCoords} />
-
-            {/* Window marks */}
-            <WindowMarks room={room} />
-
-            {/* Room name */}
             <text
               x={cx} y={cy - subSize * 0.5}
               textAnchor="middle" dominantBaseline="middle"
@@ -604,19 +678,16 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
             >
               {room.name}
             </text>
-
-            {/* Dimensions sub-label */}
             <text
-              x={cx} y={cy + labelSize * 0.65}
+              x={cx} y={cy + labelSize * 0.5}
               textAnchor="middle" dominantBaseline="middle"
-              fill={labelColor + '99'} fontSize={subSize}
+              fill={labelColor} fontSize={subSize} opacity={0.65}
               fontFamily="Inter, system-ui, sans-serif"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >
-              {room.width}×{room.height} ft · {sqft} sqft
+              {Math.round(room.width)}×{Math.round(room.height)} ft · {sqft} sqft
             </text>
 
-            {/* Dimension lines — width */}
             {room.width > 5 && (
               <g>
                 <line x1={room.x} y1={room.y - 1.2}
@@ -639,6 +710,17 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
           </g>
         );
       })}
+
+      {/* Pass 2: Draw doors and windows ON TOP of all walls so white gaps remain visible */}
+      {displayRooms.map((room, i) => (
+        <g key={`overlay-${room.name}-${i}`} style={{ pointerEvents: 'none' }}>
+          {/* Doors */}
+          <DoorArcs room={room} doorAttributes={doorAttributes} />
+
+          {/* Window marks */}
+          <WindowMarks room={room} />
+        </g>
+      ))}
 
       {/* Scale bar */}
       <g>

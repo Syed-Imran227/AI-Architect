@@ -23,7 +23,7 @@ DIM_CLR     = (85, 105, 130)
 TEXT_CLR    = (18, 22, 32)
 SUB_CLR     = (90, 108, 128)
 DOOR_CLR    = (55, 90, 140)
-WIN_CLR     = (70, 130, 200)
+WIN_CLR     = (35, 65, 110)    # Darkened from (70,130,180)
 
 ROOM_FILLS = {
     "master":   (210, 228, 252),
@@ -144,8 +144,10 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
         # ── Doors ─────────────────────────────────────────────────────────
         for door in room.get("doors", []):
             d_wall = door.get("wall", "right")
-            d_pos  = px(room["x"] + door.get("position", 0)) if d_wall in ["top", "bottom"] else py(room["y"] + door.get("position", 0))
-            d_w    = pl(door.get("width", 3))
+            ft_pos = room["x"] + door.get("position", 0) if d_wall in ["top", "bottom"] else room["y"] + door.get("position", 0)
+            d_pos  = px(ft_pos) if d_wall in ["top", "bottom"] else py(ft_pos)
+            door_w_ft = door.get("width", 3)
+            d_w    = pl(door_w_ft)
             if d_w < pl(1.5): continue
             
             hx = d_pos if d_wall in ["top", "bottom"] else (rx0 if d_wall == "left" else rx1)
@@ -153,24 +155,38 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
             key = (hx, hy)
             is_drawn = key in drawn_doors
             drawn_doors.add(key)
+            
+            # Check if this door touches a stair room
+            ft_hx = ft_pos if d_wall in ["top", "bottom"] else (room["x"] if d_wall == "left" else room["x"] + room["width"])
+            ft_hy = room["y"] if d_wall == "top" else (room["y"] + room["height"] if d_wall == "bottom" else ft_pos)
+            is_stair = any(
+                "stair" in r["name"].lower() and
+                (r["x"] - 0.1 <= ft_hx <= r["x"] + r["width"] + 0.1) and
+                (r["y"] - 0.1 <= ft_hy <= r["y"] + r["height"] + 0.1)
+                for r in rooms
+            )
 
             try:
                 if d_wall == "top":
                     draw.line([(d_pos, ry0), (d_pos + d_w, ry0)], fill=fill, width=WALL_PX + 2)
-                    if not is_drawn:
-                        draw.line([(d_pos, ry0), (d_pos + int(d_w*0.8), ry0 + int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                    if not is_drawn and not is_stair:
+                        draw.line([(d_pos, ry0), (d_pos, ry0 + d_w)], fill=DOOR_CLR, width=1)
+                        draw.arc([d_pos - d_w, ry0 - d_w, d_pos + d_w, ry0 + d_w], 0, 90, fill=DOOR_CLR, width=1)
                 elif d_wall == "bottom":
                     draw.line([(d_pos, ry1), (d_pos + d_w, ry1)], fill=fill, width=WALL_PX + 2)
-                    if not is_drawn:
-                        draw.line([(d_pos, ry1), (d_pos + int(d_w*0.8), ry1 - int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                    if not is_drawn and not is_stair:
+                        draw.line([(d_pos, ry1), (d_pos, ry1 - d_w)], fill=DOOR_CLR, width=1)
+                        draw.arc([d_pos - d_w, ry1 - d_w, d_pos + d_w, ry1 + d_w], 270, 360, fill=DOOR_CLR, width=1)
                 elif d_wall == "left":
                     draw.line([(rx0, d_pos), (rx0, d_pos + d_w)], fill=fill, width=WALL_PX + 2)
-                    if not is_drawn:
-                        draw.line([(rx0, d_pos), (rx0 + int(d_w*0.8), d_pos + int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                    if not is_drawn and not is_stair:
+                        draw.line([(rx0, d_pos), (rx0 + d_w, d_pos)], fill=DOOR_CLR, width=1)
+                        draw.arc([rx0 - d_w, d_pos - d_w, rx0 + d_w, d_pos + d_w], 0, 90, fill=DOOR_CLR, width=1)
                 elif d_wall == "right":
                     draw.line([(rx1, d_pos), (rx1, d_pos + d_w)], fill=fill, width=WALL_PX + 2)
-                    if not is_drawn:
-                        draw.line([(rx1, d_pos), (rx1 - int(d_w*0.8), d_pos + int(d_w*0.8))], fill=DOOR_CLR, width=1)
+                    if not is_drawn and not is_stair:
+                        draw.line([(rx1, d_pos), (rx1 - d_w, d_pos)], fill=DOOR_CLR, width=1)
+                        draw.arc([rx1 - d_w, d_pos - d_w, rx1 + d_w, d_pos + d_w], 90, 180, fill=DOOR_CLR, width=1)
             except Exception:
                 pass
 

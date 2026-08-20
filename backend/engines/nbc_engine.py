@@ -100,8 +100,6 @@ def score_nbc(
     total = 0
 
     min_x, min_y, max_x, max_y = _bounding_box(rooms)
-    building_w = max_x - min_x
-    building_h = max_y - min_y
     plot_sqft   = plot_w * plot_h
     plot_sqm    = plot_sqft * SQFT_TO_SQM
 

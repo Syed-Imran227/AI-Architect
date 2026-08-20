@@ -264,6 +264,8 @@ export default function Editor() {
     }
   };
 
+
+
   const handleSaveToDatabase = async () => {
     if (!activePlan || !floors.length) return;
     setSaveLoading(true);
@@ -610,11 +612,25 @@ export default function Editor() {
                     onChange={e => setCopilotInput(e.target.value)}
                     placeholder="e.g. Add an attached bath to the Master Bedroom and make the kitchen larger..."
                     disabled={copilotLoading || !currentRooms.length}
-                    style={{ width: '100%', padding: '0.85rem 1rem', fontSize: '0.85rem', borderRadius: '8px', border: 'none', boxShadow: 'var(--input-shadow)', background: 'var(--input-bg)', resize: 'none', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.85rem 1rem', 
+                      fontSize: '0.85rem', 
+                      borderRadius: '8px', 
+                      border: '2px solid rgba(59, 130, 246, 0.5)', 
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.05)', 
+                      background: 'var(--bg-primary)', 
+                      resize: 'none', 
+                      color: 'var(--text-primary)', 
+                      fontFamily: 'inherit',
+                      outline: 'none',
+                      opacity: (!currentRooms.length || copilotLoading) ? 0.6 : 1,
+                      cursor: (!currentRooms.length || copilotLoading) ? 'not-allowed' : 'text'
+                    }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <button type="submit" className="btn-primary" disabled={copilotLoading || !copilotInput.trim()} style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', borderRadius: '20px' }}>
-                      {copilotLoading ? 'Generating...' : '↑ Send'}
+                      {copilotLoading ? 'Generating...' : '↑ Send to AI Copilot'}
                     </button>
                   </div>
                 </form>

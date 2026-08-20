@@ -111,10 +111,47 @@ export interface FloorCirculation {
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 export interface RegisterPayload { email: string; password: string; name?: string; }
 export interface LoginPayload { email: string; password: string; }
-export interface SaveProjectPayload { name?: string; layout?: LayoutData; [key: string]: any; }
-export interface GeneratePlansPayload { length: number; width: number; bedrooms: number; bathrooms: number; floors: number; entryDir: string; [key: string]: any; }
-export type LayoutData = { rooms?: Room[]; [key: string]: any };
-export type ProjectMeta = { name?: string; [key: string]: any };
+
+export interface SaveProjectPayload {
+  name: string;
+  layout_data: LayoutData;
+  image_url?: string;
+}
+
+export interface GeneratePlansPayload {
+  length: number;
+  width: number;
+  bedrooms: number;
+  bathrooms: number;
+  floors: number;
+  duplex: boolean;
+  balcony: number;
+  terrace: boolean;
+  lift: boolean;
+  parking: boolean;
+  kitchen: number;
+  vastuToggle: boolean;
+  entryDir: string;
+}
+
+export interface LayoutData {
+  rooms?: Room[];
+  plot_width?: number;
+  plot_height?: number;
+  floors?: Array<{ level: string; rooms: Room[]; imageUrl?: string }>;
+  vastuScore?: number;
+  vastuResult?: VastuResult;
+  nbcResult?: NbcResult;
+  energyResult?: EnergyResult;
+}
+
+export interface ProjectMeta {
+  name?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  floors?: number;
+  entry_dir?: string;
+}
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -145,6 +182,7 @@ const fetchWithTimeout = async (
     clearTimeout(timerId);
   }
 };
+
 
 const authFetch = async (input: RequestInfo | URL, init?: RequestInit, timeoutMs = 30_000) => {
   const res = await fetchWithTimeout(input, init, timeoutMs);

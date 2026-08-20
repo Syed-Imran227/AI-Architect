@@ -22,7 +22,7 @@ frontend InteractiveBlueprint.tsx require no changes.
 
 from __future__ import annotations
 import math
-from typing import Any, Optional
+from typing import Any
 from engines.window_placer import place_windows
 from engines.circulation import compute_paths
 
@@ -43,9 +43,7 @@ def default_topology(bedrooms: int, bathrooms: int) -> Any:
     from engines.inference import TopologyResponse, TopologyBody, LeftBayTopology, RightBayTopology, SpineTopology
 
     left_beds  = math.ceil(bedrooms / 2)
-    right_beds = bedrooms - left_beds
     left_baths  = min(left_beds, bathrooms)
-    right_baths = min(right_beds, max(0, bathrooms - left_baths))
 
     left_rooms  = ["Master Bedroom"] + [f"Bedroom {i+1}" for i in range(1, left_beds)]
     right_rooms = ["Living Room", "Dining Room", "Kitchen"] + [f"Bedroom {i+1}" for i in range(left_beds, bedrooms)]
@@ -206,9 +204,7 @@ def _build_ground_floor(
             "name": "Corridor",
             "x": spine_x, "y": front_h, "width": spine_w, "height": rear_h,
             "doors": [
-                _door("top",    spine_w * 0.3),
-                _door("left",   rear_h * 0.4),
-                _door("right",  rear_h * 0.4),
+                _door("top",    spine_w * 0.3), # Only door to Foyer needed, side rooms add their own doors
             ],
             "furniture": []
         })
@@ -222,7 +218,6 @@ def _build_ground_floor(
 
     # ── RIGHT BAY ─────────────────────────────────────────────────────────────
     # Topology drives Living/Dining/Kitchen arrangement
-    topo_right = topology.topology.right_bay
 
     # Living Room always fills front zone
     rooms.append({
@@ -305,12 +300,7 @@ def _build_upper_floor(
     rooms.append({
         "name": "Corridor",
         "x": spine_x, "y": 0, "width": spine_w, "height": stair_y,
-        "doors": [
-            _door("left",  stair_y * 0.25),
-            _door("right", stair_y * 0.25),
-            _door("left",  stair_y * 0.65),
-            _door("right", stair_y * 0.65),
-        ],
+        "doors": [], # Adjacent rooms (Bedrooms, Bathrooms, Utility) already generate doors leading into the corridor
         "furniture": []
     })
     rooms.append({
@@ -322,10 +312,8 @@ def _build_upper_floor(
 
     # ── Distribute beds and baths across bays using topology ─────────────────
     topo_left  = topology.topology.left_bay
-    topo_right = topology.topology.right_bay
 
     left_baths_alloc  = min(topo_left.bathrooms_allocated,  baths)
-    right_baths_alloc = min(baths - left_baths_alloc, baths - left_baths_alloc)
 
     # Count bedroom-type rooms in each bay from topology
     def _count_beds(bay_rooms: list[str]) -> int:
@@ -476,9 +464,7 @@ def build_layout(
     from engines.inference import LeftBayTopology, RightBayTopology, SpineTopology, TopologyBody, TopologyResponse
 
     left_beds  = math.ceil(bedrooms / 2)
-    right_beds = bedrooms - left_beds
     left_baths  = min(left_beds, bathrooms)
-    right_baths = min(right_beds, max(0, bathrooms - left_baths))
 
     left_rooms = ["Master Bedroom"] + [f"Bedroom {i+2}" for i in range(left_beds - 1)]
     right_rooms = ["Living Room", "Dining Room", "Kitchen"]

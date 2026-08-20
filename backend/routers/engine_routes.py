@@ -54,7 +54,7 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
             vastu     = int(req.vastuToggle),
             entry_dir = req.entryDir,
         )
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         raise HTTPException(
             status_code=503,
@@ -186,7 +186,7 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Failed to generate PDF Report due to an internal server error.")
 
@@ -311,7 +311,7 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Auto-fix failed due to an internal server error.")
 
@@ -427,7 +427,7 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Auto-fix failed due to an internal server error.")
 
@@ -489,6 +489,6 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Regeneration failed due to an internal server error.")

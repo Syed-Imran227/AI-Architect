@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Box, Cylinder, Edges, Text, Sky, Environment } from '@react-three/drei';
+import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky, Environment } from '@react-three/drei';
 import type { Room } from '../services/api';
 
 interface FloorPlan3DProps {
@@ -592,7 +592,7 @@ function WallWithOpenings({
   openings, wallColor,
 }: {
   wallLen: number; wallBase: number; wallFixed: number; wallT: number;
-  isHoriz: boolean; openings: { pos: number; width: number; type: 'door' | 'window' }[];
+  isHoriz: boolean; openings: { pos: number; width: number; type: 'door' | 'window'; isStairDoor?: boolean }[];
   wallColor: string;
 }) {
   const DOOR_H    = ROOM_HEIGHT * 0.82;   // door height (ft)
@@ -648,13 +648,66 @@ function WallWithOpenings({
               <Box args={args3} position={pos3}>
                 <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
               </Box>
-              {/* Door leaf (swung 90 degrees open) */}
-              <Box
-                args={isHoriz ? [wallT * 0.3, DOOR_H, op.width * 0.85] : [op.width * 0.85, DOOR_H, wallT * 0.3]}
-                position={isHoriz ? [opMid - op.width * 0.42, DOOR_H / 2, wallFixed + op.width * 0.4] : [wallFixed + op.width * 0.4, DOOR_H / 2, opMid - op.width * 0.42]}
-              >
-                <meshStandardMaterial color="#8a6030" />
-              </Box>
+              {/* Detailed Door leaf (swung open 90 degrees) */}
+              {!op.isStairDoor && (() => {
+                const dw = op.width * 0.9;
+                const hingeCoord = wallBase + op.pos; // Left/Bottom hinge
+                const doorT = wallT * 0.25;
+                
+                const pos3Leaf: [number, number, number] = isHoriz
+                  ? [hingeCoord + wallT * 0.125, DOOR_H / 2, wallFixed + dw / 2]
+                  : [wallFixed + dw / 2, DOOR_H / 2, hingeCoord + wallT * 0.125];
+                
+                const panelW = dw * 0.35;
+                const panelT = doorT * 0.15;
+                
+                const pTopH = DOOR_H * 0.20;
+                const pMidH = DOOR_H * 0.32;
+                const pBotH = DOOR_H * 0.22;
+                
+                const pY1 = DOOR_H/2 - pTopH/2 - DOOR_H*0.06;
+                const pY2 = pY1 - pTopH/2 - pMidH/2 - DOOR_H*0.04;
+                const pY3 = pY2 - pMidH/2 - pBotH/2 - DOOR_H*0.04;
+                
+                const pX1 = -dw/4;
+                const pX2 =  dw/4;
+                
+                const knobR = 0.05;
+                const knobY = 0; // Center height
+                const knobX = dw/2 - 0.15; // Near edge away from hinge
+                
+                const doorColor = "#cca677";
+                const panelColor = "#d6b589";
+                
+                return (
+                  <group position={pos3Leaf} rotation={isHoriz ? [0, 0, 0] : [0, Math.PI / 2, 0]}>
+                    <Box args={[doorT, DOOR_H, dw]}>
+                      <meshStandardMaterial color={doorColor} roughness={0.6} />
+                    </Box>
+                    {[pY1, pY2, pY3].map((py, pi) => (
+                      <group key={pi}>
+                        <Box args={[doorT + panelT*2, pTopH, panelW]} position={[0, py, pX1]}>
+                          <meshStandardMaterial color={panelColor} roughness={0.7} />
+                        </Box>
+                        <Box args={[doorT + panelT*2, pTopH, panelW]} position={[0, py, pX2]}>
+                          <meshStandardMaterial color={panelColor} roughness={0.7} />
+                        </Box>
+                      </group>
+                    ))}
+                    <group position={[0, knobY, knobX]}>
+                      <Cylinder args={[knobR, knobR, doorT + 0.1, 12]} rotation={[0, 0, Math.PI / 2]}>
+                        <meshStandardMaterial color="#888" metalness={0.8} roughness={0.2} />
+                      </Cylinder>
+                      <Sphere args={[knobR * 1.5, 12, 12]} position={[doorT/2 + 0.05, 0, 0]}>
+                        <meshStandardMaterial color="#666" metalness={0.9} roughness={0.1} />
+                      </Sphere>
+                      <Sphere args={[knobR * 1.5, 12, 12]} position={[-doorT/2 - 0.05, 0, 0]}>
+                        <meshStandardMaterial color="#666" metalness={0.9} roughness={0.1} />
+                      </Sphere>
+                    </group>
+                  </group>
+                );
+              })()}
             </group>
           );
         } else {
@@ -675,8 +728,9 @@ function WallWithOpenings({
             ? [opMid, WIN_SILL + WIN_H / 2, wallFixed]
             : [wallFixed, WIN_SILL + WIN_H / 2, opMid];
           const args3Glass: [number, number, number] = isHoriz
-            ? [op.width, WIN_H, wallT * 0.25]
-            : [wallT * 0.25, WIN_H, op.width];
+            ? [op.width, WIN_H, wallT * 0.15]
+            : [wallT * 0.15, WIN_H, op.width];
+          const frameColor = "#665a6a"; // Dark grayish-purple matching reference
           return (
             <group key={`win_${i}`}>
               <Box args={args3Sill} position={pos3Sill}>
@@ -685,21 +739,36 @@ function WallWithOpenings({
               <Box args={args3Lintel} position={pos3Lintel}>
                 <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
               </Box>
-              <Box args={args3Glass} position={pos3Glass}>
-                <meshStandardMaterial color="#a0d8ef" opacity={0.35} transparent />
-              </Box>
-              {/* Vertical Mullion */}
-              <Box 
-                args={isHoriz ? [wallT*0.15, WIN_H, wallT*0.3] : [wallT*0.3, WIN_H, wallT*0.15]} 
-                position={pos3Glass}>
-                <meshStandardMaterial color="#1e3a8a" />
-              </Box>
-              {/* Horizontal Mullion */}
-              <Box 
-                args={isHoriz ? [op.width, wallT*0.15, wallT*0.3] : [wallT*0.3, wallT*0.15, op.width]} 
-                position={pos3Glass}>
-                <meshStandardMaterial color="#1e3a8a" />
-              </Box>
+              
+              {/* Detailed Window Frame & Physical Glass */}
+              <group position={pos3Glass}>
+                {/* Physical Glass Material */}
+                <Box args={args3Glass}>
+                  <meshPhysicalMaterial color="#ffffff" transmission={0.9} opacity={1} transparent roughness={0.08} ior={1.5} thickness={0.1} />
+                </Box>
+                
+                {/* 4-Pane Cross Mullions */}
+                <Box args={isHoriz ? [op.width, 0.08, wallT * 0.25] : [wallT * 0.25, 0.08, op.width]}>
+                  <meshStandardMaterial color={frameColor} roughness={0.7} />
+                </Box>
+                <Box args={isHoriz ? [0.08, WIN_H, wallT * 0.25] : [wallT * 0.25, WIN_H, 0.08]}>
+                  <meshStandardMaterial color={frameColor} roughness={0.7} />
+                </Box>
+                
+                {/* Outer Window Border Frame */}
+                <Box args={isHoriz ? [op.width, 0.1, wallT * 0.3] : [wallT * 0.3, 0.1, op.width]} position={[0, WIN_H/2 - 0.05, 0]}>
+                  <meshStandardMaterial color={frameColor} roughness={0.7} />
+                </Box>
+                <Box args={isHoriz ? [op.width, 0.1, wallT * 0.3] : [wallT * 0.3, 0.1, op.width]} position={[0, -WIN_H/2 + 0.05, 0]}>
+                  <meshStandardMaterial color={frameColor} roughness={0.7} />
+                </Box>
+                <Box args={isHoriz ? [0.1, WIN_H, wallT * 0.3] : [wallT * 0.3, WIN_H, 0.1]} position={isHoriz ? [op.width/2 - 0.05, 0, 0] : [0, 0, op.width/2 - 0.05]}>
+                  <meshStandardMaterial color={frameColor} roughness={0.7} />
+                </Box>
+                <Box args={isHoriz ? [0.1, WIN_H, wallT * 0.3] : [wallT * 0.3, WIN_H, 0.1]} position={isHoriz ? [-op.width/2 + 0.05, 0, 0] : [0, 0, -op.width/2 + 0.05]}>
+                  <meshStandardMaterial color={frameColor} roughness={0.7} />
+                </Box>
+              </group>
             </group>
           );
         }
@@ -709,7 +778,7 @@ function WallWithOpenings({
 }
 
 // ── Room 3D ──────────────────────────────────────────────────────────────────
-function Room3D({ room }: { room: Room }) {
+function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
   const n      = room.name.toLowerCase();
   const colors = getRoomColor(room.name);
   const cx     = room.x + room.width  / 2;
@@ -739,12 +808,29 @@ function Room3D({ room }: { room: Room }) {
   }
 
   // Parse doors and windows per wall
-  type Opening = { pos: number; width: number; type: 'door' | 'window' };
+  type Opening = { pos: number; width: number; type: 'door' | 'window'; isStairDoor?: boolean };
   const wallOpenings: Record<string, Opening[]> = { top: [], bottom: [], left: [], right: [] };
+  
   for (const d of (room.doors ?? [])) {
     const wall = d.wall as string;
-    if (wallOpenings[wall]) wallOpenings[wall].push({ pos: d.position, width: d.width, type: 'door' });
+    let hx = 0, hy = 0;
+    if (wall === 'top') { hx = room.x + d.position; hy = room.y; }
+    else if (wall === 'bottom') { hx = room.x + d.position; hy = room.y + room.height; }
+    else if (wall === 'left') { hx = room.x; hy = room.y + d.position; }
+    else if (wall === 'right') { hx = room.x + room.width; hy = room.y + d.position; }
+
+    const hingeX = (wall === 'left' || wall === 'right') ? (wall === 'left' ? room.x : room.x + room.width) : hx;
+    const hingeY = (wall === 'top' || wall === 'bottom') ? (wall === 'top' ? room.y : room.y + room.height) : hy;
+
+    const isStairDoor = allRooms.some(r => {
+      if (!r.name.toLowerCase().includes('stair')) return false;
+      const rx1 = r.x, rx2 = r.x + r.width, ry1 = r.y, ry2 = r.y + r.height;
+      return (hingeX >= rx1 - 0.1 && hingeX <= rx2 + 0.1 && hingeY >= ry1 - 0.1 && hingeY <= ry2 + 0.1);
+    });
+
+    if (wallOpenings[wall]) wallOpenings[wall].push({ pos: d.position, width: d.width, type: 'door', isStairDoor });
   }
+  
   for (const w of (room.windows ?? [])) {
     const wall = w.wall as string;
     if (wallOpenings[wall]) wallOpenings[wall].push({ pos: w.position, width: w.width, type: 'window' });
@@ -839,7 +925,9 @@ export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
         />
 
         <group>
-          {rooms.map((room, i) => <Room3D key={i} room={room} />)}
+          {rooms.map((r, i) => (
+            <Room3D key={i} room={r} allRooms={rooms} />
+          ))}
         </group>
         
         {/* Grass / Ground */}

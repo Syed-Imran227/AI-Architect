@@ -15,10 +15,11 @@ The Python Drafter (architectural_layout.py) turns topology into exact coordinat
 
 from __future__ import annotations
 import os
-import json
+import re
 from typing import Optional
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
+import json_repair
 from engines.architectural_layout import build_layout_from_topology, inject_furniture, default_topology
 from engines.layout_validator import boundary_check_only
 
@@ -148,7 +149,6 @@ def _clean_llm_raw(raw: str) -> str:
             # However, we can try to find the last occurrence of '```json' or '{' just in case.
             pass
     # Strip ```json ... ``` markdown fences
-    import re
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
     if fence:
         raw = fence.group(1).strip()
@@ -182,23 +182,20 @@ def _call_architect_llm(prompt: str, retries: int = 0) -> Optional[TopologyRespo
                     print(f"RAW DUMP (len={len(raw)}):\n{raw[:500]}...\n...\n{raw[-500:]}")
                     continue
 
-                try:
-                    import json_repair
-                except ImportError:
-                    import sys, subprocess, importlib
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", "json-repair"])
-                    importlib.invalidate_caches()
-                    import json_repair
-                
                 obj = json_repair.loads(raw[start:end+1])
+                if not isinstance(obj, dict):
+                    raise ValueError("LLM returned valid JSON, but it was not a dictionary object.")
                 topology = TopologyResponse(**obj)
-                print(f"[architect:{label}] Topology OK: {topology.design_rationale}")
+                safe_rationale = topology.design_rationale.encode("ascii", "ignore").decode("ascii")
+                print(f"[architect:{label}] Topology OK: {safe_rationale}")
                 return topology
 
             except (ValueError, ValidationError) as e:
-                print(f"[architect:{label}] Attempt {attempt+1}: Parse error — {e}")
+                safe_err = str(e).encode("ascii", "ignore").decode("ascii")
+                print(f"[architect:{label}] Attempt {attempt+1}: Parse error — {safe_err}")
             except Exception as e:
-                print(f"[architect:{label}] Attempt {attempt+1}: API error — {e}")
+                safe_err = str(e).encode("ascii", "ignore").decode("ascii")
+                print(f"[architect:{label}] Attempt {attempt+1}: API error — {safe_err}")
                 break  # don't retry on API errors, move to next model
 
         print(f"[architect:{label}] All attempts failed — trying next model.")

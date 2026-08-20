@@ -15,7 +15,6 @@ Door arc logic is synced with InteractiveBlueprint.tsx:
 import ezdxf
 from ezdxf import units
 import tempfile
-import math
 import os
 
 SCALE = 304.8   # 1 ft in mm
@@ -46,39 +45,37 @@ def _draw_door_inward(msp, room_x, room_y, room_w, room_h,
     x, y, w, h = room_x, room_y, room_w, room_h
 
     if wall == "bottom":
-        # In DXF (y-up), "bottom" of SVG corresponds to the TOP face of the room
-        # (because SVG y=0 is at top). Hinge at left edge of opening.
         hx = x + pos
         hy = y + h        # top face of room in DXF
-        # Leaf end goes inward (downward in DXF = into the room)
-        leaf_x = hx + door_w
-        leaf_y = hy
-        # Arc sweeps from 180° (pointing left along leaf) to 270° (pointing down into room)
+        # Leaf end goes inward (downward in DXF)
+        leaf_x = hx
+        leaf_y = hy - door_w
+        # Arc sweeps from 270 (leaf) to 360/0 (wall opening)
         msp.add_arc(center=(hx, hy), radius=door_w,
-                    start_angle=180, end_angle=270, dxfattribs=attribs)
+                    start_angle=270, end_angle=0, dxfattribs=attribs)
         msp.add_line((hx, hy), (leaf_x, leaf_y), dxfattribs=wall_attribs)   # door leaf
         # Wall gap (thin white-ish line over the wall to indicate opening)
         msp.add_line((hx, hy), (hx + door_w, hy), dxfattribs={"layer": "WALLOPENING", "lineweight": 5})
 
     elif wall == "top":
-        # "top" wall in SVG = BOTTOM face in DXF
         hx = x + pos
         hy = y            # bottom face of room
-        leaf_x = hx + door_w
-        leaf_y = hy
-        # Arc sweeps from 90° (pointing up into room) to 180° (pointing left)
+        # Leaf end goes inward (upward in DXF)
+        leaf_x = hx
+        leaf_y = hy + door_w
+        # Arc sweeps from 0 (wall opening) to 90 (leaf)
         msp.add_arc(center=(hx, hy), radius=door_w,
-                    start_angle=90, end_angle=180, dxfattribs=attribs)
+                    start_angle=0, end_angle=90, dxfattribs=attribs)
         msp.add_line((hx, hy), (leaf_x, leaf_y), dxfattribs=wall_attribs)
         msp.add_line((hx, hy), (hx + door_w, hy), dxfattribs={"layer": "WALLOPENING", "lineweight": 5})
 
     elif wall == "left":
         hx = x            # left face
         hy = y + pos
-        leaf_x = hx
-        leaf_y = hy + door_w
-        # Hinge at bottom of opening; leaf swings right (into room) then up
-        # Arc: from 0° (rightward) to 90° (upward)
+        # Leaf end goes inward (rightward in DXF)
+        leaf_x = hx + door_w
+        leaf_y = hy
+        # Arc sweeps from 0 (leaf) to 90 (wall opening)
         msp.add_arc(center=(hx, hy), radius=door_w,
                     start_angle=0, end_angle=90, dxfattribs=attribs)
         msp.add_line((hx, hy), (leaf_x, leaf_y), dxfattribs=wall_attribs)
@@ -87,10 +84,10 @@ def _draw_door_inward(msp, room_x, room_y, room_w, room_h,
     elif wall == "right":
         hx = x + w        # right face
         hy = y + pos
-        leaf_x = hx
-        leaf_y = hy + door_w
-        # Hinge at bottom of opening; leaf swings left (into room) then up
-        # Arc: from 90° (upward) to 180° (leftward into room)
+        # Leaf end goes inward (leftward in DXF)
+        leaf_x = hx - door_w
+        leaf_y = hy
+        # Arc sweeps from 90 (wall opening) to 180 (leaf)
         msp.add_arc(center=(hx, hy), radius=door_w,
                     start_angle=90, end_angle=180, dxfattribs=attribs)
         msp.add_line((hx, hy), (leaf_x, leaf_y), dxfattribs=wall_attribs)
