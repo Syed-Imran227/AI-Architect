@@ -6,7 +6,7 @@ interface FloorPlan3DProps {
   rooms: Room[];
 }
 
-const ROOM_HEIGHT = 9;   // ft ceiling height
+const ROOM_HEIGHT = 10;  // ft ceiling height — must match cost_rates.CEILING_HEIGHT_FT
 const WALL_T      = 0.3;
 
 // ── Architectural room palette ────────────────────────────────────────────────

@@ -25,9 +25,9 @@ export default function Login() {
       toast.success('Successfully logged in!');
       navigate('/dashboard');
     } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(err.message || 'Login failed');
-      setError(err.message || 'Failed to login');
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg || 'Login failed');
+      setError(msg || 'Failed to login');
     } finally {
       setLoading(false);
     }

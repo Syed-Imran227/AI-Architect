@@ -33,11 +33,6 @@ const CSS = `
   .al-footer-link { font-size: 13px; text-decoration: none; opacity: 0.5; font-family: 'Inter', sans-serif; transition: opacity 100ms; }
   .al-footer-link:hover { opacity: 1; }
   .al-code { font-family: 'JetBrains Mono', 'Menlo', monospace; font-size: 13px; line-height: 1.75; }
-  .al-marquee { overflow: hidden; white-space: nowrap; }
-  .al-marquee-inner { display: inline-flex; gap: 64px; animation: marquee 28s linear infinite; }
-  @media (prefers-reduced-motion: reduce) { .al-marquee-inner { animation: none; } }
-  @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  .al-pixel-border { image-rendering: pixelated; }
   .metric-num { font-size: 56px; font-family: 'Inter', system-ui, sans-serif; font-weight: 400; letter-spacing: -0.04em; line-height: 1; }
   @media (max-width: 768px) {
     .hero-h1 { font-size: 34px !important; letter-spacing: -1px !important; }
@@ -52,11 +47,6 @@ const CSS = `
     .al-feat-vis { min-height: 180px !important; }
   }
 `;
-
-/* ─── Canvas Hero ──────────────────────────────────────────────────── */
-function PixelCanvas() {
-  return null;
-}
 
 /* ─── Section fade wrapper ─────────────────────────────────────────── */
 function Fade({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
@@ -83,7 +73,7 @@ function Terminal({ isDark }: { isDark: boolean }) {
     { t: "success", s: "  Vastu score: 91/100 (SW master ✓, SE kitchen ✓)" },
     { t: "out", s: "  Drafter: 0 overlaps, 0 constraint violations" },
     { t: "cmd", s: "$ architect export --format dxf --layers all" },
-    { t: "success", s: "  floor_plan_v1.dxf exported (6 layers, 1:100 scale)" },
+    { t: "success", s: "  floor_plan_v1.dxf exported (7 layers, 1:100 scale)" },
     { t: "cmd", s: "$ architect report --format pdf" },
     { t: "success", s: "  report.pdf generated (4 pages, BOM included)" },
   ];
@@ -151,13 +141,11 @@ export default function Landing() {
     textTransform: "uppercase", color: P.textMuted, display: "block", marginBottom: 16,
   };
 
-  const partners = ["Infosys", "L&T", "Shapoorji", "Godrej", "DLF", "Sobha"];
-
   const metrics = [
     { n: "< 8s", label: "avg generation time" },
     { n: "10/10", label: "Vastu rule coverage" },
     { n: "0", label: "geometry overlaps" },
-    { n: "6", label: "DXF export layers" },
+    { n: "7", label: "DXF export layers" },
   ];
 
   const features = [
@@ -246,10 +234,10 @@ export default function Landing() {
     {
       eyebrow: "Export Suite",
       title: "Files engineers actually open.",
-      copy: "Multi-layer DXF at 1 ft = 304.8 mm. Separate WALLS, DOORS, WINDOWS, FURNITURE, and DIMENSIONS layers. Drop it into AutoCAD or ZWCAD unchanged.",
+      copy: "Multi-layer DXF at 1 ft = 304.8 mm. Separate WALLS, LABELS, DOORS, WALLOPENING, WINDOW, FURNITURE, and DIMENSIONS layers. Drop it into AutoCAD or ZWCAD unchanged.",
       visual: (
         <div style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: 8, padding: 20, width: "100%", minHeight: 200 }}>
-          {[["WALLS", 90], ["DOORS", 65], ["WINDOWS", 50], ["FURNITURE", 75], ["DIMENSIONS", 40]].map(([layer, w]) => (
+          {[["WALLS", 90], ["LABELS", 45], ["DOORS", 65], ["WALLOPENING", 55], ["WINDOW", 50], ["FURNITURE", 75], ["DIMENSIONS", 40]].map(([layer, w]) => (
             <div key={layer as string} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                 <span className="al-code" style={{ fontSize: 11, color: P.textMuted }}>{layer}</span>
@@ -317,7 +305,6 @@ export default function Landing() {
         <main>
           {/* ── HERO ── */}
           <section style={{ position: "relative", minHeight: "100svh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "120px 24px 96px", textAlign: "center", overflow: "hidden" }}>
-            <PixelCanvas />
             <div style={{ position: "relative", zIndex: 2, maxWidth: 760 }}>
               {/* blinking cursor eyebrow */}
               <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: P.textMuted, marginBottom: 24, letterSpacing: "0.06em" }}>
@@ -337,22 +324,6 @@ export default function Landing() {
             </div>
             <style>{`@keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }`}</style>
           </section>
-
-          {/* ── SOCIAL PROOF ── */}
-          <Fade>
-            <section style={{ padding: "0 24px 96px" }}>
-              <div style={{ ...MAX, borderTop: `1px solid ${P.border}`, paddingTop: 48 }}>
-                <span style={{ ...eyebrow, textAlign: "center", display: "block", marginBottom: 32 }}>Trusted by teams at</span>
-                <div className="al-marquee">
-                  <div className="al-marquee-inner">
-                    {[...partners, ...partners].map((name, i) => (
-                      <span key={i} style={{ fontSize: 14, fontWeight: 600, color: P.textMuted, letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.5, flexShrink: 0 }}>{name}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          </Fade>
 
           {/* ── CODE PROOF ── */}
           <Fade>

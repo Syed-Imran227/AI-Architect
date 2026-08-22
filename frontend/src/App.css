@@ -1,4 +1,4 @@
-﻿/* â”€â”€ Animations â”€â”€ */
+/* ── Animations ── */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -9,7 +9,7 @@
   }
 }
 
-/* â”€â”€ Layout â”€â”€ */
+/* ── Layout ── */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -52,7 +52,7 @@ header {
   grid-template-columns: 320px 1fr 360px;
 }
 
-/* â”€â”€ UI Components (Linear / Rayon solid panels) â”€â”€ */
+/* ── UI Components (Linear / Rayon solid panels) ── */
 .card,
 .panel-card,
 .form-pane,
@@ -85,14 +85,14 @@ header {
   border-radius: 10px;
 }
 
-/* â”€â”€ Buttons â€” unified system â”€â”€ */
+/* ── Buttons — unified system ── */
 button {
   font-family: var(--font-primary);
   transition: opacity 0.2s, transform 0.2s, background 0.2s, box-shadow 0.2s;
   letter-spacing: 0.01em;
 }
 
-/* Primary button â€” CTAs */
+/* Primary button — CTAs */
 .btn-primary {
   background: var(--accent-color);
   color: var(--accent-fg);
@@ -117,7 +117,7 @@ button {
   cursor: not-allowed;
 }
 
-/* Ghost button â€” secondary actions */
+/* Ghost button — secondary actions */
 .btn-ghost {
   background: var(--glass-bg);
   color: var(--text-secondary);
@@ -145,7 +145,7 @@ button {
   cursor: not-allowed;
 }
 
-/* Danger button â€” delete, destructive */
+/* Danger button — delete, destructive */
 .btn-danger {
   background: var(--glass-bg);
   color: var(--error);
@@ -166,7 +166,7 @@ button {
   box-shadow: var(--input-shadow);
 }
 
-/* â”€â”€ Form Inputs â”€â”€ */
+/* ── Form Inputs ── */
 .input-field {
   padding: 0.85rem 1rem;
   border-radius: 10px;
@@ -270,7 +270,7 @@ button {
 }
 
 
-/* â”€â”€ Forms â”€â”€ */
+/* ── Forms ── */
 .form-group {
   margin-bottom: 1.25rem;
 }
@@ -389,7 +389,7 @@ select:focus {
   transform: translateX(calc(var(--button-width) - var(--toggle-wider) - var(--button-toggle-offset)));
 }
 
-/* â”€â”€ Blueprint & Gallery â”€â”€ */
+/* ── Blueprint & Gallery ── */
 .blueprint-wrapper {
   background: var(--bg-secondary);
   border-radius: 6px;
@@ -439,7 +439,7 @@ select:focus {
   border: 1px solid var(--text-primary);
 }
 
-/* â”€â”€ Specific Overrides for Auth/Dashboard â”€â”€ */
+/* ── Specific Overrides for Auth/Dashboard ── */
 .auth-container {
   display: flex;
   justify-content: center;
@@ -470,7 +470,7 @@ select:focus {
   color: var(--text-secondary);
 }
 
-/* â”€â”€ History Strip (Current Session) â”€â”€ */
+/* ── History Strip (Current Session) ── */
 .history-strip {
   margin-top: 1.5rem;
   background: var(--glass-bg);
@@ -517,7 +517,7 @@ select:focus {
   box-shadow: var(--accent-glow);
 }
 
-/* â”€â”€ Vastu Analysis Panel â€” theme-aware â”€â”€ */
+/* ── Vastu Analysis Panel — theme-aware ── */
 .vastu-panel {
   background: var(--glass-bg);
   border: none;
@@ -585,7 +585,7 @@ select:focus {
   border: 1px solid var(--error);
 }
 
-/* â”€â”€ Room Editor Overlay â”€â”€ */
+/* ── Room Editor Overlay ── */
 .room-editor {
   width: 100%;
   background: var(--glass-bg);

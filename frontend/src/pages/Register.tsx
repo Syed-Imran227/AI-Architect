@@ -26,9 +26,9 @@ export default function Register() {
       toast.success('Account created successfully!');
       navigate('/dashboard');
     } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(err.message || 'Registration failed');
-      setError(err.message || 'Failed to register');
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg || 'Registration failed');
+      setError(msg || 'Failed to register');
     } finally {
       setLoading(false);
     }

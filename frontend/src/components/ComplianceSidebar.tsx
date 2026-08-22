@@ -72,8 +72,8 @@ export default function ComplianceSidebar({
       }
     } catch (e: unknown) {
       console.error(e);
-      const err = e as Error;
-      toast.error(`Vastu fix failed: ${err.message}`, { id: 'vastu-fix' });
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Vastu fix failed: ${msg}`, { id: 'vastu-fix' });
     } finally {
       setVastuFixing(false);
     }
@@ -108,8 +108,8 @@ export default function ComplianceSidebar({
       }
     } catch (e: unknown) {
       console.error(e);
-      const err = e as Error;
-      toast.error(`NBC fix failed: ${err.message}`, { id: 'nbc-fix' });
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`NBC fix failed: ${msg}`, { id: 'nbc-fix' });
     } finally {
       setNbcFixing(false);
     }

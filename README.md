@@ -6,7 +6,7 @@ AI Architect is an advanced, generative AI-powered floor plan generator and arch
 
 The core innovation of AI Architect is its **Architect-Drafter Hybrid Model**, which solves the fundamental problem of LLMs hallucinating overlapping or unbuildable physical coordinates:
 
-1. **The AI Architect (LLM via Groq):** The LLM is strictly used for linguistic, topological, and spatial reasoning. It receives the user's requirements and generates a structured JSON topology. It decides *what* rooms exist, *how* they relate to each other, and *where* they roughly belong conceptually (e.g., "Kitchen in South-East"). It does **not** generate raw X, Y coordinates.
+1. **The AI Architect (LLM via HuggingFace Inference Router):** The LLM is strictly used for linguistic, topological, and spatial reasoning. It receives the user's requirements and generates a structured JSON topology. It decides *what* rooms exist, *how* they relate to each other, and *where* they roughly belong conceptually (e.g., "Kitchen in South-East"). It does **not** generate raw X, Y coordinates.
 2. **The Deterministic Drafter (Python Grid Partitioner):** A strictly mathematical Python engine reads the topological JSON and structurally partitions the plot canvas. It mathematically guarantees 0 overlaps, perfect alignment, and precise parametric sizing (wall thickness, door gaps, circulation paths), effectively acting as a traditional draftsman.
 
 ## ✨ Features
@@ -22,23 +22,23 @@ The core innovation of AI Architect is its **Architect-Drafter Hybrid Model**, w
 ## 🛠 Tech Stack
 
 ### Frontend
-- **Framework:** React 18 with TypeScript & Vite
-- **Routing:** React Router v6
+- **Framework:** React 19 with TypeScript 6 & Vite 8
+- **Routing:** React Router v7
 - **Styling:** Vanilla CSS with custom theme-aware CSS variables (Light/Dark mode)
 - **Icons & UI:** Lucide React, React Hot Toast
 
 ### Backend
 - **Framework:** FastAPI (Python 3)
-- **AI Integration:** Groq API (Llama-3.3-70b-versatile)
+- **AI Integration:** Fallback chain: deepseek-ai/DeepSeek-V3-0324 (HF) -> Qwen/Qwen3-Coder-30B-A3B-Instruct (HF) -> openai/gpt-oss-120b (Groq)
 - **CAD Generation:** `ezdxf`
 - **Authentication:** JWT-based user auth
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v16+)
+- Node.js (^20.19.0 || >=22.12.0)
 - Python 3.9+
-- A [Groq API Key](https://console.groq.com/) for the LLM.
+- Both a HuggingFace API Key (primary) and a Groq API Key (fallback) are mandatory for the LLM to boot.
 
 ### 1. Backend Setup
 
@@ -60,6 +60,8 @@ GROQ_API_KEY=gsk_your_api_key_here
 HF_API_KEY=hf_your_huggingface_token
 JWT_SECRET=your_super_secret_jwt_key
 MONGO_URI=mongodb://localhost:27017/ai_architect
+# CORS_ORIGINS is a comma-separated list of allowed domains. Defaults to http://localhost:5173 if unset.
+CORS_ORIGINS=http://localhost:5173
 ```
 
 Start the backend server:
@@ -82,11 +84,18 @@ The frontend will run on `http://localhost:5173`.
 ## 📂 Project Structure
 
 - `/backend`
-  - `main.py`: FastAPI application, endpoints, and generation orchestration.
-  - `architectural_layout.py`: The "Drafter" logic (Grid partitioning, door/window generation).
-  - `inference.py`: The "Architect" logic (LLM prompt engineering and topological generation).
-  - `vastu_engine.py`: Vastu Shastra rule evaluation and scoring.
-  - `dxf_exporter.py`: Mathematical DXF compilation using `ezdxf`.
+  - `main.py`: App wiring and lifespan env validation only; generation orchestration now lives in `routers/engine_routes.py`.
+  - `/routers`: API route handlers (e.g., `engine_routes.py`).
+  - `/db`: Database models and repositories.
+  - `/core`: Authentication and core configuration.
+  - `/engines`:
+    - `architectural_layout.py`: The "Drafter" logic (Grid partitioning, door/window generation).
+    - `inference.py`: The "Architect" logic (LLM prompt engineering and topological generation).
+    - `vastu_engine.py`: Vastu Shastra rule evaluation and scoring.
+    - `nbc_engine.py`, `energy_engine.py`, `bom_engine.py`, `cost_rates.py`, `circulation.py`, `window_placer.py`, `layout_validator.py`
+  - `/exporters`:
+    - `dxf_exporter.py`: Mathematical DXF compilation using `ezdxf`.
+    - `floor_renderer.py`, `pdf_report.py`
 - `/frontend`
   - `/src/pages`: Main application views (Dashboard, Editor, Login, Register).
   - `/src/components`: Reusable UI components including the `InteractiveBlueprint` and `RoomEditor`.

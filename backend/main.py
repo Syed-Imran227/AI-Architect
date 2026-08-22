@@ -26,9 +26,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AI Architect API", lifespan=lifespan)
 
 # ── CORS Setup ────────────────────────────────────────────────────────────────
+# Comma-separated origins via CORS_ORIGINS; defaults to the Vite dev server.
+# Never use "*" here — allow_credentials=True makes wildcard origins invalid.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Dev frontend origin, change for production
+    allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

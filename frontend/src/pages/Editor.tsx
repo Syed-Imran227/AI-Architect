@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import '../App.css';
 import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, regenerateRoom } from '../services/api';
 import toast from 'react-hot-toast';
-import type { Room, VastuResult, NbcResult, EnergyResult, FloorCirculation } from '../services/api';
+import type { Room, VastuResult, NbcResult, EnergyResult, FloorCirculation, LayoutData } from '../services/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
 import FloorPlan3D from '../components/FloorPlan3D';
 import RoomEditor from '../components/RoomEditor';
@@ -22,7 +22,7 @@ interface Floor {
 interface Plan {
   id: string;
   imageUrl: string;
-  layout: { rooms?: Room[]; floors?: Floor[]; error?: string };
+  layout: LayoutData & { error?: string; floors?: Floor[] };
   vastuScore: number;
   vastuResult?: VastuResult;
   nbcResult?: NbcResult;
@@ -137,9 +137,9 @@ export default function Editor() {
         openPlan(first);
       }
     } catch (e: unknown) {
-      const err = e as Error;
-      setGenError(err.message || 'Generation failed. Check the backend is running.');
-      toast.error(err.message || 'Generation failed.');
+      const msg = e instanceof Error ? e.message : String(e);
+      setGenError(msg || 'Generation failed. Check the backend is running.');
+      toast.error(msg || 'Generation failed.');
     } finally {
       setLoading(false);
     }
@@ -200,8 +200,8 @@ export default function Editor() {
         { duration: 6000 }
       );
     } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(`DXF export failed: ${err.message}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`DXF export failed: ${msg}`);
     } finally {
       setDxfLoading(false);
     }
@@ -225,15 +225,15 @@ export default function Editor() {
         vastu:     formData.vastuToggle,
       };
       await exportReport(
-        activePlan.layout as Record<string, unknown>,
+        activePlan.layout,
         activePlan.vastuResult,
         activePlan.id,
         meta,
       );
       toast.success('✅ Architectural report downloaded!', { id: 'report-gen' });
     } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(`Report failed: ${err.message}`, { id: 'report-gen' });
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Report failed: ${msg}`, { id: 'report-gen' });
     } finally {
       setReportLoading(false);
     }
@@ -257,8 +257,8 @@ export default function Editor() {
         toast.error('Copilot failed to generate a valid layout.', { id: 'copilot' });
       }
     } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(`Copilot error: ${err.message}`, { id: 'copilot' });
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Copilot error: ${msg}`, { id: 'copilot' });
     } finally {
       setCopilotLoading(false);
     }
@@ -289,8 +289,8 @@ export default function Editor() {
       toast.success('Design saved to My Plans!');
       navigate('/dashboard');
     } catch (e: unknown) {
-      const err = e as Error;
-      toast.error(`Save failed: ${err.message}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Save failed: ${msg}`);
     } finally {
       setSaveLoading(false);
     }
@@ -662,9 +662,9 @@ export default function Editor() {
               {/* Validation Report */}
               {(activePlan.validationReport?.length ?? 0) > 0 && (
                 <details style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.6rem', fontSize: '0.78rem' }}>
-                  <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({activePlan.validationReport!.length})</summary>
-                  <ul style={{ margin: '0.5rem 0 0 1rem', padding: 0, opacity: 0.8 }}>
-                    {activePlan.validationReport!.map((entry, i) => <li key={i}>{entry}</li>)}
+                  <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({activePlan.validationReport?.length || 0})</summary>
+                  <ul style={{ margin: 0, padding: '0.5rem 0 0 1.5rem', opacity: 0.85, fontSize: '0.9rem' }}>
+                    {(activePlan.validationReport || []).map((entry, i) => <li key={i}>{entry}</li>)}
                   </ul>
                 </details>
               )}

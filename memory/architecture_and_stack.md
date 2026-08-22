@@ -2,7 +2,7 @@
 
 ## Frontend Presentation Layer
 - **Framework:** React 19 + TypeScript
-- **Build Tooling:** Vite 6
+- **Build Tooling:** Vite 8
 - **Styling:** Vanilla CSS, custom glassmorphism design system
 - **Theming:** Dual Light/Dark modes switched via CSS variables
 - **Rendering:** Native HTML/Browser SVG for the 2D layout editor (drag-overlay pattern for 60FPS)
@@ -46,4 +46,4 @@
 - `/generate`, `/export/dxf`, `/export/report` endpoints require valid JWT (`Depends(get_current_user)`).
 - JWT_SECRET raises `ValueError` on startup if missing (no insecure fallback).
 - Error responses are sanitized — no raw exceptions or API context leaked to frontend.
-- CORS is currently `allow_origins=["http://localhost:5173"]` — restrict to production domain before deployment.
+- CORS origins are controlled by the CORS_ORIGINS env var (defaults to http://localhost:5173). Set CORS_ORIGINS for the production domain before deployment.

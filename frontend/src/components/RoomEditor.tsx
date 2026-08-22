@@ -75,8 +75,8 @@ const RoomEditor: React.FC<Props> = ({ room, allRooms, plotContext, onRoomUpdate
         setAiError('AI returned an unexpected response.');
       }
     } catch (e: unknown) {
-      const err = e as Error;
-      setAiError(err.message || 'AI editing failed. Please try again.');
+      const msg = e instanceof Error ? e.message : String(e);
+      setAiError(msg || 'AI editing failed. Please try again.');
     } finally {
       setAiLoading(false);
     }
