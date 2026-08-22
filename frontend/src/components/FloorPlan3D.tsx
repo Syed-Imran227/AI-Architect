@@ -1,9 +1,10 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky, Environment } from '@react-three/drei';
+import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky } from '@react-three/drei';
 import type { Room } from '../services/api';
 
 interface FloorPlan3DProps {
   rooms: Room[];
+  entryDir?: string;
 }
 
 const ROOM_HEIGHT = 10;  // ft ceiling height — must match cost_rates.CEILING_HEIGHT_FT
@@ -890,7 +891,7 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
+export default function FloorPlan3D({ rooms, entryDir = 'north' }: FloorPlan3DProps) {
   if (!rooms || rooms.length === 0) return null;
 
   const minX = Math.min(...rooms.map(r => r.x));
@@ -910,11 +911,10 @@ export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
         gl={{ antialias: true }}
       >
         <Sky sunPosition={[centerX + 50, maxDim * 1.5, centerZ + 50]} turbidity={0.2} rayleigh={0.1} />
-        <Environment preset="city" />
-        <ambientLight intensity={0.6} />
+        <ambientLight intensity={0.8} />
         <directionalLight
           position={[centerX + maxDim * 0.7, maxDim * 1.4, centerZ + maxDim * 0.7]}
-          intensity={1.1}
+          intensity={1.2}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
@@ -953,6 +953,28 @@ export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
           ]}
           position={[centerX, -0.25, centerZ]}
         />
+        {/* 3D North Arrow */}
+        {(() => {
+          const ed = entryDir.toLowerCase();
+          let angle = 0; // default North is -Z (Top)
+          if (ed.startsWith('e')) angle = -Math.PI / 2;
+          else if (ed.startsWith('s')) angle = Math.PI;
+          else if (ed.startsWith('w')) angle = Math.PI / 2;
+          
+          return (
+            <group position={[centerX + maxDim * 0.6, 0.2, centerZ - maxDim * 0.6]} rotation={[0, angle, 0]}>
+              <mesh position={[0, 0, -2]} rotation={[-Math.PI/2, 0, 0]}>
+                <cylinderGeometry args={[0, 1.5, 4, 3]} />
+                <meshStandardMaterial color="#ef4444" />
+              </mesh>
+              <mesh position={[0, 0, 2]} rotation={[Math.PI/2, 0, 0]}>
+                <cylinderGeometry args={[0, 1.5, 4, 3]} />
+                <meshStandardMaterial color="#94a3b8" />
+              </mesh>
+              <Text position={[0, 0.5, -5]} rotation={[-Math.PI/2, 0, 0]} fontSize={2} color="#ffffff" fontWeight="bold">N</Text>
+            </group>
+          );
+        })()}
       </Canvas>
     </div>
   );

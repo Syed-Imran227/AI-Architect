@@ -4,24 +4,14 @@ Evaluates thermal efficiency and sun path optimization for a floor plan.
 """
 
 from typing import Dict, Tuple
+from backend.engines.vastu_engine import get_zone_map
 
-# We map the 3x3 grid to zones.
-# For Vastu we used absolute compass, but here we can just use the same ZONE_MAP
-# and rotate based on entry direction to find the absolute compass zones.
-ZONE_MAP: Dict[Tuple[int, int], str] = {
-    (0, 0): "NW", (1, 0): "N",  (2, 0): "NE",
-    (0, 1): "W",  (1, 1): "C",  (2, 1): "E",
-    (0, 2): "SW", (1, 2): "S",  (2, 2): "SE",
-}
-
-# The above ZONE_MAP assumes Top=North.
-# We will use Vastu's mapping logic.
-def _zone(room: dict, plot_w: float, plot_h: float) -> str:
+def _zone(room: dict, plot_w: float, plot_h: float, entry_dir: str) -> str:
     cx = room["x"] + room["width"]  / 2
     cy = room["y"] + room["height"] / 2
     col = 0 if cx < plot_w / 3 else (1 if cx < 2 * plot_w / 3 else 2)
     row = 0 if cy < plot_h / 3 else (1 if cy < 2 * plot_h / 3 else 2)
-    return ZONE_MAP[(col, row)]
+    return get_zone_map(entry_dir)[(col, row)]
 
 def _classify(name: str) -> str:
     n = name.lower()
@@ -32,63 +22,106 @@ def _classify(name: str) -> str:
     if "stair" in n: return "staircase"
     return "other"
 
+def wall_to_compass(wall: str, entry_dir: str) -> str:
+    ed = entry_dir.strip().lower()
+    if ed in ["east", "e"]:
+        mapping = {"top": "E", "bottom": "W", "left": "N", "right": "S"}
+    elif ed in ["south", "s"]:
+        mapping = {"top": "S", "bottom": "N", "left": "E", "right": "W"}
+    elif ed in ["west", "w"]:
+        mapping = {"top": "W", "bottom": "E", "left": "S", "right": "N"}
+    else:
+        mapping = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
+    return mapping.get(wall.lower(), "N")
+
 def score_energy(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> dict:
     """
     Score a layout based on natural lighting and thermal efficiency.
     Returns {score, grade, rules: [{rule, status, points, max, detail}]}
     """
-    # For a real implementation, the absolute direction of the plot depends on entry_dir.
-    # In Vastu, entry_dir is the literal direction the door faces.
-    # We will score based on 3 simple thermal rules.
-    
-    typed = [(r, _classify(r["name"]), _zone(r, plot_w, plot_h)) for r in rooms]
     results = []
     total = 0
-    
-    # Rule 1: West Wall Heat Gain (Minimize living/bedrooms on the West)
-    w_points = 35
-    west_rooms = [t for r, t, z in typed if "W" in z]
-    if any(t in ["bedroom", "living"] for t in west_rooms):
-        pts = 10
-        status = "warn"
-        detail = "Bedrooms/Living spaces on West wall will experience high afternoon heat gain."
-    else:
-        pts = w_points
-        status = "pass"
-        detail = "Excellent. West wall is shielded from direct living areas."
-    results.append({"rule": "West Wall Heat Gain", "status": status, "points": pts, "max": w_points, "detail": detail})
-    total += pts
 
-    # Rule 2: Morning Sun (East Exposure for Kitchen/Bedrooms)
-    w_points = 35
-    east_rooms = [t for r, t, z in typed if "E" in z]
-    if any(t in ["kitchen", "bedroom"] for t in east_rooms):
-        pts = w_points
-        status = "pass"
-        detail = "Great use of morning sun for Kitchen or Bedrooms on the East side."
+    # Rule 1: Solar Gain (35 points)
+    # Score west-facing glazing negatively, north-facing positively.
+    north_windows = 0
+    west_windows = 0
+    for r in rooms:
+        for w in r.get("windows", []):
+            compass = wall_to_compass(w["wall"], entry_dir)
+            if compass == "N": north_windows += 1
+            elif compass == "W": west_windows += 1
+            
+    solar_score = min(35, max(0, 20 + (north_windows * 5) - (west_windows * 5)))
+    if solar_score >= 30:
+        s_status = "pass"
+        s_detail = "Excellent solar gain control. North glazing provides diffuse light; West is protected."
+    elif solar_score >= 20:
+        s_status = "warn"
+        s_detail = "Moderate solar gain. Consider reducing West-facing windows."
     else:
-        pts = 15
-        status = "warn"
-        detail = "East wall under-utilized for morning spaces."
-    results.append({"rule": "Morning Sun Utilization", "status": status, "points": pts, "max": w_points, "detail": detail})
-    total += pts
+        s_status = "fail"
+        s_detail = "High thermal load due to excessive West-facing glazing."
+        
+    results.append({"rule": "Solar Gain Optimization", "status": s_status, "points": solar_score, "max": 35, "detail": s_detail})
+    total += solar_score
 
-    # Rule 3: South Wall Thermal Buffering (Bathrooms/Stairs on South)
-    w_points = 30
-    south_rooms = [t for r, t, z in typed if "S" in z]
-    if any(t in ["bathroom", "staircase"] for t in south_rooms):
-        pts = w_points
-        status = "pass"
-        detail = "Bathrooms or stairs on South wall act as good thermal buffers."
+    # Rule 2: Cross-ventilation (35 points)
+    # Score rooms that have openings on >= 2 different walls.
+    well_ventilated_rooms = 0
+    habitable = [r for r in rooms if _classify(r["name"]) in ["bedroom", "living", "kitchen"]]
+    for r in habitable:
+        walls_with_openings = set()
+        for w in r.get("windows", []):
+            walls_with_openings.add(w["wall"])
+        for d in r.get("doors", []):
+            walls_with_openings.add(d["wall"])
+        if len(walls_with_openings) >= 2:
+            well_ventilated_rooms += 1
+
+    if not habitable:
+        vent_score = 35
     else:
-        pts = 10
-        status = "warn"
-        detail = "Lack of thermal buffer on South wall."
-    results.append({"rule": "South Thermal Buffer", "status": status, "points": pts, "max": w_points, "detail": detail})
-    total += pts
+        ratio = well_ventilated_rooms / len(habitable)
+        vent_score = int(35 * ratio)
+        
+    if vent_score >= 25:
+        v_status = "pass"
+        v_detail = f"Good cross-ventilation. {well_ventilated_rooms} of {len(habitable)} habitable rooms have multiple openings."
+    elif vent_score >= 15:
+        v_status = "warn"
+        v_detail = f"Fair cross-ventilation. {well_ventilated_rooms} of {len(habitable)} habitable rooms have multiple openings."
+    else:
+        v_status = "fail"
+        v_detail = "Poor cross-ventilation. Most habitable rooms only have openings on one side."
+        
+    results.append({"rule": "Natural Cross-Ventilation", "status": v_status, "points": vent_score, "max": 35, "detail": v_detail})
+    total += vent_score
+
+    # Rule 3: Thermal Buffering (30 points)
+    # Score service rooms (bath, utility, stair) placed on the South or West envelope where they shield habitable rooms.
+    typed = [(r, _classify(r["name"]), _zone(r, plot_w, plot_h, entry_dir)) for r in rooms]
+    service_rooms = [z for _, t, z in typed if t in ["bathroom", "staircase", "other"]]
+    sw_buffers = sum(1 for z in service_rooms if "S" in z or "W" in z)
+
+    if sw_buffers >= 2:
+        buffer_score = 30
+        b_status = "pass"
+        b_detail = "Excellent thermal buffering. Service rooms on South/West protect habitable spaces from afternoon heat."
+    elif sw_buffers == 1:
+        buffer_score = 15
+        b_status = "warn"
+        b_detail = "Partial thermal buffering. More service rooms could be placed on the South/West edges."
+    else:
+        buffer_score = 0
+        b_status = "fail"
+        b_detail = "Lack of thermal buffers. South/West walls expose habitable rooms to direct heat."
+
+    results.append({"rule": "Envelope Thermal Buffering", "status": b_status, "points": buffer_score, "max": 30, "detail": b_detail})
+    total += buffer_score
 
     return {
         "score": total,
-        "grade": "A" if total >= 80 else "B" if total >= 60 else "C",
+        "grade": "A" if total >= 70 else "B" if total >= 50 else "C",
         "rules": results
     }

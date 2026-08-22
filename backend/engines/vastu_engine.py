@@ -8,13 +8,32 @@ returns score/100 with a per-rule breakdown.
 from typing import Dict, Tuple
 
 # ── Zone grid ─────────────────────────────────────────────────────────────────
-# col: 0=West, 1=Center, 2=East   (x increases East)
-# row: 0=North, 1=Center, 2=South (y increases South in our SVG coord system)
-ZONE_MAP: Dict[Tuple[int, int], str] = {
-    (0, 0): "NW", (1, 0): "N",  (2, 0): "NE",
-    (0, 1): "W",  (1, 1): "C",  (2, 1): "E",
-    (0, 2): "SW", (1, 2): "S",  (2, 2): "SE",
-}
+def get_zone_map(entry_dir: str) -> Dict[Tuple[int, int], str]:
+    ed = entry_dir.strip().lower()
+    if ed in ["east", "e"]:
+        return {
+            (0, 0): "NE", (1, 0): "E",  (2, 0): "SE",
+            (0, 1): "N",  (1, 1): "C",  (2, 1): "S",
+            (0, 2): "NW", (1, 2): "W",  (2, 2): "SW",
+        }
+    elif ed in ["south", "s"]:
+        return {
+            (0, 0): "SE", (1, 0): "S",  (2, 0): "SW",
+            (0, 1): "E",  (1, 1): "C",  (2, 1): "W",
+            (0, 2): "NE", (1, 2): "N",  (2, 2): "NW",
+        }
+    elif ed in ["west", "w"]:
+        return {
+            (0, 0): "SW", (1, 0): "W",  (2, 0): "NW",
+            (0, 1): "S",  (1, 1): "C",  (2, 1): "N",
+            (0, 2): "SE", (1, 2): "E",  (2, 2): "NE",
+        }
+    else: # north / default
+        return {
+            (0, 0): "NW", (1, 0): "N",  (2, 0): "NE",
+            (0, 1): "W",  (1, 1): "C",  (2, 1): "E",
+            (0, 2): "SW", (1, 2): "S",  (2, 2): "SE",
+        }
 
 WEIGHTS = {
     "entrance":    20,
@@ -55,12 +74,12 @@ def _classify(name: str) -> str:
     return "other"
 
 
-def _zone(room: dict, plot_w: float, plot_h: float) -> str:
+def _zone(room: dict, plot_w: float, plot_h: float, entry_dir: str) -> str:
     cx = room["x"] + room["width"]  / 2
     cy = room["y"] + room["height"] / 2
     col = 0 if cx < plot_w / 3 else (1 if cx < 2 * plot_w / 3 else 2)
     row = 0 if cy < plot_h / 3 else (1 if cy < 2 * plot_h / 3 else 2)
-    return ZONE_MAP[(col, row)]
+    return get_zone_map(entry_dir)[(col, row)]
 
 
 def _center_overlap(room: dict, plot_w: float, plot_h: float) -> bool:
@@ -79,7 +98,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
     Returns {score, grade, rules: [{rule, status, points, max, detail}]}
     """
     ed = entry_dir.strip().lower()
-    typed = [(r, _classify(r["name"]), _zone(r, plot_w, plot_h)) for r in rooms]
+    typed = [(r, _classify(r["name"]), _zone(r, plot_w, plot_h, entry_dir)) for r in rooms]
     results = []
     total = 0
 

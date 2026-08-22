@@ -19,6 +19,16 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('Password must contain at least 1 letter and 1 number');
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await register({ name, email, password });
@@ -57,7 +67,7 @@ export default function Register() {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <input type="text" placeholder="Full Name" className="input-field" required value={name} onChange={e => setName(e.target.value)} />
             <input type="email" placeholder="Email Address" className="input-field" required value={email} onChange={e => setEmail(e.target.value)} />
-            <input type="password" placeholder="Password (min 6 characters)" className="input-field" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} />
+            <input type="password" placeholder="Password (min 8 chars, 1 letter, 1 number)" className="input-field" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} />
             {error && <p style={{ color: 'var(--error)', fontSize: '0.85rem', margin: 0 }}>⚠ {error}</p>}
             <button type="submit" disabled={loading} className="btn-primary" style={{ padding: '0.9rem', fontSize: '1rem', width: '100%', justifyContent: 'center' }}>
               {loading ? 'Creating Account…' : 'Sign Up Free →'}

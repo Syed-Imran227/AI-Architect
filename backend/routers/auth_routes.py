@@ -12,6 +12,11 @@ async def register_user(user: UserCreate):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    if len(user.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+    if not any(c.isalpha() for c in user.password) or not any(c.isdigit() for c in user.password):
+        raise HTTPException(status_code=400, detail="Password must contain at least 1 letter and 1 number")
+
     user_doc = {
         "name":            user.name,
         "email":           user.email,

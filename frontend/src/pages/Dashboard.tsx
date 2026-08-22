@@ -34,13 +34,15 @@ export default function Dashboard() {
       setProjects(data);
     } catch (e) {
       console.error(e);
+      toast.error('Session expired. Please log in again.');
+      logout();
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [logout]);
 
   useEffect(() => {
-    setTimeout(() => fetchProjects(), 0);
+    fetchProjects();
   }, [fetchProjects]);
 
 
@@ -103,7 +105,7 @@ export default function Dashboard() {
           {[
             { label: 'Total Designs', value: projects.length, icon: '🏗️', color: 'var(--accent-color)' },
             { label: 'Rooms Designed', value: totalRooms, icon: '🛏️', color: 'var(--text-secondary)' },
-            { label: 'Vastu Projects', value: projects.length, icon: '⛩️', color: 'var(--success-text)' },
+            { label: 'Vastu Projects', value: projects.filter(p => (p.layout_data as any).vastuScore && (p.layout_data as any).vastuScore > 0).length, icon: '⛩️', color: 'var(--success-text)' },
           ].map((stat, i) => (
             <div key={i} className="stat-card" style={{ background: "var(--glass-bg)", border: "none", boxShadow: "var(--glass-shadow)", borderRadius: "16px", padding: "1.5rem", backdropFilter: "blur(12px)" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

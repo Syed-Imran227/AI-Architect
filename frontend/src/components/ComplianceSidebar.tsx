@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Room, VastuResult, NbcResult, EnergyResult, VastuFixResult, NbcFixResult } from '../services/api';
+import type { VastuResult, NbcResult, EnergyResult, VastuFixResult, NbcFixResult } from '../services/api';
 import { vastuFix, nbcFix } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,9 @@ interface PlotContext {
   bedrooms: number;
   bathrooms: number;
   floors: number;
+  balcony: number;
+  terrace: number;
+  lift: number;
 }
 
 interface ComplianceSidebarProps {
@@ -19,7 +22,7 @@ interface ComplianceSidebarProps {
   energyResult?: EnergyResult;
   layout: Record<string, unknown>;
   plotContext: PlotContext;
-  onLayoutUpdate: (newRooms: Room[], imageUrl?: string) => void;
+  onLayoutUpdate: (data: any, imageUrl?: string) => void;
   onVastuUpdate?: (newVastuResult: VastuResult, newScore: number) => void;
   onNbcUpdate?: (newNbcResult: NbcResult, newScore: number) => void;
 }
@@ -51,8 +54,8 @@ export default function ComplianceSidebar({
       const result = await vastuFix(layout, vastuResult, plotContext);
       setLastFixResult(result);
 
-      if (result.fixed_layout?.length) {
-        onLayoutUpdate(result.fixed_layout, result.imageUrl);
+      if (result.fixed_layout?.length || result.full_layout) {
+        onLayoutUpdate(result, result.imageUrl);
         if (onVastuUpdate && result.new_vastu_result) {
           onVastuUpdate(result.new_vastu_result, result.after_score);
         }
@@ -87,8 +90,8 @@ export default function ComplianceSidebar({
       const result = await nbcFix(layout, nbcResult, plotContext);
       setLastNbcFixResult(result);
 
-      if (result.fixed_layout?.length) {
-        onLayoutUpdate(result.fixed_layout, result.imageUrl);
+      if (result.fixed_layout?.length || result.full_layout) {
+        onLayoutUpdate(result, result.imageUrl);
         if (onNbcUpdate && result.new_nbc_result) {
           onNbcUpdate(result.new_nbc_result, result.after_score);
         }
@@ -125,7 +128,7 @@ export default function ComplianceSidebar({
               <span style={{ fontSize: '1.2rem' }}>🧭</span> Vastu Analysis
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span className={`vastu-badge ${vastuScore >= 70 ? 'pass' : vastuScore >= 40 ? 'warn' : 'fail'}`}>
+              <span className={`vastu-badge ${vastuScore >= 60 ? 'pass' : vastuScore >= 40 ? 'warn' : 'fail'}`}>
                 {vastuScore}/100
               </span>
               <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{vastuOpen ? '▲' : '▼'}</span>
@@ -190,7 +193,7 @@ export default function ComplianceSidebar({
               <span style={{ fontSize: '1.2rem' }}>🏛</span> NBC 2016 Compliance
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span className={`vastu-badge ${nbcResult.score >= 65 ? 'pass' : 'fail'}`}>
+              <span className={`vastu-badge ${nbcResult.score >= 90 ? 'pass' : nbcResult.score >= 65 ? 'warn' : 'fail'}`}>
                 {nbcResult.score}/100
               </span>
               <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{nbcOpen ? '▲' : '▼'}</span>
@@ -254,7 +257,7 @@ export default function ComplianceSidebar({
               <span style={{ fontSize: '1.2rem' }}>☀️</span> Energy & Sun Path
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span className={`vastu-badge ${energyResult.score >= 80 ? 'pass' : energyResult.score >= 60 ? 'warn' : 'fail'}`}>
+              <span className={`vastu-badge ${energyResult.score >= 70 ? 'pass' : energyResult.score >= 50 ? 'warn' : 'fail'}`}>
                 {energyResult.grade} ({energyResult.score}/100)
               </span>
               <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{energyOpen ? '▲' : '▼'}</span>

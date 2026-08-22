@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { Room } from '../services/api';
 import { regenerateRoom } from '../services/api';
+import { validateRoomPlacement } from '../utils/validateRooms';
+import { toast } from 'react-hot-toast';
 
 interface PlotContext {
   plotWidth: number;
@@ -9,14 +11,18 @@ interface PlotContext {
   bedrooms: number;
   bathrooms: number;
   floors: number;
+  balcony: number;
+  terrace: number;
+  lift: number;
 }
 
 interface Props {
   room: Room;
+  index: number;
   allRooms: Room[];
   plotContext: PlotContext;
-  onRoomUpdate: (updated: Room) => void;
-  onLayoutUpdate: (updatedRooms: Room[], imageUrl?: string) => void;
+  onRoomUpdate: (index: number, updated: Room) => void;
+  onLayoutUpdate: (data: any, imageUrl?: string) => void;
   onClose: () => void;
 }
 
@@ -29,7 +35,7 @@ const FIELD_LABELS: Record<NumericRoomKey, string> = {
   height: 'Height (ft)',
 };
 
-const RoomEditor: React.FC<Props> = ({ room, allRooms, plotContext, onRoomUpdate, onLayoutUpdate, onClose }) => {
+const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoomUpdate, onLayoutUpdate, onClose }) => {
   const [local, setLocal] = useState<Room>({ ...room });
   const [prevRoomName, setPrevRoomName] = useState(room.name);
   const [instruction, setInstruction] = useState('');
@@ -52,7 +58,14 @@ const RoomEditor: React.FC<Props> = ({ room, allRooms, plotContext, onRoomUpdate
   };
 
   const handleApply = () => {
-    onRoomUpdate(local);
+    // Validate bounds and overlaps using the full list, pretending the local room replaced the original
+    const newRooms = allRooms.map((r, i) => i === index ? local : r);
+    const violations = validateRoomPlacement(newRooms, plotContext.plotWidth, plotContext.plotHeight);
+    if (violations.length > 0) {
+      toast.error(violations[0].reason);
+      return;
+    }
+    onRoomUpdate(index, local);
   };
 
   const handleReset = () => {
@@ -66,8 +79,8 @@ const RoomEditor: React.FC<Props> = ({ room, allRooms, plotContext, onRoomUpdate
     setAiSuccess(false);
     try {
       const res = await regenerateRoom(allRooms, room.name, instruction, plotContext);
-      if (res?.rooms?.length) {
-        onLayoutUpdate(res.rooms, res.imageUrl);
+      if (res?.rooms?.length || res?.full_layout) {
+        onLayoutUpdate(res, res.imageUrl);
         setInstruction('');
         setAiSuccess(true);
         setTimeout(() => { setAiSuccess(false); }, 3000);

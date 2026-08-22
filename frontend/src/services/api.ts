@@ -51,7 +51,8 @@ export interface VastuFixResult {
   before_score: number;
   after_score: number;
   new_vastu_result?: VastuResult;
-  fixed_layout: Room[];
+  fixed_layout?: Room[];
+  full_layout?: any;
   design_rationale?: string;
   converged?: boolean;
   message?: string;
@@ -63,7 +64,8 @@ export interface NbcFixResult {
   before_score: number;
   after_score: number;
   new_nbc_result?: NbcResult;
-  fixed_layout: Room[];
+  fixed_layout?: Room[];
+  full_layout?: any;
   design_rationale?: string;
   converged?: boolean;
   message?: string;
@@ -128,13 +130,12 @@ export interface GeneratePlansPayload {
   balcony: number;
   terrace: boolean;
   lift: boolean;
-  parking: boolean;
-  kitchen: number;
   vastuToggle: boolean;
   entryDir: string;
 }
 
 export interface LayoutData {
+  form?: any;
   rooms?: Room[];
   plot_width?: number;
   plot_height?: number;
@@ -151,6 +152,8 @@ export interface ProjectMeta {
   bathrooms?: number;
   floors?: number;
   entry_dir?: string;
+  length?: number;
+  width?: number;
 }
 
 const getAuthHeaders = () => {
@@ -264,11 +267,11 @@ export const generatePlans = async (data: GeneratePlansPayload): Promise<{ candi
   return res.json();
 };
 
-export const exportDxf = async (rooms: Room[], planId: string): Promise<void> => {
+export const exportDxf = async (rooms: Room[], planId: string, plotWidth: number, plotHeight: number): Promise<void> => {
   const res = await authFetch(`${API_BASE_URL}/export/dxf`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ rooms, plan_id: planId }),
+    body: JSON.stringify({ rooms, plan_id: planId, plot_width: plotWidth, plot_height: plotHeight }),
   });
   if (!res.ok) throw new Error(`DXF export failed: ${await res.text()}`);
   const blob = await res.blob();
@@ -294,7 +297,7 @@ export const regenerateRoom = async (
     bathrooms: number;
     floors: number;
   }
-): Promise<{ rooms: Room[]; imageUrl?: string; llm_called: boolean; design_rationale?: string }> => {
+): Promise<{ rooms?: Room[]; full_layout?: any; imageUrl?: string; llm_called: boolean; design_rationale?: string }> => {
   const res = await authFetch(`${API_BASE_URL}/regenerate-room`, {
     method: "POST",
     headers: getAuthHeaders(),

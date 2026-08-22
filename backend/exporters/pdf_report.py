@@ -47,10 +47,10 @@ ROW_ALT      = colors.HexColor("#f1f5f9")
 def _inr(amount: float) -> str:
     """Format a float as Indian Rupee string with lakh/crore grouping."""
     if amount >= 1_00_00_000:
-        return f"₹{amount / 1_00_00_000:.2f} Cr"
+        return f"Rs. {amount / 1_00_00_000:.2f} Cr"
     if amount >= 1_00_000:
-        return f"₹{amount / 1_00_000:.2f} L"
-    return f"₹{amount:,.0f}"
+        return f"Rs. {amount / 1_00_000:.2f} L"
+    return f"Rs. {amount:,.0f}"
 
 
 # ── Helper: page header/footer ─────────────────────────────────────────────────
@@ -230,7 +230,18 @@ def generate_report_pdf(
         if img_b64 and img_b64.startswith("data:image/png;base64,"):
             img_bytes = base64.b64decode(img_b64.split(",", 1)[1])
             img_buf = io.BytesIO(img_bytes)
-            rl_img = RLImage(img_buf, width=w - 4 * cm, height=(w - 4 * cm) * 0.75)
+            
+            # Determine actual aspect ratio using PIL
+            try:
+                from PIL import Image as PILImage
+                with PILImage.open(img_buf) as pimg:
+                    pw, ph = pimg.size
+                    ratio = ph / pw
+            except Exception:
+                ratio = 0.75
+            
+            img_buf.seek(0)
+            rl_img = RLImage(img_buf, width=w - 4 * cm, height=(w - 4 * cm) * ratio)
             story.append(Paragraph(floor.get("level", "Floor"), styles["meta"]))
             story.append(rl_img)
             story.append(Spacer(1, 0.5 * cm))
@@ -258,7 +269,7 @@ def generate_report_pdf(
             if r.get("max", 0) == 0:
                 continue
             status = r.get("status", "")
-            icon   = "✅ Pass" if status == "pass" else ("⚠ Warn" if status == "warn" else "❌ Fail")
+            icon   = "(Pass)" if status == "pass" else ("(Warn)" if status == "warn" else "(Fail)")
             vastu_rows.append([
                 Paragraph(str(r.get("rule", "")), styles["body"]),
                 icon,

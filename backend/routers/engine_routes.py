@@ -20,17 +20,15 @@ router = APIRouter(tags=["engine"])
 ai_generator = FloorPlanGenerator()
 
 class GenerateRequest(BaseModel):
-    length: float
-    width: float
-    floors: int
+    length: float = Field(..., ge=15, le=500)
+    width: float = Field(..., ge=15, le=500)
+    floors: int = Field(1, ge=1, le=10)
     duplex: bool
-    bedrooms: int
-    bathrooms: int
-    kitchen: int
+    bedrooms: int = Field(..., ge=0, le=20)
+    bathrooms: int = Field(..., ge=0, le=20)
     balcony: int
     terrace: bool
     lift: bool
-    parking: bool
     vastuToggle: bool
     entryDir: str
 
@@ -77,7 +75,7 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         for floor in floor_list:
             floor_rooms = floor.get("rooms", [])
             floor_label = f"{floor.get('level', 'Floor')} | {unit_label}"
-            png_bytes = render_floor_plan(floor_rooms, unit_label=floor_label)
+            png_bytes = render_floor_plan(floor_rooms, unit_label=floor_label, plot_w=req.length, plot_h=req.width, entry_dir=req.entryDir)
             
             b64_str = base64.b64encode(png_bytes).decode("utf-8")
             floor["imageUrl"] = f"data:image/png;base64,{b64_str}"
@@ -138,11 +136,13 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
 class DxfExportRequest(BaseModel):
     rooms: List[Any]
     plan_id: str
+    plot_width: float = 40.0
+    plot_height: float = 30.0
 
 @router.post("/export/dxf")
 def export_dxf(req: DxfExportRequest, current_user: dict = Depends(get_current_user)):
     try:
-        dxf_bytes = export_to_dxf(req.rooms)
+        dxf_bytes = export_to_dxf(req.rooms, plot_w=req.plot_width, plot_h=req.plot_height)
         return Response(
             content=dxf_bytes,
             media_type="application/dxf",
@@ -193,12 +193,12 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
 
 class VastuFixRequest(BaseModel):
     layout: dict
-    plot_width: float = 40.0
-    plot_height: float = 30.0
+    plot_width: float = Field(40.0, ge=15, le=500)
+    plot_height: float = Field(30.0, ge=15, le=500)
     entry_dir: str = "east"
-    bedrooms: int = 2
-    bathrooms: int = 2
-    floors: int = 1
+    bedrooms: int = Field(2, ge=0, le=20)
+    bathrooms: int = Field(2, ge=0, le=20)
+    floors: int = Field(1, ge=1, le=10)
     balcony: int = 0
     terrace: int = 0
     lift: int = 0
@@ -276,10 +276,13 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
                 break
 
         if best_layout is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Vastu fix failed: The AI could not produce a layout that strictly improves the score."
-            )
+            return {
+                "status": "already_optimal",
+                "message": "Vastu fix could not find a layout that strictly improves the score.",
+                "before_score": before_score,
+                "after_score": before_score,
+                "fixed_layout": req.layout.get("rooms") or req.layout.get("floors", [{}])[0].get("rooms", []),
+            }
 
         new_layout = best_layout
         ground_rooms = new_layout["floors"][0]["rooms"]
@@ -292,7 +295,7 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             num_floors=req.floors,
         )
 
-        png_bytes = render_floor_plan(ground_rooms, unit_label="Vastu-Optimised Plan")
+        png_bytes = render_floor_plan(ground_rooms, unit_label="Vastu-Optimised Plan", plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
         b64_str = base64.b64encode(png_bytes).decode("utf-8")
         image_url = f"data:image/png;base64,{b64_str}"
 
@@ -318,12 +321,12 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
 
 class NbcFixRequest(BaseModel):
     layout: dict
-    plot_width: float = 40.0
-    plot_height: float = 30.0
+    plot_width: float = Field(40.0, ge=15, le=500)
+    plot_height: float = Field(30.0, ge=15, le=500)
     entry_dir: str = "east"
-    bedrooms: int = 2
-    bathrooms: int = 2
-    floors: int = 1
+    bedrooms: int = Field(2, ge=0, le=20)
+    bathrooms: int = Field(2, ge=0, le=20)
+    floors: int = Field(1, ge=1, le=10)
     balcony: int = 0
     terrace: int = 0
     lift: int = 0
@@ -389,10 +392,13 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
                 break
 
         if best_layout is None:
-            raise HTTPException(
-                status_code=400,
-                detail="NBC fix failed: The AI could not produce a layout that strictly improves the score."
-            )
+            return {
+                "status": "already_optimal",
+                "message": "NBC fix could not find a layout that strictly improves the score.",
+                "before_score": before_score,
+                "after_score": before_score,
+                "fixed_layout": req.layout.get("rooms") or req.layout.get("floors", [{}])[0].get("rooms", []),
+            }
 
         new_layout = best_layout
         ground_rooms = new_layout["floors"][0]["rooms"]
@@ -409,7 +415,7 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
             entry_dir=req.entry_dir,
         )
 
-        png_bytes = render_floor_plan(ground_rooms, unit_label="NBC-Optimised Plan")
+        png_bytes = render_floor_plan(ground_rooms, unit_label="NBC-Optimised Plan", plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
         b64_str = base64.b64encode(png_bytes).decode("utf-8")
         image_url = f"data:image/png;base64,{b64_str}"
 
@@ -437,12 +443,12 @@ class RegenerateRoomRequest(BaseModel):
     room_name: str
     instruction: str
     # Real plot dimensions — no more hardcoded 40×30
-    plot_width: float = 40.0
-    plot_height: float = 30.0
+    plot_width: float = Field(40.0, ge=15, le=500)
+    plot_height: float = Field(30.0, ge=15, le=500)
     entry_dir: str = "east"
-    bedrooms: int = 2
-    bathrooms: int = 2
-    floors: int = 1
+    bedrooms: int = Field(2, ge=0, le=20)
+    bathrooms: int = Field(2, ge=0, le=20)
+    floors: int = Field(1, ge=1, le=10)
     balcony: int = 0
     terrace: int = 0
     lift: int = 0
@@ -472,7 +478,7 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
         if result["converged"] and result["layout"] is not None:
             ground_rooms = result["layout"]["floors"][0]["rooms"]
             
-            png_bytes = render_floor_plan(ground_rooms, unit_label="AI-Edited Room Plan")
+            png_bytes = render_floor_plan(ground_rooms, unit_label="AI-Edited Room Plan", plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
             b64_str = base64.b64encode(png_bytes).decode("utf-8")
             image_url = f"data:image/png;base64,{b64_str}"
 
@@ -481,6 +487,7 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
                 "imageUrl": image_url,
                 "llm_called": True,
                 "design_rationale": result["design_rationale"],
+                "full_layout": result["layout"],
             }
 
         raise HTTPException(

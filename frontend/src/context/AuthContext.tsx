@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })
         .finally(() => setLoading(false));
     } else {
-      setTimeout(() => setLoading(false), 0);
+      setLoading(false);
     }
   }, []);
 

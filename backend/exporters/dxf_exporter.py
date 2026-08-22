@@ -94,13 +94,13 @@ def _draw_door_inward(msp, room_x, room_y, room_w, room_h,
         msp.add_line((hx, hy), (hx, hy + door_w), dxfattribs={"layer": "WALLOPENING", "lineweight": 5})
 
 
-def export_to_dxf(rooms: list) -> bytes:
+def export_to_dxf(rooms: list, plot_w: float = None, plot_h: float = None) -> bytes:
     """
     Converts a list of room dicts (x, y, width, height in feet, name, doors)
     into an AutoCAD R2010-compatible DXF file.
     Returns raw DXF bytes ready for download.
     """
-    doc = ezdxf.new(dxfversion="R2010")
+    doc = ezdxf.new(dxfversion="R2010", setup=True)
     doc.units = units.MM
 
     msp = doc.modelspace()
@@ -114,11 +114,30 @@ def export_to_dxf(rooms: list) -> bytes:
     doc.layers.add("FURNITURE",   color=8)    # dark gray
     doc.layers.add("DIMENSIONS",  color=4)    # cyan
 
+    dimstyle = doc.dimstyles.get("EZ_INSIDE")
+    if dimstyle:
+        dimstyle.dxf.dimtxt = 0.5 * SCALE  # Text height
+        dimstyle.dxf.dimasz = 0.3 * SCALE  # Arrow size
+        dimstyle.dxf.dimexe = 0.2 * SCALE  # Extension line extension
+        dimstyle.dxf.dimexo = 0.2 * SCALE  # Extension line offset
+
+    # ── Plot Boundary ────────────────────────────────────────────────────────
+    if plot_w is not None and plot_h is not None:
+        pw, ph = plot_w * SCALE, plot_h * SCALE
+        doc.layers.add("PLOT_BOUNDARY", color=1) # red
+        msp.add_lwpolyline([(0, 0), (pw, 0), (pw, ph), (0, ph)], close=True, dxfattribs={"layer": "PLOT_BOUNDARY", "lineweight": 70})
+
+    # For y-flip
+    if plot_h is None and rooms:
+        max_y_ft = max(r["y"] + r["height"] for r in rooms)
+    else:
+        max_y_ft = plot_h if plot_h is not None else 0
+
     for room in rooms:
         rx = room["x"]      * SCALE
-        ry = room["y"]      * SCALE
         rw = room["width"]  * SCALE
         rh = room["height"] * SCALE
+        ry = (max_y_ft - (room["y"] + room["height"])) * SCALE
 
         # ── Walls (closed polyline) ───────────────────────────────────────────
         pts = [(rx, ry), (rx + rw, ry), (rx + rw, ry + rh), (rx, ry + rh)]
@@ -139,6 +158,8 @@ def export_to_dxf(rooms: list) -> bytes:
         for door in room.get("doors", []):
             door_w_ft = door.get("width", 3)
             wall      = door.get("wall", "bottom")
+            if wall == "top": wall = "bottom"
+            elif wall == "bottom": wall = "top"
             pos_ft    = door.get("position", 0)
 
             door_w_mm = door_w_ft * SCALE
@@ -164,6 +185,8 @@ def export_to_dxf(rooms: list) -> bytes:
         # ── Windows — double-line symbol on exterior walls ────────────────────
         for window in room.get("windows", []):
             wall    = window.get("wall", "")
+            if wall == "top": wall = "bottom"
+            elif wall == "bottom": wall = "top"
             w_pos   = window.get("position", 0) * SCALE
             w_width = window.get("width", 3)    * SCALE
             gap     = SCALE * 0.15   # 0.15 ft gap between the two parallel lines in mm

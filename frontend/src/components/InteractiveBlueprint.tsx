@@ -1,14 +1,19 @@
 import React, { useState, useRef } from 'react';
 import type { Room, FloorCirculation } from '../services/api';
 import CirculationOverlay from './CirculationOverlay';
+import { validateRoomPlacement } from '../utils/validateRooms';
+import { toast } from 'react-hot-toast';
 
 interface Props {
   rooms: Room[];
   selectedRoom: Room | null;
-  onRoomSelect: (room: Room) => void;
+  onRoomSelect?: (room: Room, index: number) => void;
   onRoomDrop?: (updatedRooms: Room[], imageUrl?: string) => void;
   circulation?: FloorCirculation | null;
   showCirculation?: boolean;
+  entryDir?: string;
+  plotWidth?: number;
+  plotHeight?: number;
 }
 
 // Professional 2D architectural color scheme per room type
@@ -441,13 +446,13 @@ function WindowMarks({ room }: { room: Room }) {
   );
 }
 
-const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation }) => {
+const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation, entryDir = 'north', plotWidth, plotHeight }) => {
   // Drag overlay: only maintain local state during an active drag.
   // When not dragging, the parent prop is the source of truth (no sync needed).
   const [dragRooms, setDragRooms] = useState<Room[] | null>(null);
   const displayRooms = dragRooms ?? rooms;
 
-  const [draggingRoom, setDraggingRoom] = useState<string | null>(null);
+  const [draggingRoomIndex, setDraggingRoomIndex] = useState<number | null>(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -496,23 +501,22 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
     return pt.matrixTransform(ctm.inverse());
   };
 
-  const handlePointerDown = (e: React.PointerEvent, room: Room) => {
-    onRoomSelect(room);
-    setDraggingRoom(room.name);
+  const handlePointerDown = (e: React.PointerEvent, _room: Room, index: number) => {
+    setDraggingRoomIndex(index);
     setDragRooms(rooms); // snapshot current rooms as drag base
     (e.target as Element).setPointerCapture(e.pointerId);
     dragStartPos.current = getSvgCoordinates(e.clientX, e.clientY);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!draggingRoom) return;
+    if (draggingRoomIndex === null) return;
     const currentPos = getSvgCoordinates(e.clientX, e.clientY);
     const dx = currentPos.x - dragStartPos.current.x;
     const dy = currentPos.y - dragStartPos.current.y;
 
-    setDragRooms(prev => (prev ?? rooms).map(r =>
-      r.name === draggingRoom
-        ? { ...r, x: r.x + dx, y: r.y + dy }
+    setDragRooms(prev => (prev ?? rooms).map((r, i) =>
+      i === draggingRoomIndex
+        ? { ...r, x: Math.round((r.x + dx) * 2) / 2, y: Math.round((r.y + dy) * 2) / 2 }
         : r
     ));
 
@@ -520,9 +524,19 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (draggingRoom) {
-      setDraggingRoom(null);
+    if (draggingRoomIndex !== null) {
+      setDraggingRoomIndex(null);
       (e.target as Element).releasePointerCapture(e.pointerId);
+      
+      if (dragRooms && plotWidth && plotHeight) {
+        const violations = validateRoomPlacement(dragRooms, plotWidth, plotHeight);
+        if (violations.length > 0) {
+          toast.error(violations[0].reason);
+          setDragRooms(null); // revert to original rooms
+          return;
+        }
+      }
+
       if (onRoomDrop && dragRooms) {
         onRoomDrop(dragRooms);
       }
@@ -603,22 +617,17 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       </text>
 
       {/* Outer building boundary */}
-      {(() => {
-        const bMinX = Math.min(...displayRooms.map(r => r.x));
-        const bMinY = Math.min(...displayRooms.map(r => r.y));
-        const bMaxX = Math.max(...displayRooms.map(r => r.x + r.width));
-        const bMaxY = Math.max(...displayRooms.map(r => r.y + r.height));
-        return (
-          <rect
-            x={bMinX - WALL} y={bMinY - WALL}
-            width={bMaxX - bMinX + WALL * 2}
-            height={bMaxY - bMinY + WALL * 2}
-            fill="url(#hatch)"
-            stroke="#1e293b"
-            strokeWidth={WALL * 1.5}
-          />
-        );
-      })()}
+      {displayRooms.length > 0 ? (
+        <rect
+          x={Math.min(...displayRooms.map(r => r.x)) - WALL} 
+          y={Math.min(...displayRooms.map(r => r.y)) - WALL}
+          width={Math.max(...displayRooms.map(r => r.x + r.width)) - Math.min(...displayRooms.map(r => r.x)) + WALL * 2}
+          height={Math.max(...displayRooms.map(r => r.y + r.height)) - Math.min(...displayRooms.map(r => r.y)) + WALL * 2}
+          fill="url(#hatch)"
+          stroke="#1e293b"
+          strokeWidth={WALL * 1.5}
+        />
+      ) : null}
 
       {/* Rooms */}
       {displayRooms.map((room, i) => {
@@ -634,8 +643,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
 
         return (
           <g key={`${room.name}-${i}`}
-            onPointerDown={(e) => handlePointerDown(e, room)}
-            style={{ cursor: draggingRoom === room.name ? 'grabbing' : 'grab' }}>
+            className={`room-group ${isSelected ? 'selected' : ''}`}
+            style={{ cursor: 'grab', touchAction: 'none' }}>
 
             {/* Room fill */}
             <rect
@@ -653,6 +662,11 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
               fill="none"
               stroke={isSelected ? '#93c5fd' : 'rgba(80,100,130,0.12)'}
               strokeWidth={0.08}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (onRoomSelect) onRoomSelect(room, i);
+                handlePointerDown(e, room, i);
+              }}
             />
 
             {/* Selection highlight */}
@@ -742,16 +756,25 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       </g>
 
       {/* North arrow */}
-      <g transform={`translate(${maxX - PAD * 0.5}, ${minY + PAD * 0.5})`}>
+      {(() => {
+        const ed = entryDir.toLowerCase();
+        let angle = 0;
+        if (ed.startsWith('e')) angle = -90;
+        else if (ed.startsWith('s')) angle = 180;
+        else if (ed.startsWith('w')) angle = 90;
+        return (
+          <g transform={`translate(${maxX - PAD * 0.5}, ${minY + PAD * 0.5}) rotate(${angle})`}>
         <circle r={2.2} fill="rgba(255,255,255,0.92)" stroke="#cbd5e1" strokeWidth={0.2} />
         <polygon points="0,-1.5 0.6,0.8 0,0.3 -0.6,0.8"
           fill="#1e293b" />
         <polygon points="0,1.5 0.6,-0.8 0,-0.3 -0.6,-0.8"
           fill="#94a3b8" />
-        <text textAnchor="middle" y={-1.85}
+        <text textAnchor="middle" y={-1.85} transform={`rotate(${-angle})`}
           fill="#1e293b" fontSize={0.9}
           fontFamily="Inter, sans-serif" fontWeight="800">N</text>
-      </g>
+        </g>
+        );
+      })()}
 
       {/* Legend */}
       {displayRooms.length > 0 && (() => {

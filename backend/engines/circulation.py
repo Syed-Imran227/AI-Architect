@@ -27,38 +27,33 @@ def _room_centre(room: dict) -> tuple[float, float]:
     return (room["x"] + room["width"] / 2, room["y"] + room["height"] / 2)
 
 
-def _shared_wall_midpoint(
-    a: dict, b: dict
-) -> tuple[float, float] | None:
+def _door_bbox(room: dict, door: dict) -> tuple[float, float, float, float]:
+    rx, ry = room["x"], room["y"]
+    w = door.get("width", 3.0)
+    pos = door.get("position", 0.0)
+    wall = door["wall"]
+    T = 0.5
+    if wall == "top": return (rx + pos, rx + pos + w, ry - T, ry + T)
+    if wall == "bottom": return (rx + pos, rx + pos + w, ry + room["height"] - T, ry + room["height"] + T)
+    if wall == "left": return (rx - T, rx + T, ry + pos, ry + pos + w)
+    if wall == "right": return (rx + room["width"] - T, rx + room["width"] + T, ry + pos, ry + pos + w)
+    return (0, 0, 0, 0)
+
+def _shared_door_midpoint(a: dict, b: dict) -> tuple[float, float] | None:
     """
-    If rooms a and b share a wall segment of at least MIN_OVERLAP ft, return
-    the midpoint of that shared segment. Otherwise return None.
+    Returns the midpoint of a door connecting room a and room b.
+    If no door connects them, returns None.
     """
-    MIN_OVERLAP = 1.5   # ft — minimum shared wall needed to be "adjacent"
-
-    ax0, ax1 = a["x"], a["x"] + a["width"]
-    ay0, ay1 = a["y"], a["y"] + a["height"]
-    bx0, bx1 = b["x"], b["x"] + b["width"]
-    by0, by1 = b["y"], b["y"] + b["height"]
-
-    TOL = 0.6   # ft — tolerance for floating-point wall alignment
-
-    # Check horizontal adjacency (shared vertical wall)
-    if abs(ax1 - bx0) < TOL or abs(bx1 - ax0) < TOL:
-        wall_x = ax1 if abs(ax1 - bx0) < TOL else bx1
-        overlap_y0 = max(ay0, by0)
-        overlap_y1 = min(ay1, by1)
-        if overlap_y1 - overlap_y0 >= MIN_OVERLAP:
-            return (wall_x, (overlap_y0 + overlap_y1) / 2)
-
-    # Check vertical adjacency (shared horizontal wall)
-    if abs(ay1 - by0) < TOL or abs(by1 - ay0) < TOL:
-        wall_y = ay1 if abs(ay1 - by0) < TOL else by1
-        overlap_x0 = max(ax0, bx0)
-        overlap_x1 = min(ax1, bx1)
-        if overlap_x1 - overlap_x0 >= MIN_OVERLAP:
-            return ((overlap_x0 + overlap_x1) / 2, wall_y)
-
+    for r1, r2 in [(a, b), (b, a)]:
+        for door in r1.get("doors", []):
+            x1, x2, y1, y2 = _door_bbox(r1, door)
+            r2x1, r2x2 = r2["x"], r2["x"] + r2["width"]
+            r2y1, r2y2 = r2["y"], r2["y"] + r2["height"]
+            
+            # Check intersection
+            if (x1 <= r2x2 + 0.1 and x2 >= r2x1 - 0.1 and 
+                y1 <= r2y2 + 0.1 and y2 >= r2y1 - 0.1):
+                return ((x1 + x2) / 2, (y1 + y2) / 2)
     return None
 
 
@@ -70,7 +65,7 @@ def _build_adjacency(rooms: list[dict]) -> dict[str, list[tuple[str, tuple[float
     for i, a in enumerate(rooms):
         for j in range(i + 1, len(rooms)):
             b = rooms[j]
-            midpt = _shared_wall_midpoint(a, b)
+            midpt = _shared_door_midpoint(a, b)
             if midpt is not None:
                 adj[a["name"]].append((b["name"], midpt))
                 adj[b["name"]].append((a["name"], midpt))

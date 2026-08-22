@@ -69,22 +69,6 @@ const CirculationOverlay: React.FC<Props> = React.memo(({ circulation, visible }
         ))
       )}
 
-      {/* Unreachable room warning indicators */}
-      {circulation.unreachable.map((roomName, i) => (
-        <text
-          key={i}
-          x={0} y={0}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize={0.8}
-          fill="#ef4444"
-          fontFamily="Inter, system-ui, sans-serif"
-          fontWeight="700"
-          style={{ userSelect: 'none' }}
-        >
-          ⚠ {roomName}
-        </text>
-      ))}
     </g>
   );
 });

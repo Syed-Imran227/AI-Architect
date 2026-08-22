@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import type { Room, VastuResult, NbcResult, EnergyResult, FloorCirculation, LayoutData } from '../services/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
 import FloorPlan3D from '../components/FloorPlan3D';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import RoomEditor from '../components/RoomEditor';
 import ComplianceSidebar from '../components/ComplianceSidebar';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -34,9 +35,9 @@ interface Plan {
 
 const INITIAL_FORM = {
   length: 40, width: 30, floors: 1,
-  duplex: false, bedrooms: 2, bathrooms: 2, kitchen: 1,
-  balcony: 1, terrace: true, lift: false, parking: true,
-  vastuToggle: true, entryDir: 'east',
+  duplex: false, bedrooms: 2, bathrooms: 2,
+  balcony: 0, terrace: false, lift: false,
+  vastuToggle: true, entryDir: 'East',
 };
 
 export default function Editor() {
@@ -51,7 +52,7 @@ export default function Editor() {
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [activeFloorIndex, setActiveFloorIndex] = useState(0);
-  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [showCirculation, setShowCirculation] = useState(false);
   const [show3D, setShow3D] = useState(false);
@@ -81,7 +82,7 @@ export default function Editor() {
       setFloors([]);
     }
     setActiveFloorIndex(0);
-    setSelectedRoom(null);
+    setSelectedRoomIndex(null);
   };
 
   // Issue 6: memoised so the useEffect dependency array is honest.
@@ -96,7 +97,11 @@ export default function Editor() {
         vastuScore: project.layout_data?.vastuScore ?? project.layout_data?.vastuResult?.score ?? 0,
         vastuResult: project.layout_data?.vastuResult,
         nbcResult: project.layout_data?.nbcResult,
+        energyResult: project.layout_data?.energyResult,
       };
+      if (project.layout_data?.form) {
+        setFormData(project.layout_data.form);
+      }
       setPlans([restoredPlan]);
       openPlan(restoredPlan);
     } catch (e: unknown) {
@@ -113,7 +118,7 @@ export default function Editor() {
     const params = new URLSearchParams(location.search);
     const projectId = params.get("project");
     if (projectId) {
-      setTimeout(() => loadSavedProject(projectId), 0);
+      loadSavedProject(projectId);
     }
   }, [location.search, loadSavedProject]);
 
@@ -145,34 +150,60 @@ export default function Editor() {
     }
   };
 
-
-
-  const handleRoomSelect = useCallback((room: Room) => setSelectedRoom(room), []);
-
-  const handleRoomUpdate = useCallback((updated: Room) => {
+  const handleRoomUpdate = useCallback((index: number, updated: Room) => {
     setFloors(prev => {
       const idx = activeFloorIndexRef.current;
       const newFloors = [...prev];
       newFloors[idx] = {
         ...newFloors[idx],
-        rooms: newFloors[idx].rooms.map(r => r.name === updated.name ? updated : r)
+        rooms: newFloors[idx].rooms.map((r, i) => i === index ? updated : r),
+        imageUrl: undefined
       };
       return newFloors;
     });
-    setSelectedRoom(updated);
+    setSelectedRoomIndex(index);
   }, []);
 
   // Issue 1: accepts an optional imageUrl so that AI-mutated layouts stay in sync
   // with the concept sketch, PDF export, and database saves.
-  const handleLayoutUpdate = useCallback((updatedRooms: Room[], imageUrl?: string) => {
+  // P4: accept full_layout or fallback to room array.
+  const handleLayoutUpdate = useCallback((data: any, imageUrl?: string) => {
     setFloors(prev => {
-      const idx = activeFloorIndexRef.current;
-      const newFloors = [...prev];
-      newFloors[idx] = {
-        ...newFloors[idx],
-        rooms: updatedRooms,
-        ...(imageUrl ? { imageUrl } : {}),
-      };
+      let newFloors = [...prev];
+      
+      // if the backend sent every floor, replace all floors; never splice a
+      // ground-floor array into the active floor slot
+      if (data && !Array.isArray(data) && data.full_layout?.floors?.length) {
+        newFloors = data.full_layout.floors;
+      } else {
+        // it's an array of rooms (either from drag/drop or single-floor API response)
+        const updatedRooms = Array.isArray(data) ? data : data.rooms;
+        // P4 rule: single-floor response from backend is ALWAYS the ground floor, index 0.
+        // Wait, drag and drop should update activeFloorIndex!
+        // We can distinguish: drag and drop passes an array directly.
+        // API responses pass an object or array. If it's single-floor from API, we should update index 0.
+        // Let's assume if it's called with an array, it's a drag-and-drop on the active floor.
+        const targetIdx = Array.isArray(data) ? activeFloorIndexRef.current : 0;
+        if (newFloors[targetIdx]) {
+          newFloors[targetIdx] = {
+            ...newFloors[targetIdx],
+            rooms: updatedRooms,
+          };
+        }
+      }
+
+      // Add imageUrl to the updated floor(s)
+      if (imageUrl && newFloors[activeFloorIndexRef.current]) {
+        newFloors[activeFloorIndexRef.current] = {
+          ...newFloors[activeFloorIndexRef.current],
+          imageUrl,
+        };
+      } else if (!imageUrl && newFloors[activeFloorIndexRef.current]) {
+        newFloors[activeFloorIndexRef.current] = {
+          ...newFloors[activeFloorIndexRef.current],
+          imageUrl: undefined,
+        };
+      }
       
       setActivePlan(prevPlan => prevPlan ? {
         ...prevPlan,
@@ -193,7 +224,12 @@ export default function Editor() {
     if (!currentRooms.length) return;
     setDxfLoading(true);
     try {
-      await exportDxf(currentRooms, `${activePlan.id}_${floors[activeFloorIndex].level.replace(/\s+/g, '_')}`);
+      await exportDxf(
+        currentRooms, 
+        `${activePlan.id}_${floors[activeFloorIndex].level.replace(/\s+/g, '_')}`,
+        plotContext.plotWidth,
+        plotContext.plotHeight
+      );
       toast.success(
         '✅ DXF downloaded — Scale: 1 unit = 1 ft = 304.8 mm (AutoCAD units: mm). ' +
         'Verify units in AutoCAD with UNITS command before printing.',
@@ -249,9 +285,9 @@ export default function Editor() {
       // Pass 'General' as the room name to let the LLM handle global topology changes based on instruction
       const res = await regenerateRoom(currentRooms, 'General', copilotInput, plotContext);
       
-      if (res.rooms) {
+      if (res.rooms || res.full_layout) {
         toast.success(`✅ Copilot updated layout!\n${res.design_rationale || ''}`, { id: 'copilot', duration: 5000 });
-        handleLayoutUpdate(res.rooms, res.imageUrl);
+        handleLayoutUpdate(res, res.imageUrl);
         setCopilotInput('');
       } else {
         toast.error('Copilot failed to generate a valid layout.', { id: 'copilot' });
@@ -263,8 +299,6 @@ export default function Editor() {
       setCopilotLoading(false);
     }
   };
-
-
 
   const handleSaveToDatabase = async () => {
     if (!activePlan || !floors.length) return;
@@ -280,9 +314,11 @@ export default function Editor() {
         name: projectName,
         layout_data: { 
           floors,
+          form: formData,
           vastuScore: activePlan.vastuScore,
           vastuResult: activePlan.vastuResult,
           nbcResult: activePlan.nbcResult,
+          energyResult: activePlan.energyResult,
         },
         image_url: activePlan.imageUrl
       });
@@ -300,7 +336,6 @@ export default function Editor() {
   const floorCirculation = floors[activeFloorIndex]?.circulation ?? null;
   const currentLayout    = activePlan?.layout as Record<string, unknown> | undefined;
 
-  // Derived plot context — passed into ComplianceSidebar and RoomEditor
   const plotContext = {
     plotWidth:  formData.length,
     plotHeight: formData.width,
@@ -308,6 +343,9 @@ export default function Editor() {
     bedrooms:   formData.bedrooms,
     bathrooms:  formData.bathrooms,
     floors:     formData.floors,
+    balcony:    formData.balcony,
+    terrace:    formData.terrace ? 1 : 0,
+    lift:       formData.lift ? 1 : 0,
   };
 
   const handleVastuUpdate = useCallback((newVastuResult: VastuResult, newScore: number) => {
@@ -374,11 +412,11 @@ export default function Editor() {
           <div className="form-row">
             <div className="form-group">
               <label>Length (ft)</label>
-              <input type="number" name="length" value={formData.length} onChange={handleChange} />
+              <input type="number" name="length" min={15} value={formData.length} onChange={handleChange} />
             </div>
             <div className="form-group">
               <label>Width (ft)</label>
-              <input type="number" name="width" value={formData.width} onChange={handleChange} />
+              <input type="number" name="width" min={15} value={formData.width} onChange={handleChange} />
             </div>
           </div>
           <div className="form-row">
@@ -479,7 +517,7 @@ export default function Editor() {
                     {floors.map((f, i) => (
                       <button
                         key={i}
-                        onClick={() => { setActiveFloorIndex(i); setSelectedRoom(null); }}
+                        onClick={() => { setActiveFloorIndex(i); setSelectedRoomIndex(null); }}
                         style={{
                           padding: '0.35rem 0.9rem',
                           borderRadius: '6px',
@@ -502,15 +540,18 @@ export default function Editor() {
                 {currentRooms.length > 0
                   ? (
                     show3D ? (
-                      <FloorPlan3D rooms={currentRooms} />
+                      <ErrorBoundary fallback={<div className="blueprint-empty">Failed to load 3D view. WebGL may have crashed.</div>}>
+                        <FloorPlan3D rooms={currentRooms} entryDir={plotContext.entryDir} />
+                      </ErrorBoundary>
                     ) : (
                       <InteractiveBlueprint
                         rooms={currentRooms}
-                        selectedRoom={selectedRoom}
-                        onRoomSelect={handleRoomSelect}
+                        selectedRoom={selectedRoomIndex !== null ? currentRooms[selectedRoomIndex] : null}
+                        onRoomSelect={(_room, idx) => setSelectedRoomIndex(idx)}
                         onRoomDrop={handleLayoutUpdate}
                         circulation={floorCirculation}
                         showCirculation={showCirculation}
+                        entryDir={plotContext.entryDir}
                       />
                     )
                   )
@@ -539,7 +580,7 @@ export default function Editor() {
               {/* Header: close + score */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button className="btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setActivePlan(null)}>← Close Plan</button>
-                <div className={`vastu-score ${activePlan.vastuScore >= 90 ? 'high' : 'medium'}`} style={{ padding: '0.3rem 0.7rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, border: '1px solid currentColor' }}>
+                <div className={`vastu-score ${activePlan.vastuScore >= 60 ? 'high' : (activePlan.vastuScore >= 40 ? 'medium' : 'low')}`} style={{ padding: '0.3rem 0.7rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, border: '1px solid currentColor' }}>
                   Vastu {activePlan.vastuScore}/100
                 </div>
               </div>
@@ -637,16 +678,17 @@ export default function Editor() {
               </div>
 
               {/* Room Editor — slides in below actions when a room is selected */}
-              {selectedRoom && (
-                <RoomEditor
-                  room={selectedRoom}
-                  allRooms={currentRooms}
-                  plotContext={plotContext}
-                  onRoomUpdate={handleRoomUpdate}
-                  onLayoutUpdate={handleLayoutUpdate}
-                  onClose={() => setSelectedRoom(null)}
-                />
-              )}
+                {selectedRoomIndex !== null && currentRooms[selectedRoomIndex] ? (
+                  <RoomEditor
+                    room={currentRooms[selectedRoomIndex]}
+                    index={selectedRoomIndex}
+                    allRooms={currentRooms}
+                    plotContext={plotContext}
+                    onRoomUpdate={handleRoomUpdate}
+                    onLayoutUpdate={handleLayoutUpdate}
+                    onClose={() => setSelectedRoomIndex(null)}
+                  />
+                ) : null}
 
               {/* Circulation Warning — sourced from the computed floor circulation data */}
               {(() => {

@@ -81,19 +81,21 @@ def _center_text(draw, text, cx, cy, font, color):
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
-    """
-    Render rooms (each with x, y, width, height in feet) to a PNG.
-    Returns raw PNG bytes.
-    """
-    if not rooms:
-        raise ValueError("No rooms to render")
+def render_floor_plan(rooms: list, unit_label: str = "Architectural Plan", plot_w: float = None, plot_h: float = None, entry_dir: str = "north") -> bytes:
+    """Generates a professional 2D floor plan PNG."""
+    if not rooms and not plot_w:
+        raise ValueError("No rooms or plot boundaries to render")
 
     # Bounding box
-    xs = [r["x"] for r in rooms] + [r["x"] + r["width"]  for r in rooms]
-    ys = [r["y"] for r in rooms] + [r["y"] + r["height"] for r in rooms]
-    min_x, min_y = min(xs), min(ys)
-    max_x, max_y = max(xs), max(ys)
+    if plot_w is not None and plot_h is not None:
+        min_x, min_y = 0.0, 0.0
+        max_x, max_y = float(plot_w), float(plot_h)
+    else:
+        xs = [r["x"] for r in rooms] + [r["x"] + r["width"]  for r in rooms]
+        ys = [r["y"] for r in rooms] + [r["y"] + r["height"] for r in rooms]
+        min_x, min_y = min(xs), min(ys)
+        max_x, max_y = max(xs), max(ys)
+    
     plan_w, plan_h = max_x - min_x, max_y - min_y
 
     # Auto-scale to fit TARGET_W
@@ -297,13 +299,32 @@ def render_floor_plan(rooms: list, unit_label: str = "FLOOR PLAN") -> bytes:
     na_cx, na_cy, r = cw - PADDING + 30, PADDING - 20, 18
     draw.ellipse([na_cx - r, na_cy - r, na_cx + r, na_cy + r],
                  outline=DIM_CLR, width=1, fill=(245, 246, 248))
+                 
+    ed = entry_dir.strip().lower()
+    if ed in ["east", "e"]: angle = -90
+    elif ed in ["south", "s"]: angle = 180
+    elif ed in ["west", "w"]: angle = 90
+    else: angle = 0
+    
+    import math
+    def rot(pts):
+        rad = math.radians(angle)
+        res = []
+        for (x, y) in pts:
+            dx, dy = x - na_cx, y - na_cy
+            res.append((na_cx + dx * math.cos(rad) - dy * math.sin(rad),
+                        na_cy + dx * math.sin(rad) + dy * math.cos(rad)))
+        return res
+
     # Filled north half
-    draw.polygon([(na_cx, na_cy - r + 2), (na_cx - 6, na_cy + 4), (na_cx + 6, na_cy + 4)],
-                 fill=WALL_CLR)
+    pts_n = [(na_cx, na_cy - r + 2), (na_cx - 6, na_cy + 4), (na_cx + 6, na_cy + 4)]
+    draw.polygon(rot(pts_n), fill=WALL_CLR)
     # Open south half
-    draw.polygon([(na_cx, na_cy + r - 2), (na_cx - 6, na_cy - 4), (na_cx + 6, na_cy - 4)],
-                 fill=(200, 205, 215))
-    _center_text(draw, "N", na_cx, na_cy - r - 10, _font(11, bold=True), WALL_CLR)
+    pts_s = [(na_cx, na_cy + r - 2), (na_cx - 6, na_cy - 4), (na_cx + 6, na_cy - 4)]
+    draw.polygon(rot(pts_s), fill=(200, 205, 215))
+    
+    n_pos = rot([(na_cx, na_cy - r - 10)])[0]
+    _center_text(draw, "N", n_pos[0], n_pos[1], _font(11, bold=True), WALL_CLR)
 
     # ── Title block ───────────────────────────────────────────────────────────
     tb_y = ch - 65
