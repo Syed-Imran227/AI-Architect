@@ -275,7 +275,7 @@ class FloorPlanGenerator:
 
 # ── Phase 3: Boundary-only validator (safety net, not fixer) ─────────────────
 
-def _run_boundary_check(layout: dict, plot_w: float, plot_h: float) -> dict:
+def _run_boundary_check(layout: dict, plot_w: float = None, plot_h: float = None) -> dict:
     """
     Runs boundary-clamp ONLY (no overlap push-apart).
     The Drafter guarantees no overlaps by construction.
@@ -283,11 +283,13 @@ def _run_boundary_check(layout: dict, plot_w: float, plot_h: float) -> dict:
     """
     floors = layout.get("floors", [])
     for floor in floors:
+        pw = float(floor.get("plot_width", plot_w or 0))
+        ph = float(floor.get("plot_height", plot_h or 0))
         rooms = floor.get("rooms", [])
-        checked_rooms, clamped = boundary_check_only(rooms, plot_w, plot_h)
+        checked_rooms, clamped = boundary_check_only(rooms, pw, ph)
         if clamped:
             print(f"[boundary-check] WARNING: {len(clamped)} room(s) out of bounds in "
-                  f"'{floor.get('level')}' — this indicates a Drafter bug: {clamped}")
+                  f"'{floor.get('level')}' (plot {pw}x{ph}) — this indicates a Drafter bug: {clamped}")
         floor["rooms"] = checked_rooms
     return layout
 
@@ -450,7 +452,7 @@ You are the Lead AI Architect performing an NBC compliance correction.
 Revise the topology to address these violations. You MUST:
 1. Keep the 3-bay structure (left_bay, spine, right_bay) — do NOT output coordinates.
 2. Address the specific failing rules above. For NBC compliance, setbacks and area ratios are critical. 
-3. You can reduce room counts or move rooms to different bays to satisfy area requirements.
+3. You CANNOT reduce room counts. You must allocate exactly {bedrooms} bedrooms across the bays.
 4. Total bathrooms_allocated across both bays must sum to {bathrooms}.
 
 # Output Schema (ONLY this JSON, no wrapping, no explanations):

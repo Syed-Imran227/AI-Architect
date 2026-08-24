@@ -126,7 +126,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
         ks = {"SE": w, "NW": round(w*0.80), "W": round(w*0.65),
               "N": round(w*0.40), "S": round(w*0.40), "E": round(w*0.30),
               "SW": round(w*0.15), "C": round(w*0.10), "NE": 0}
-        pts = max(ks.get(z, round(w*0.30)) for z in kitchens)
+        pts = min(ks.get(z, round(w*0.30)) for z in kitchens)
         z0 = kitchens[0]
         msg = "Ideal — Southeast" if z0 == "SE" else ("Good — Northwest" if z0 == "NW" else
               ("Avoid Northeast" if z0 == "NE" else "Acceptable"))
@@ -145,7 +145,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
         bs = {"SW": w, "S": round(w*0.80), "W": round(w*0.65),
               "C": round(w*0.40), "E": round(w*0.25), "NW": round(w*0.25),
               "N": round(w*0.15), "SE": round(w*0.20), "NE": 0}
-        pts = max(bs.get(z, round(w*0.30)) for _, z in beds)
+        pts = min(bs.get(z, round(w*0.30)) for _, z in beds)
         z0 = beds[0][1]
         msg = "Ideal — Southwest" if z0 == "SW" else ("Good" if pts >= round(w*0.5) else "Avoid Northeast")
         status = "pass" if pts >= round(w*0.65) else ("warn" if pts > 0 else "fail")
@@ -161,7 +161,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
         ps = {"NE": w, "N": round(w*0.80), "E": round(w*0.65),
               "NW": round(w*0.40), "W": round(w*0.25), "C": round(w*0.15),
               "SW": 0, "S": round(w*0.10), "SE": round(w*0.10)}
-        pts = max(ps.get(z, round(w*0.25)) for z in poojas)
+        pts = min(ps.get(z, round(w*0.25)) for z in poojas)
         msg = "Ideal — Northeast" if poojas[0] == "NE" else "Acceptable"
         status = "pass" if pts >= round(w*0.65) else ("warn" if pts > 0 else "fail")
     else:
@@ -176,7 +176,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
         ss = {"SW": w, "S": round(w*0.80), "W": round(w*0.65),
               "SE": round(w*0.50), "NW": round(w*0.30),
               "N": round(w*0.10), "E": round(w*0.10), "NE": 0, "C": 0}
-        pts = max(ss.get(z, round(w*0.25)) for z in stairs)
+        pts = min(ss.get(z, round(w*0.25)) for z in stairs)
         msg = "Ideal — SW/S/W" if pts >= round(w*0.65) else "Avoid Northeast or Center"
         status = "pass" if pts >= round(w*0.65) else ("warn" if pts > 0 else "fail")
     else:
@@ -221,7 +221,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
     if balconies:
         bals = {"N": w, "E": w, "NE": w, "NW": round(w*0.60), "W": round(w*0.60),
                 "S": round(w*0.20), "SE": round(w*0.20), "C": round(w*0.10), "SW": 0}
-        pts = max(bals.get(z, round(w*0.40)) for z in balconies)
+        pts = min(bals.get(z, round(w*0.40)) for z in balconies)
         msg = "Ideal — N/E/NE" if pts >= round(w*0.75) else "Avoid Southwest openings"
         status = "pass" if pts >= round(w*0.75) else ("warn" if pts > 0 else "fail")
     else:
@@ -236,7 +236,7 @@ def score_vastu(rooms: list, plot_w: float, plot_h: float, entry_dir: str) -> di
         ws = {"NE": w, "N": round(w*0.80), "E": round(w*0.60),
               "NW": round(w*0.40), "W": round(w*0.30), "C": round(w*0.20),
               "SE": round(w*0.20), "S": round(w*0.10), "SW": 0}
-        pts = max(ws.get(z, round(w*0.30)) for z in water)
+        pts = min(ws.get(z, round(w*0.30)) for z in water)
         msg = "Ideal — Northeast" if water[0] == "NE" else "Acceptable"
         status = "pass" if pts >= round(w*0.75) else ("warn" if pts > 0 else "fail")
     else:

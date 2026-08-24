@@ -67,12 +67,21 @@ def boundary_check_only(
 
     for room in rooms:
         orig_x, orig_y = room["x"], room["y"]
+        orig_w, orig_h = room.get("width", 0), room.get("height", 0)
+        
         room["x"] = max(0.0, min(room["x"], plot_width  - room["width"]))
         room["y"] = max(0.0, min(room["y"], plot_height - room["height"]))
+        
         # Clamp width/height if somehow larger than plot
         room["width"]  = min(room["width"],  plot_width)
         room["height"] = min(room["height"], plot_height)
-        if room["x"] != orig_x or room["y"] != orig_y:
+        
+        shrunk = room["width"] < orig_w or room["height"] < orig_h
+        moved = room["x"] != orig_x or room["y"] != orig_y
+        
+        if shrunk:
+            clamped.append(f"{room['name']} (area-shrunk w:{orig_w:.2f}->{room['width']:.2f} h:{orig_h:.2f}->{room['height']:.2f})")
+        elif moved:
             clamped.append(room["name"])
 
     return rooms, clamped

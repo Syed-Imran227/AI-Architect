@@ -173,6 +173,7 @@ class PdfExportRequest(BaseModel):
 
 @router.post("/export/pdf")
 def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_user)):
+
     try:
         length = float(req.project_meta.get("length", 40))
         width = float(req.project_meta.get("width", 30))

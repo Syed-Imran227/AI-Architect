@@ -83,9 +83,9 @@ def build_layout_from_topology(
         rear_setback = 6.56
         side_setback = 4.92
 
-    # L gets front/rear, W gets side
-    buildable_W = W - 2 * side_setback
-    buildable_L = L - front_setback - rear_setback
+    # L gets side, W gets front/rear
+    buildable_W = W - front_setback - rear_setback
+    buildable_L = L - 2 * side_setback
     
     if buildable_L < MIN_ROOM_DIM * 3 or buildable_W < MIN_ROOM_DIM * 3:
         raise ValueError(f"Buildable envelope {buildable_W}x{buildable_L} is too small to build on.")
@@ -176,10 +176,10 @@ def build_layout_from_topology(
         # Apply setback shift
         if side_setback > 0 or front_setback > 0:
             for r in fl["rooms"]:
-                # x was reduced by front_setback+rear_setback, so offset by front_setback
-                # y was reduced by 2*side_setback, so offset by side_setback
-                r["x"] = round(r["x"] + front_setback, 2)
-                r["y"] = round(r["y"] + side_setback, 2)
+                # x was reduced by 2*side_setback, so offset by side_setback
+                # y was reduced by front_setback+rear_setback, so offset by front_setback
+                r["x"] = round(r["x"] + side_setback, 2)
+                r["y"] = round(r["y"] + front_setback, 2)
                 
         # Emit plot_width/plot_height so the exporters can draw the boundary
         fl["plot_width"] = L
