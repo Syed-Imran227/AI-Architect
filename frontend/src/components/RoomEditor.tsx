@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import type { Room } from '../services/api';
-import { regenerateRoom } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { regenerateRoom, type Room, type LayoutUpdatePayload } from '../services/api';
 import { validateRoomPlacement } from '../utils/validateRooms';
 import { toast } from 'react-hot-toast';
 
@@ -22,7 +21,7 @@ interface Props {
   allRooms: Room[];
   plotContext: PlotContext;
   onRoomUpdate: (index: number, updated: Room) => void;
-  onLayoutUpdate: (data: any, imageUrl?: string) => void;
+  onLayoutUpdate: (data: LayoutUpdatePayload, imageUrl?: string) => void;
   onClose: () => void;
 }
 
@@ -42,6 +41,15 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiSuccess, setAiSuccess] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   // Sync local state when the selected room prop changes using the during-render pattern
   // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
@@ -83,7 +91,10 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
         onLayoutUpdate(res, res.imageUrl);
         setInstruction('');
         setAiSuccess(true);
-        setTimeout(() => { setAiSuccess(false); }, 3000);
+        if (timeoutRef.current !== null) {
+          window.clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = window.setTimeout(() => { setAiSuccess(false); }, 3000);
       } else {
         setAiError('AI returned an unexpected response.');
       }

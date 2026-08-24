@@ -64,7 +64,7 @@ def _draw_header_footer(canvas, doc):
     canvas.rect(0, h - 1.4 * cm, w, 1.4 * cm, fill=1, stroke=0)
     canvas.setFillColor(BRAND_ACCENT)
     canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawString(1.5 * cm, h - 0.9 * cm, "⬡  AI ARCHITECT")
+    canvas.drawString(1.5 * cm, h - 0.9 * cm, "AI ARCHITECT")
     canvas.setFillColor(colors.white)
     canvas.setFont("Helvetica", 8)
     canvas.drawRightString(w - 1.5 * cm, h - 0.9 * cm, "ARCHITECTURAL REPORT")
@@ -270,11 +270,13 @@ def generate_report_pdf(
                 continue
             status = r.get("status", "")
             icon   = "(Pass)" if status == "pass" else ("(Warn)" if status == "warn" else "(Fail)")
+            safe_rule = str(r.get("rule", "")).replace("✅", "[PASS]").replace("❌", "[FAIL]").replace("⚠", "[WARN]")
+            safe_detail = str(r.get("detail", "")).replace("✅", "[PASS]").replace("❌", "[FAIL]").replace("⚠", "[WARN]")
             vastu_rows.append([
-                Paragraph(str(r.get("rule", "")), styles["body"]),
+                Paragraph(safe_rule, styles["body"]),
                 icon,
                 f"{r.get('points', 0)}/{r.get('max', 0)}",
-                Paragraph(str(r.get("detail", "")), styles["body"]),
+                Paragraph(safe_detail, styles["body"]),
             ])
 
         col_w = [4.5 * cm, 2 * cm, 2 * cm, 9 * cm]
@@ -328,7 +330,7 @@ def generate_report_pdf(
 
     story.append(Spacer(1, 0.5 * cm))
     story.append(Paragraph(
-        "⚠ Disclaimer: All cost figures are indicative estimates based on 2026 Indian market rates. "
+        "Disclaimer: All cost figures are indicative estimates based on 2026 Indian market rates. "
         "Actual costs depend on location, material quality, and contractor rates. "
         "Always obtain a formal Bill of Quantities (BOQ) from a licensed architect or contractor.",
         styles["small"],

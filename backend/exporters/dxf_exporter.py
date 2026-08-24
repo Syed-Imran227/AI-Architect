@@ -114,12 +114,13 @@ def export_to_dxf(rooms: list, plot_w: float = None, plot_h: float = None) -> by
     doc.layers.add("FURNITURE",   color=8)    # dark gray
     doc.layers.add("DIMENSIONS",  color=4)    # cyan
 
+    if "EZ_INSIDE" not in doc.dimstyles:
+        doc.dimstyles.add("EZ_INSIDE")
     dimstyle = doc.dimstyles.get("EZ_INSIDE")
-    if dimstyle:
-        dimstyle.dxf.dimtxt = 0.5 * SCALE  # Text height
-        dimstyle.dxf.dimasz = 0.3 * SCALE  # Arrow size
-        dimstyle.dxf.dimexe = 0.2 * SCALE  # Extension line extension
-        dimstyle.dxf.dimexo = 0.2 * SCALE  # Extension line offset
+    dimstyle.dxf.dimtxt = 0.5 * SCALE  # Text height
+    dimstyle.dxf.dimasz = 0.3 * SCALE  # Arrow size
+    dimstyle.dxf.dimexe = 0.2 * SCALE  # Extension line extension
+    dimstyle.dxf.dimexo = 0.2 * SCALE  # Extension line offset
 
     # ── Plot Boundary ────────────────────────────────────────────────────────
     if plot_w is not None and plot_h is not None:
@@ -245,8 +246,8 @@ def export_to_dxf(rooms: list, plot_w: float = None, plot_h: float = None) -> by
                 dxfattribs={"layer": "DIMENSIONS"},
             )
             dim.render()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"dim failed: {e}")
 
     # ── Write to temp file then read bytes back ───────────────────────────────
     with tempfile.NamedTemporaryFile(suffix=".dxf", delete=False) as tmp:

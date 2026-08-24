@@ -52,7 +52,7 @@ export interface VastuFixResult {
   after_score: number;
   new_vastu_result?: VastuResult;
   fixed_layout?: Room[];
-  full_layout?: any;
+  full_layout?: { floors: Floor[] };
   design_rationale?: string;
   converged?: boolean;
   message?: string;
@@ -65,7 +65,7 @@ export interface NbcFixResult {
   after_score: number;
   new_nbc_result?: NbcResult;
   fixed_layout?: Room[];
-  full_layout?: any;
+  full_layout?: { floors: Floor[] };
   design_rationale?: string;
   converged?: boolean;
   message?: string;
@@ -110,6 +110,22 @@ export interface FloorCirculation {
   unreachable: string[];
 }
 
+export interface Floor {
+  level: string;
+  rooms: Room[];
+  imageUrl?: string;
+  circulation?: FloorCirculation;
+}
+
+export interface LayoutUpdatePayload {
+  rooms?: Room[];
+  fixed_layout?: Room[];
+  full_layout?: { floors: Floor[] };
+  imageUrl?: string;
+  status?: string;
+  design_rationale?: string;
+}
+
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 export interface RegisterPayload { email: string; password: string; name?: string; }
 export interface LoginPayload { email: string; password: string; }
@@ -135,11 +151,11 @@ export interface GeneratePlansPayload {
 }
 
 export interface LayoutData {
-  form?: any;
+  form?: Record<string, unknown>;
   rooms?: Room[];
   plot_width?: number;
   plot_height?: number;
-  floors?: Array<{ level: string; rooms: Room[]; imageUrl?: string }>;
+  floors?: Floor[];
   vastuScore?: number;
   vastuResult?: VastuResult;
   nbcResult?: NbcResult;
@@ -297,7 +313,7 @@ export const regenerateRoom = async (
     bathrooms: number;
     floors: number;
   }
-): Promise<{ rooms?: Room[]; full_layout?: any; imageUrl?: string; llm_called: boolean; design_rationale?: string }> => {
+): Promise<LayoutUpdatePayload> => {
   const res = await authFetch(`${API_BASE_URL}/regenerate-room`, {
     method: "POST",
     headers: getAuthHeaders(),

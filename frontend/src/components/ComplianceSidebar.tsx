@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { VastuResult, NbcResult, EnergyResult, VastuFixResult, NbcFixResult } from '../services/api';
+import type { VastuResult, NbcResult, EnergyResult, VastuFixResult, NbcFixResult, LayoutUpdatePayload } from '../services/api';
 import { vastuFix, nbcFix } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -22,7 +22,7 @@ interface ComplianceSidebarProps {
   energyResult?: EnergyResult;
   layout: Record<string, unknown>;
   plotContext: PlotContext;
-  onLayoutUpdate: (data: any, imageUrl?: string) => void;
+  onLayoutUpdate: (data: LayoutUpdatePayload, imageUrl?: string) => void;
   onVastuUpdate?: (newVastuResult: VastuResult, newScore: number) => void;
   onNbcUpdate?: (newNbcResult: NbcResult, newScore: number) => void;
 }
@@ -54,22 +54,23 @@ export default function ComplianceSidebar({
       const result = await vastuFix(layout, vastuResult, plotContext);
       setLastFixResult(result);
 
+      if (result.status === 'already_optimal') {
+        toast.success(result.message || 'Layout is already Vastu-optimal!', { id: 'vastu-fix' });
+        return;
+      }
+
       if (result.fixed_layout?.length || result.full_layout) {
         onLayoutUpdate(result, result.imageUrl);
         if (onVastuUpdate && result.new_vastu_result) {
           onVastuUpdate(result.new_vastu_result, result.after_score);
         }
 
-        if (result.status === 'already_optimal') {
-          toast.success('Layout is already Vastu-optimal!', { id: 'vastu-fix' });
-        } else {
-          const delta = result.after_score - result.before_score;
-          const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
-          toast.success(
-            `Vastu improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
-            { id: 'vastu-fix', duration: 5000 }
-          );
-        }
+        const delta = result.after_score - result.before_score;
+        const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
+        toast.success(
+          `Vastu improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
+          { id: 'vastu-fix', duration: 5000 }
+        );
       } else {
         toast.error('Vastu fix did not return a valid layout.', { id: 'vastu-fix' });
       }
@@ -90,22 +91,23 @@ export default function ComplianceSidebar({
       const result = await nbcFix(layout, nbcResult, plotContext);
       setLastNbcFixResult(result);
 
+      if (result.status === 'already_optimal') {
+        toast.success(result.message || 'Layout is already NBC-optimal!', { id: 'nbc-fix' });
+        return;
+      }
+
       if (result.fixed_layout?.length || result.full_layout) {
         onLayoutUpdate(result, result.imageUrl);
         if (onNbcUpdate && result.new_nbc_result) {
           onNbcUpdate(result.new_nbc_result, result.after_score);
         }
 
-        if (result.status === 'already_optimal') {
-          toast.success('Layout is already NBC-optimal!', { id: 'nbc-fix' });
-        } else {
-          const delta = result.after_score - result.before_score;
-          const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
-          toast.success(
-            `NBC improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
-            { id: 'nbc-fix', duration: 5000 }
-          );
-        }
+        const delta = result.after_score - result.before_score;
+        const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
+        toast.success(
+          `NBC improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
+          { id: 'nbc-fix', duration: 5000 }
+        );
       } else {
         toast.error('NBC fix did not return a valid layout.', { id: 'nbc-fix' });
       }

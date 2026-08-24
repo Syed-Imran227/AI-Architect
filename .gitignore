@@ -41,3 +41,19 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Audit / verification harnesses — developer tooling, not part of the app.
+# Sweep scripts and the DXF files they emit; nothing here is imported by
+# backend/ or frontend/, so the project builds and runs without it.
+_audit/
+
+# Test runner cache
+.pytest_cache/
+
+# Secrets: backend/.env holds live GROQ_API_KEY / JWT_SECRET / MONGO_URI.
+# `.env` above only matches that exact name, so a `.env.production` or
+# `.env.backup` would still be committable. Ignore every variant.
+.env.*
+!.env.example
+
+graphify-out/

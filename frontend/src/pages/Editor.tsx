@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import '../App.css';
 import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, regenerateRoom } from '../services/api';
 import toast from 'react-hot-toast';
-import type { Room, VastuResult, NbcResult, EnergyResult, FloorCirculation, LayoutData } from '../services/api';
+import type { Room, VastuResult, NbcResult, EnergyResult, LayoutData, LayoutUpdatePayload, Floor } from '../services/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
 import FloorPlan3D from '../components/FloorPlan3D';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -12,13 +12,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import FloatingOrbs from '../components/FloatingOrbs';
 import ThemeToggle from '../components/ThemeToggle';
-
-interface Floor {
-  level: string;
-  rooms: Room[];
-  imageUrl?: string;
-  circulation?: FloorCirculation;
-}
 
 interface Plan {
   id: string;
@@ -167,23 +160,24 @@ export default function Editor() {
   // Issue 1: accepts an optional imageUrl so that AI-mutated layouts stay in sync
   // with the concept sketch, PDF export, and database saves.
   // P4: accept full_layout or fallback to room array.
-  const handleLayoutUpdate = useCallback((data: any, imageUrl?: string) => {
-    setFloors(prev => {
-      let newFloors = [...prev];
-      
-      // if the backend sent every floor, replace all floors; never splice a
-      // ground-floor array into the active floor slot
-      if (data && !Array.isArray(data) && data.full_layout?.floors?.length) {
+  // targetFloor says which floor `data.rooms` belongs to. It used to be inferred
+  // from `Array.isArray(data)`, but LayoutUpdatePayload has no array variant, so
+  // that test was always false and every caller silently wrote to floor 0 --
+  // dragging a room or running Copilot on an upper floor edited the ground floor.
+  // Defaults to 0 because the Vastu/NBC fix routes return ground-floor rooms.
+  const handleLayoutUpdate = useCallback((data: LayoutUpdatePayload, imageUrl?: string, targetFloor: number = 0) => {
+    const computeNewFloors = (prevFloors: Floor[]) => {
+      let newFloors = [...prevFloors];
+
+      if (data && data.full_layout?.floors?.length) {
         newFloors = data.full_layout.floors;
       } else {
-        // it's an array of rooms (either from drag/drop or single-floor API response)
-        const updatedRooms = Array.isArray(data) ? data : data.rooms;
-        // P4 rule: single-floor response from backend is ALWAYS the ground floor, index 0.
-        // Wait, drag and drop should update activeFloorIndex!
-        // We can distinguish: drag and drop passes an array directly.
-        // API responses pass an object or array. If it's single-floor from API, we should update index 0.
-        // Let's assume if it's called with an array, it's a drag-and-drop on the active floor.
-        const targetIdx = Array.isArray(data) ? activeFloorIndexRef.current : 0;
+        const updatedRooms = data.rooms ?? data.fixed_layout;
+        if (!updatedRooms || !Array.isArray(updatedRooms) || updatedRooms.length === 0) {
+          return prevFloors;
+        }
+
+        const targetIdx = targetFloor;
         if (newFloors[targetIdx]) {
           newFloors[targetIdx] = {
             ...newFloors[targetIdx],
@@ -192,7 +186,6 @@ export default function Editor() {
         }
       }
 
-      // Add imageUrl to the updated floor(s)
       if (imageUrl && newFloors[activeFloorIndexRef.current]) {
         newFloors[activeFloorIndexRef.current] = {
           ...newFloors[activeFloorIndexRef.current],
@@ -205,17 +198,19 @@ export default function Editor() {
         };
       }
       
-      setActivePlan(prevPlan => prevPlan ? {
-        ...prevPlan,
-        layout: {
-          ...prevPlan.layout,
-          floors: newFloors
-        },
-        ...(imageUrl ? { imageUrl } : {})
-      } : prevPlan);
-      
       return newFloors;
-    });
+    };
+
+    setFloors(prev => computeNewFloors(prev));
+    
+    setActivePlan(prevPlan => prevPlan ? {
+      ...prevPlan,
+      layout: {
+        ...prevPlan.layout,
+        floors: computeNewFloors(prevPlan.layout?.floors || [])
+      },
+      ...(imageUrl ? { imageUrl } : {})
+    } : prevPlan);
   }, []);
 
   const handleExportDxf = async () => {
@@ -287,7 +282,8 @@ export default function Editor() {
       
       if (res.rooms || res.full_layout) {
         toast.success(`✅ Copilot updated layout!\n${res.design_rationale || ''}`, { id: 'copilot', duration: 5000 });
-        handleLayoutUpdate(res, res.imageUrl);
+        // Copilot was given the active floor's rooms, so its result belongs there.
+        handleLayoutUpdate(res, res.imageUrl, activeFloorIndexRef.current);
         setCopilotInput('');
       } else {
         toast.error('Copilot failed to generate a valid layout.', { id: 'copilot' });
@@ -337,8 +333,12 @@ export default function Editor() {
   const currentLayout    = activePlan?.layout as Record<string, unknown> | undefined;
 
   const plotContext = {
-    plotWidth:  formData.length,
-    plotHeight: formData.width,
+    // plotWidth/plotHeight are the x/y extents of the drafted plan, which the
+    // drafter lays out as x over `width` and y over `length` -- not the raw form
+    // fields in form order. Sending them transposed made the DXF plot boundary
+    // and every compass-zone score disagree with the room coordinates.
+    plotWidth:  formData.width,
+    plotHeight: formData.length,
     entryDir:   formData.entryDir,
     bedrooms:   formData.bedrooms,
     bathrooms:  formData.bathrooms,
@@ -548,7 +548,7 @@ export default function Editor() {
                         rooms={currentRooms}
                         selectedRoom={selectedRoomIndex !== null ? currentRooms[selectedRoomIndex] : null}
                         onRoomSelect={(_room, idx) => setSelectedRoomIndex(idx)}
-                        onRoomDrop={handleLayoutUpdate}
+                        onRoomDrop={(rooms, img) => handleLayoutUpdate({ rooms }, img, activeFloorIndexRef.current)}
                         circulation={floorCirculation}
                         showCirculation={showCirculation}
                         entryDir={plotContext.entryDir}

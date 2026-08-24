@@ -20,8 +20,8 @@ router = APIRouter(tags=["engine"])
 ai_generator = FloorPlanGenerator()
 
 class GenerateRequest(BaseModel):
-    length: float = Field(..., ge=15, le=500)
-    width: float = Field(..., ge=15, le=500)
+    length: float = Field(..., ge=30, le=500)
+    width: float = Field(..., ge=30, le=500)
     floors: int = Field(1, ge=1, le=10)
     duplex: bool
     bedrooms: int = Field(..., ge=0, le=20)
@@ -52,6 +52,8 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
             vastu     = int(req.vastuToggle),
             entry_dir = req.entryDir,
         )
+    except ValueError as ve:
+        raise HTTPException(status_code=422, detail=str(ve))
     except Exception:
         traceback.print_exc()
         raise HTTPException(
@@ -71,11 +73,19 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         
     try:
         unit_label = f"{int(plot_size)} sqft · {req.bedrooms}BHK · {req.entryDir} Entry"
-        
+
+        # The drafter lays x over `width` and y over `length`, and emits
+        # plot_width/plot_height to match. Pass those, never the raw request
+        # fields in the other order: on a non-square plot that transposition
+        # collapses every room into one compass zone (measured: a 30x80 plot put
+        # all 8 rooms in NE), corrupting Vastu, NBC and Energy scoring alike.
+        plot_x = float(floor_list[0].get("plot_width", req.width))
+        plot_y = float(floor_list[0].get("plot_height", req.length))
+
         for floor in floor_list:
             floor_rooms = floor.get("rooms", [])
             floor_label = f"{floor.get('level', 'Floor')} | {unit_label}"
-            png_bytes = render_floor_plan(floor_rooms, unit_label=floor_label, plot_w=req.length, plot_h=req.width, entry_dir=req.entryDir)
+            png_bytes = render_floor_plan(floor_rooms, unit_label=floor_label, plot_w=plot_x, plot_h=plot_y, entry_dir=req.entryDir)
             
             b64_str = base64.b64encode(png_bytes).decode("utf-8")
             floor["imageUrl"] = f"data:image/png;base64,{b64_str}"
@@ -96,22 +106,22 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
 
     vastu_result = score_vastu(
         rooms    = vastu_rooms,
-        plot_w   = req.length,
-        plot_h   = req.width,
+        plot_w   = plot_x,
+        plot_h   = plot_y,
         entry_dir = req.entryDir,
     ) if req.vastuToggle else {"score": 0, "grade": "Disabled", "rules": []}
 
     nbc_result = score_nbc(
         rooms      = ground_rooms,
-        plot_w     = req.length,
-        plot_h     = req.width,
+        plot_w     = plot_x,
+        plot_h     = plot_y,
         num_floors = req.floors,
     )
 
     energy_result = score_energy(
         rooms     = ground_rooms,
-        plot_w    = req.length,
-        plot_h    = req.width,
+        plot_w    = plot_x,
+        plot_h    = plot_y,
         entry_dir = req.entryDir,
     )
 
@@ -136,8 +146,8 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
 class DxfExportRequest(BaseModel):
     rooms: List[Any]
     plan_id: str
-    plot_width: float = 40.0
-    plot_height: float = 30.0
+    plot_width: float = Field(40.0, gt=0, le=500)
+    plot_height: float = Field(30.0, gt=0, le=500)
 
 @router.post("/export/dxf")
 def export_dxf(req: DxfExportRequest, current_user: dict = Depends(get_current_user)):
@@ -193,8 +203,8 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
 
 class VastuFixRequest(BaseModel):
     layout: dict
-    plot_width: float = Field(40.0, ge=15, le=500)
-    plot_height: float = Field(30.0, ge=15, le=500)
+    plot_width: float = Field(40.0, ge=30, le=500)
+    plot_height: float = Field(30.0, ge=30, le=500)
     entry_dir: str = "east"
     bedrooms: int = Field(2, ge=0, le=20)
     bathrooms: int = Field(2, ge=0, le=20)
@@ -237,8 +247,8 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
         # Loop up to 3 times to ensure the score strictly improves
         for attempt in range(3):
             result = fix_vastu_topology(
-                length=req.plot_width,
-                width=req.plot_height,
+                length=req.plot_height,
+                width=req.plot_width,
                 bedrooms=req.bedrooms,
                 bathrooms=req.bathrooms,
                 floors=req.floors,
@@ -321,8 +331,8 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
 
 class NbcFixRequest(BaseModel):
     layout: dict
-    plot_width: float = Field(40.0, ge=15, le=500)
-    plot_height: float = Field(30.0, ge=15, le=500)
+    plot_width: float = Field(40.0, ge=30, le=500)
+    plot_height: float = Field(30.0, ge=30, le=500)
     entry_dir: str = "east"
     bedrooms: int = Field(2, ge=0, le=20)
     bathrooms: int = Field(2, ge=0, le=20)
@@ -358,8 +368,8 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
         # Loop up to 3 times to ensure the score strictly improves
         for attempt in range(3):
             result = fix_nbc_topology(
-                length=req.plot_width,
-                width=req.plot_height,
+                length=req.plot_height,
+                width=req.plot_width,
                 bedrooms=req.bedrooms,
                 bathrooms=req.bathrooms,
                 floors=req.floors,
@@ -443,8 +453,8 @@ class RegenerateRoomRequest(BaseModel):
     room_name: str
     instruction: str
     # Real plot dimensions — no more hardcoded 40×30
-    plot_width: float = Field(40.0, ge=15, le=500)
-    plot_height: float = Field(30.0, ge=15, le=500)
+    plot_width: float = Field(40.0, ge=30, le=500)
+    plot_height: float = Field(30.0, ge=30, le=500)
     entry_dir: str = "east"
     bedrooms: int = Field(2, ge=0, le=20)
     bathrooms: int = Field(2, ge=0, le=20)
@@ -464,8 +474,8 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
         result = fix_room_topology(
             room_name=req.room_name,
             instruction=req.instruction,
-            length=req.plot_width,
-            width=req.plot_height,
+            length=req.plot_height,
+            width=req.plot_width,
             bedrooms=req.bedrooms,
             bathrooms=req.bathrooms,
             floors=req.floors,

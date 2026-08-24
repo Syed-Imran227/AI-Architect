@@ -4,7 +4,7 @@ Evaluates thermal efficiency and sun path optimization for a floor plan.
 """
 
 from typing import Dict, Tuple
-from backend.engines.vastu_engine import get_zone_map
+from engines.vastu_engine import get_zone_map
 
 def _zone(room: dict, plot_w: float, plot_h: float, entry_dir: str) -> str:
     cx = room["x"] + room["width"]  / 2
