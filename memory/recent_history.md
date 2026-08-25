@@ -1,5 +1,10 @@
 # Recent History & Conversations
 
+## Late August 2026: Architectural Layout Engine Restoration
+- **Layout Reversion:** Surgically reverted `architectural_layout.py` back to a stable deterministic state (commit `6377819`) to fix a severe bug where the engine lost its functional zoning capabilities (spilling 3 bathrooms onto the ground floor and squeezing living rooms to 5 ft). The engine now correctly enforces Ground Floor public/service zones (Parking, Kitchen, Living, Dining) and Upper Floor private zones (Bedrooms, Bathrooms).
+- **Realistic Dynamic Cramming:** Adjusted the absolute minimum limits (`MIN_BED_H` to 8.5ft and `MIN_ROOM_H` to 7ft) to allow realistic room cramming in tighter plots, fulfilling the user's requirement to allow flexibility while remaining architecturally viable.
+- **API Resilience:** Fixed a critical `500 Internal Server Error` in `/generate` caused by an unpassed `duplex` argument, safely re-aligning `build_layout_from_topology` with `inference.py`.
+- **Validation Fix:** Corrected the auto-correction bug where corridors were incorrectly flagged for having "no door".
 ## Late August 2026: UI Polish & Feature Adjustments
 - **AI Copilot UI:** Styled the `Editor.tsx` AI Copilot text box with distinct background, blue border, and shadow to clearly distinguish it as an interactive input field rather than a static info box.
 - **Concept Sketch Parity:** Updated `floor_renderer.py` to correctly suppress rendering door swing arcs when the door connects to a staircase, matching the Interactive Blueprint rules. Darkened the window color in the Concept Sketch export from light blue to deep blue `(35, 65, 110)` for better visibility.

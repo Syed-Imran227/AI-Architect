@@ -23,7 +23,7 @@ interface Plan {
   nbcScore?: number;
   energyResult?: EnergyResult;
   circulationWarnings?: string[];
-  validationReport?: string[];
+  validationReport?: any[];
 }
 
 const INITIAL_FORM = {
@@ -277,8 +277,8 @@ export default function Editor() {
     setCopilotLoading(true);
     toast.loading('🤖 Copilot is redesigning...', { id: 'copilot' });
     try {
-      // Pass 'General' as the room name to let the LLM handle global topology changes based on instruction
-      const res = await regenerateRoom(currentRooms, 'General', copilotInput, plotContext);
+      const targetRoomName = selectedRoomIndex !== null ? currentRooms[selectedRoomIndex].name : 'General';
+      const res = await regenerateRoom(currentRooms, targetRoomName, copilotInput, plotContext);
       
       if (res.rooms || res.full_layout) {
         toast.success(`✅ Copilot updated layout!\n${res.design_rationale || ''}`, { id: 'copilot', duration: 5000 });
@@ -702,14 +702,22 @@ export default function Editor() {
               })()}
 
               {/* Validation Report */}
-              {(activePlan.validationReport?.length ?? 0) > 0 && (
-                <details style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.6rem', fontSize: '0.78rem' }}>
-                  <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({activePlan.validationReport?.length || 0})</summary>
-                  <ul style={{ margin: 0, padding: '0.5rem 0 0 1.5rem', opacity: 0.85, fontSize: '0.9rem' }}>
-                    {(activePlan.validationReport || []).map((entry, i) => <li key={i}>{entry}</li>)}
-                  </ul>
-                </details>
-              )}
+              <details style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.6rem', fontSize: '0.78rem' }}>
+                <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({activePlan.validationReport?.length || 0})</summary>
+                <ul style={{ margin: 0, padding: '0.5rem 0 0 1.5rem', opacity: 0.85, fontSize: '0.9rem' }}>
+                  {(!activePlan.validationReport || activePlan.validationReport.length === 0) ? (
+                    <li>[INFO] -: No issues found.</li>
+                  ) : (
+                    activePlan.validationReport.map((entry, i) => (
+                      <li key={i}>
+                        {typeof entry === 'string' 
+                          ? entry 
+                          : `[${entry.severity?.toUpperCase() || 'INFO'}] ${entry.room}: ${entry.message}`}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </details>
 
             </aside>
             

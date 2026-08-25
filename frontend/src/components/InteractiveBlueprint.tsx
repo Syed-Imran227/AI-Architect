@@ -511,16 +511,18 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
   const handlePointerMove = (e: React.PointerEvent) => {
     if (draggingRoomIndex === null) return;
     const currentPos = getSvgCoordinates(e.clientX, e.clientY);
-    const dx = currentPos.x - dragStartPos.current.x;
-    const dy = currentPos.y - dragStartPos.current.y;
+    
+    // Calculate total movement since the drag started
+    const totalDx = currentPos.x - dragStartPos.current.x;
+    const totalDy = currentPos.y - dragStartPos.current.y;
 
-    setDragRooms(prev => (prev ?? rooms).map((r, i) =>
+    // Apply the total delta to the ORIGINAL room positions and snap to grid.
+    // This prevents rounding errors from accumulating and dropping slow movements.
+    setDragRooms(rooms.map((r, i) =>
       i === draggingRoomIndex
-        ? { ...r, x: Math.round((r.x + dx) * 2) / 2, y: Math.round((r.y + dy) * 2) / 2 }
+        ? { ...r, x: Math.round((r.x + totalDx) * 2) / 2, y: Math.round((r.y + totalDy) * 2) / 2 }
         : r
     ));
-
-    dragStartPos.current = currentPos;
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -644,7 +646,12 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
         return (
           <g key={`${room.name}-${i}`}
             className={`room-group ${isSelected ? 'selected' : ''}`}
-            style={{ cursor: 'grab', touchAction: 'none' }}>
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              if (onRoomSelect) onRoomSelect(room, i);
+              handlePointerDown(e, room, i);
+            }}
+            style={{ cursor: draggingRoomIndex === i ? 'grabbing' : 'grab', touchAction: 'none' }}>
 
             {/* Room fill */}
             <rect
@@ -662,11 +669,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
               fill="none"
               stroke={isSelected ? '#93c5fd' : 'rgba(80,100,130,0.12)'}
               strokeWidth={0.08}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (onRoomSelect) onRoomSelect(room, i);
-                handlePointerDown(e, room, i);
-              }}
+              style={{ pointerEvents: 'none' }}
             />
 
             {/* Selection highlight */}
@@ -718,6 +721,27 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
                   fontFamily="Inter, sans-serif"
                   style={{ pointerEvents: 'none', userSelect: 'none' }}>
                   {room.width} ft
+                </text>
+              </g>
+            )}
+
+            {room.height > 5 && (
+              <g>
+                <line x1={room.x - 1.2} y1={room.y}
+                  x2={room.x - 1.2} y2={room.y + room.height}
+                  stroke="#94a3b8" strokeWidth={0.1} />
+                <line x1={room.x - 1.6} y1={room.y}
+                  x2={room.x - 0.8} y2={room.y}
+                  stroke="#94a3b8" strokeWidth={0.1} />
+                <line x1={room.x - 1.6} y1={room.y + room.height}
+                  x2={room.x - 0.8} y2={room.y + room.height}
+                  stroke="#94a3b8" strokeWidth={0.1} />
+                <text x={room.x - 1.6} y={room.y + room.height / 2}
+                  textAnchor="middle" fill="#64748b" fontSize={subSize * 0.85}
+                  fontFamily="Inter, sans-serif"
+                  transform={`rotate(-90 ${room.x - 1.6} ${room.y + room.height / 2})`}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                  {room.height} ft
                 </text>
               </g>
             )}

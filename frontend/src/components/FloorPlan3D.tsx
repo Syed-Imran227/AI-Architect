@@ -90,26 +90,30 @@ function Stairs3D({ room }: { room: Room }) {
   // Railings
   // Flight 1 inner railing (Right side of left flight)
   const r1X = room.x + 0.25 + stepW;
-  const r1 = [0, 0.5, 1.0].map((t, i) => (
-    <Cylinder castShadow receiveShadow key={`r1_${i}`} args={[0.04, 0.04, ROOM_HEIGHT/2, 8]} position={[r1X, ROOM_HEIGHT/4, startZ + t * (landingZ - startZ)]}>
+  const r1 = [0.1, 0.5, 0.9].map((t, i) => (
+    <Cylinder castShadow receiveShadow key={`r1_${i}`} args={[0.04, 0.04, 3, 8]} position={[r1X, t * landingY + 1.5, startZ + t * (landingZ - startZ)]}>
       <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
     </Cylinder>
   ));
   const handrail1 = (
-    <Box castShadow receiveShadow args={[0.06, 0.06, landingZ - startZ]} position={[r1X, ROOM_HEIGHT/2, startZ + (landingZ - startZ)/2]} rotation={[Math.atan2(landingY, landingZ - startZ), 0, 0]}>
+    <Box castShadow receiveShadow args={[0.06, 0.06, Math.hypot(landingZ - startZ, landingY)]} position={[r1X, landingY / 2 + 3, startZ + (landingZ - startZ)/2]} rotation={[-Math.atan2(landingY, landingZ - startZ), 0, 0]}>
       <meshStandardMaterial color="#6a5020" metalness={0.25} roughness={0.6} />
     </Box>
   );
   
   // Flight 2 inner railing (Left side of right flight)
   const r2X = room.x + room.width - 0.25 - stepW;
-  const r2 = [0, 0.5, 1.0].map((t, i) => (
-    <Cylinder castShadow receiveShadow key={`r2_${i}`} args={[0.04, 0.04, ROOM_HEIGHT/2, 8]} position={[r2X, ROOM_HEIGHT/2 + ROOM_HEIGHT/4, landingZ - t * (landingZ - startZ)]}>
-      <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
-    </Cylinder>
-  ));
+  const r2 = [0.1, 0.5, 0.9].map((t, i) => {
+    const z = landingZ - t * (landingZ - startZ);
+    const y = landingY + t * (ROOM_HEIGHT - landingY);
+    return (
+      <Cylinder castShadow receiveShadow key={`r2_${i}`} args={[0.04, 0.04, 3, 8]} position={[r2X, y + 1.5, z]}>
+        <meshStandardMaterial color="#7a6030" metalness={0.25} roughness={0.6} />
+      </Cylinder>
+    );
+  });
   const handrail2 = (
-    <Box castShadow receiveShadow args={[0.06, 0.06, landingZ - startZ]} position={[r2X, ROOM_HEIGHT, startZ + (landingZ - startZ)/2]} rotation={[-Math.atan2(ROOM_HEIGHT - landingY, landingZ - startZ), 0, 0]}>
+    <Box castShadow receiveShadow args={[0.06, 0.06, Math.hypot(landingZ - startZ, ROOM_HEIGHT - landingY)]} position={[r2X, (landingY + ROOM_HEIGHT)/2 + 3, startZ + (landingZ - startZ)/2]} rotation={[Math.atan2(ROOM_HEIGHT - landingY, landingZ - startZ), 0, 0]}>
       <meshStandardMaterial color="#6a5020" metalness={0.25} roughness={0.6} />
     </Box>
   );
@@ -785,28 +789,7 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
   const cx     = room.x + room.width  / 2;
   const cz     = room.y + room.height / 2;
 
-  // Staircase gets special treatment
-  if (n.includes('stair')) {
-    return (
-      <>
-        {/* Floor */}
-        <mesh position={[cx, -0.02, cz]} rotation={[-Math.PI/2, 0, 0]}>
-          <planeGeometry args={[room.width, room.height]} />
-          <meshStandardMaterial color={colors.floor} />
-        </mesh>
-        <Stairs3D room={room} />
-        <Text
-          position={[cx, ROOM_HEIGHT + 0.8, cz]}
-          rotation={[-Math.PI/2, 0, 0]}
-          fontSize={1.1}
-          color="#666"
-          anchorX="center" anchorY="middle"
-        >
-          {room.name}
-        </Text>
-      </>
-    );
-  }
+
 
   // Parse doors and windows per wall
   type Opening = { pos: number; width: number; type: 'door' | 'window'; isStairDoor?: boolean };
@@ -870,10 +853,14 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
         openings={wallOpenings.right} wallColor={colors.wall}
       />
 
-      {/* Furniture items */}
-      {room.furniture && room.furniture.map((item, i) => (
-        <FurnitureItem3D key={i} item={item} roomX={room.x} roomY={room.y} />
-      ))}
+      {/* Furniture or Stairs */}
+      {n.includes('stair') ? (
+        <Stairs3D room={room} />
+      ) : (
+        room.furniture && room.furniture.map((item, i) => (
+          <FurnitureItem3D key={i} item={item} roomX={room.x} roomY={room.y} />
+        ))
+      )}
 
       {/* Room label (top-down) */}
       <Text
@@ -953,28 +940,50 @@ export default function FloorPlan3D({ rooms, entryDir = 'north' }: FloorPlan3DPr
           ]}
           position={[centerX, -0.25, centerZ]}
         />
-        {/* 3D North Arrow */}
-        {(() => {
-          const ed = entryDir.toLowerCase();
-          let angle = 0; // default North is -Z (Top)
-          if (ed.startsWith('e')) angle = -Math.PI / 2;
-          else if (ed.startsWith('s')) angle = Math.PI;
-          else if (ed.startsWith('w')) angle = Math.PI / 2;
+        {/* Street Environment */}
+        <group position={[centerX, 0.01, minZ - 14]}>
+          {/* Main Road */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <planeGeometry args={[maxDim * 3, 16]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.9} />
+          </mesh>
+          {/* Road Markings (Center line) */}
+          <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[maxDim * 3, 0.4]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.2} />
+          </mesh>
           
-          return (
-            <group position={[centerX + maxDim * 0.6, 0.2, centerZ - maxDim * 0.6]} rotation={[0, angle, 0]}>
-              <mesh position={[0, 0, -2]} rotation={[-Math.PI/2, 0, 0]}>
-                <cylinderGeometry args={[0, 1.5, 4, 3]} />
-                <meshStandardMaterial color="#ef4444" />
-              </mesh>
-              <mesh position={[0, 0, 2]} rotation={[Math.PI/2, 0, 0]}>
-                <cylinderGeometry args={[0, 1.5, 4, 3]} />
-                <meshStandardMaterial color="#94a3b8" />
-              </mesh>
-              <Text position={[0, 0.5, -5]} rotation={[-Math.PI/2, 0, 0]} fontSize={2} color="#ffffff" fontWeight="bold">N</Text>
-            </group>
-          );
-        })()}
+          {/* Connecting Path to House */}
+          <mesh position={[0, 0.02, 10]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <planeGeometry args={[6, 12]} />
+            <meshStandardMaterial color="#94a3b8" roughness={0.7} />
+          </mesh>
+
+          {/* Street Lights */}
+          <group position={[-maxDim * 0.4, 0, -6]}>
+            <mesh position={[0, 6, 0]}>
+              <cylinderGeometry args={[0.2, 0.3, 12]} />
+              <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
+            </mesh>
+            <mesh position={[0, 12, 1]}>
+              <sphereGeometry args={[0.6]} />
+              <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={2} />
+            </mesh>
+            <pointLight position={[0, 11.5, 1]} intensity={2.5} distance={40} decay={2} color="#fef08a" castShadow />
+          </group>
+          
+          <group position={[maxDim * 0.4, 0, -6]}>
+            <mesh position={[0, 6, 0]}>
+              <cylinderGeometry args={[0.2, 0.3, 12]} />
+              <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
+            </mesh>
+            <mesh position={[0, 12, 1]}>
+              <sphereGeometry args={[0.6]} />
+              <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={2} />
+            </mesh>
+            <pointLight position={[0, 11.5, 1]} intensity={2.5} distance={40} decay={2} color="#fef08a" castShadow />
+          </group>
+        </group>
       </Canvas>
     </div>
   );
