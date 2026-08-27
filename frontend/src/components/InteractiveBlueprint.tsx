@@ -462,6 +462,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
     const stairs = new Set<string>();
     
     displayRooms.forEach(room => {
+      // Only suppress door arcs ON the staircase room itself — not on neighbours like Balcony/Landing
+      const isStairRoom = room.name.toLowerCase().includes('stair');
       room.doors?.forEach(door => {
         const pos = door.position || 0;
         let hx = 0, hy = 0;
@@ -475,15 +477,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
         
         const key = `${Math.round(hingeX * 10)},${Math.round(hingeY * 10)}`;
         
-        // A door belongs to a staircase if its hinge touches the bounding box of any stair room
-        const touchesStair = displayRooms.some(r => {
-          if (!r.name.toLowerCase().includes('stair')) return false;
-          const rx1 = r.x, rx2 = r.x + r.width, ry1 = r.y, ry2 = r.y + r.height;
-          // Add a tiny epsilon to account for floating point matching
-          return (hingeX >= rx1 - 0.1 && hingeX <= rx2 + 0.1 && hingeY >= ry1 - 0.1 && hingeY <= ry2 + 0.1);
-        });
-        
-        if (touchesStair) stairs.add(key);
+        // Only mark as stair door if the door belongs to the Staircase room itself
+        if (isStairRoom) stairs.add(key);
         
         if (!claims.has(key)) claims.set(key, room.name);
       });

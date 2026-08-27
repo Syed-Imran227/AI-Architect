@@ -87,9 +87,15 @@ def build_layout_from_topology(
 
     buildable_W = W - front_setback - rear_setback
     buildable_L = L - 2 * side_setback
-    
+
     if buildable_L < MIN_ROOM_DIM * 3 or buildable_W < MIN_ROOM_DIM * 3:
-        raise ValueError(f"Buildable envelope {buildable_W}x{buildable_L} is too small to build on.")
+        # Setbacks made the plot unbuildable — retry without setbacks
+        print(f"[drafter] Setbacks produce {buildable_W:.1f}x{buildable_L:.1f} ft — too small. Retrying without setbacks.")
+        front_setback = rear_setback = side_setback = 0.0
+        buildable_W = W
+        buildable_L = L
+        if buildable_L < MIN_ROOM_DIM * 3 or buildable_W < MIN_ROOM_DIM * 3:
+            raise ValueError(f"Plot {W}x{L} ft is too small to build on (minimum ~{int(MIN_ROOM_DIM * 3)}x{int(MIN_ROOM_DIM * 3)} ft required).")
 
     remaining_baths = bathrooms
 

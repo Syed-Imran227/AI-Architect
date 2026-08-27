@@ -205,7 +205,7 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
 class VastuFixRequest(BaseModel):
     layout: dict
     plot_width: float = Field(40.0, ge=30, le=500)
-    plot_height: float = Field(30.0, ge=30, le=500)
+    plot_height: float = Field(40.0, ge=30, le=500)
     entry_dir: str = "east"
     bedrooms: int = Field(2, ge=0, le=20)
     bathrooms: int = Field(2, ge=0, le=20)
@@ -306,9 +306,17 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             num_floors=req.floors,
         )
 
-        png_bytes = render_floor_plan(ground_rooms, unit_label="Vastu-Optimised Plan", plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
-        b64_str = base64.b64encode(png_bytes).decode("utf-8")
-        image_url = f"data:image/png;base64,{b64_str}"
+        # Render ALL floors so duplex layouts get a fresh image for every floor
+        floor_images: list[str] = []
+        for fl in new_layout["floors"]:
+            fl_rooms = fl.get("rooms", [])
+            fl_label = f"{fl.get('level', 'Floor')} | Vastu-Optimised Plan"
+            png_bytes = render_floor_plan(fl_rooms, unit_label=fl_label, plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
+            b64 = base64.b64encode(png_bytes).decode("utf-8")
+            image_url = f"data:image/png;base64,{b64}"
+            fl["imageUrl"] = image_url
+            floor_images.append(image_url)
+        image_url = floor_images[0]  # primary (ground floor) image for backward compat
 
         return {
             "status": "success",
@@ -318,7 +326,6 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             "new_nbc_result": new_nbc,
             "design_rationale": best_rationale,
             "converged": True,
-            # fixed_layout is the full rooms list so the frontend can replace the floor
             "fixed_layout": ground_rooms,
             "imageUrl": image_url,
             "full_layout": new_layout,
@@ -332,8 +339,8 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
 
 class NbcFixRequest(BaseModel):
     layout: dict
-    plot_width: float = Field(40.0, ge=30, le=500)
-    plot_height: float = Field(30.0, ge=30, le=500)
+    plot_width: float = Field(40.0, ge=40, le=500)
+    plot_height: float = Field(40.0, ge=40, le=500)
     entry_dir: str = "east"
     bedrooms: int = Field(2, ge=0, le=20)
     bathrooms: int = Field(2, ge=0, le=20)
@@ -426,9 +433,17 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
             entry_dir=req.entry_dir,
         )
 
-        png_bytes = render_floor_plan(ground_rooms, unit_label="NBC-Optimised Plan", plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
-        b64_str = base64.b64encode(png_bytes).decode("utf-8")
-        image_url = f"data:image/png;base64,{b64_str}"
+        # Render ALL floors so duplex layouts get a fresh image for every floor
+        floor_images2: list[str] = []
+        for fl in new_layout["floors"]:
+            fl_rooms = fl.get("rooms", [])
+            fl_label = f"{fl.get('level', 'Floor')} | NBC-Optimised Plan"
+            png_bytes = render_floor_plan(fl_rooms, unit_label=fl_label, plot_w=req.plot_width, plot_h=req.plot_height, entry_dir=req.entry_dir)
+            b64 = base64.b64encode(png_bytes).decode("utf-8")
+            image_url = f"data:image/png;base64,{b64}"
+            fl["imageUrl"] = image_url
+            floor_images2.append(image_url)
+        image_url = floor_images2[0]
 
         return {
             "status": "success",
