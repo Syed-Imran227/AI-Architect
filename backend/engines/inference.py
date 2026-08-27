@@ -256,6 +256,7 @@ class FloorPlanGenerator:
                 lift=lift,
                 vastu=bool(vastu),
                 entry_dir=entry_dir,
+                duplex=bool(duplex),
             )
 
             # Step 3 — Inject furniture deterministically
@@ -266,6 +267,9 @@ class FloorPlanGenerator:
 
             return layout
 
+        except ValueError:
+            # Let known validation/constraint errors bubble up to the route for a clean 422 response
+            raise
         except Exception as e:
             import traceback
             traceback.print_exc()

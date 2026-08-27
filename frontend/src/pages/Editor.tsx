@@ -703,21 +703,31 @@ export default function Editor() {
 
               {/* Validation Report */}
               <details style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.6rem', fontSize: '0.78rem' }}>
-                <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({activePlan.validationReport?.length || 0})</summary>
-                <ul style={{ margin: 0, padding: '0.5rem 0 0 1.5rem', opacity: 0.85, fontSize: '0.9rem' }}>
-                  {(!activePlan.validationReport || activePlan.validationReport.length === 0) ? (
-                    <li>[INFO] -: No issues found.</li>
-                  ) : (
-                    activePlan.validationReport.map((entry, i) => (
-                      <li key={i}>
-                        {typeof entry === 'string' 
-                          ? entry 
-                          : `[${entry.severity?.toUpperCase() || 'INFO'}] ${entry.room}: ${entry.message}`}
-                      </li>
-                    ))
-                  )}
-                </ul>
+                {(() => {
+                  const realIssues = (activePlan.validationReport ?? []).filter(
+                    (e: any) => !(e.severity === 'info' && (e.room === '-' || e.message?.toLowerCase().includes('no issues')))
+                  );
+                  return (
+                    <>
+                      <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({realIssues.length})</summary>
+                      <ul style={{ margin: 0, padding: '0.5rem 0 0 1.5rem', opacity: 0.85, fontSize: '0.9rem' }}>
+                        {realIssues.length === 0 ? (
+                          <li>[INFO] -: No issues found.</li>
+                        ) : (
+                          realIssues.map((entry: any, i: number) => (
+                            <li key={i}>
+                              {typeof entry === 'string'
+                                ? entry
+                                : `[${entry.severity?.toUpperCase() || 'INFO'}] ${entry.room}: ${entry.message}`}
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </>
+                  );
+                })()}
               </details>
+
 
             </aside>
             
