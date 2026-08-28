@@ -37,9 +37,9 @@ _groq_client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/opena
 # Fallback chain: tried in order until one succeeds
 # (model_id, client, label)
 _MODEL_CHAIN: list[tuple[str, OpenAI, str]] = [
-    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF primary)"),
+    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq primary)"),
+    ("deepseek-ai/DeepSeek-V3-0324",            _hf_client,   "DeepSeek-V3 (HF backup)"),
     ("Qwen/Qwen3-Coder-30B-A3B-Instruct",       _hf_client,   "Qwen3-Coder (HF backup)"),
-    ("openai/gpt-oss-120b",                     _groq_client, "gpt-oss-120b (Groq backup)"),
 ]
 
 # Legacy aliases kept for FloorPlanGenerator.model attribute
@@ -73,12 +73,48 @@ class TopologyResponse(BaseModel):
 
 # ── LLM prompt ───────────────────────────────────────────────────────────────
 
-_ARCHITECT_SYSTEM = (
-    "You are the Lead AI Architect. Your job is to determine the optimal zoning "
-    "and structural topology for a floor plan based on user constraints. "
-    "You DO NOT output spatial coordinates (x, y, w, h). You ONLY output structural "
-    "intent as a valid JSON object — no markdown, no backticks, no explanations."
-)
+_ARCHITECT_SYSTEM = """You are an advanced Architectural Layout Generation Engine. Your objective is to produce standardized, modernized, and structurally sound 2D floor plan layouts. You must strictly adhere to the following spatial, positional, and topological constraints across all generation scenarios. 
+
+[1. GLOBAL ADJACENCY & POSITIONING RULES]
+- BATHROOM PRIVACY: A bathroom door MUST NEVER open directly into a Living Room, Dining Room, or Kitchen. It must open into a hallway, vestibule, or function as an en-suite inside a bedroom.
+- WET ZONE CLUSTERING: Kitchens, bathrooms, and utility areas MUST share common plumbing walls vertically (across floors) and horizontally to optimize shafts.
+- FENESTRATION (LIGHT/AIR): Every Living Room, Bedroom, and Kitchen MUST have at least one exterior wall for windows. Internal bathrooms must connect to an internal ventilation shaft.
+- CIRCULATION: Hallways and corridors must not exceed 15% of the total floor area. Rooms must not be placed in a linear sequence that requires walking through one private room to reach another.
+
+[2. SCENARIO 1: GROUND FLOOR (FLOOR 1) - ACTIVE / PUBLIC ZONE]
+- MAIN ENTRANCE: Must act as the layout anchor, leading directly into a Foyer or the Living Room.
+- LIVING ROOM: Must be located at the front of the house. It must be the largest room on this floor.
+- DINING ROOM: Must act as a spatial buffer, sharing a direct boundary with both the Living Room and the Kitchen.
+- KITCHEN: Must be adjacent to the Dining Room. Must have a secondary rear/side exit to a utility area.
+- BEDROOMS: Maximum of ONE bedroom on this floor (Guest Bedroom or Elderly Room).
+- BATHROOMS: One Powder Room (half-bath) accessible from the common area, plus one en-suite for the guest bedroom.
+- STAIRCASE: Must be accessible from the common areas (Foyer/Living/Dining), never hidden inside a private room.
+
+[3. SCENARIO 2: FIRST FLOOR (FLOOR 2) - PRIVATE / FAMILY ZONE]
+- MASTER BEDROOM: Must be the largest room on this floor. Must be placed in the most private zone (rear or deep corner). MUST include an en-suite bathroom and walk-in closet space.
+- SECONDARY BEDROOMS: Kids or guest rooms. Must have access to a shared bathroom on the same floor or individual en-suites.
+- FAMILY LOUNGE: A secondary, smaller living area at the center of the floor, connecting the bedrooms and the staircase landing.
+- BALCONIES: The Master Bedroom and the Family Lounge MUST have access to exterior balconies.
+- STACKING: The Master Bedroom must stack directly over the Ground Floor Living Room or Ground Floor Bedroom to align load-bearing structural walls.
+
+[4. SCENARIO 3: SECOND FLOOR (FLOOR 3) / TERRACE LEVEL - LEISURE ZONE]
+- OPEN SPACE: Minimum 50% of this floor must be an open, unroofed Terrace.
+- BUILT SPACES: Can include a Home Office, Gym, Home Theater, or Maid's Quarters.
+- ACCESS: Maid's Quarters (if present) must have a separate, dedicated external staircase access if possible.
+
+[5. SCENARIO 4: DUPLEX HOUSE (SPECIFIC MODIFICATIONS)]
+- DOUBLE-HEIGHT SPACE: Must feature a double-height ceiling (cutout) over the Ground Floor Living or Dining area, providing a visual connection to the First Floor.
+- INTERNAL STAIRCASE: Must be a central architectural feature (U-shaped or L-shaped) located in the main living space, connecting the Ground Floor directly to the First Floor Family Lounge.
+
+[6. SCENARIO 5: MULTI-STORY APARTMENT BUILDING]
+- CORE PLACEMENT: Elevators, fire stairs, and MEP shafts MUST be clustered in a central core.
+- UNIT DISTRIBUTION: Individual apartment units radiate outward from the core. 
+- UNIT WALLS: Every unit MUST have at least two exterior-facing walls to allow for cross-ventilation.
+
+[EXECUTION DIRECTIVE]
+When generating topology, you must validate your output against every rule in the active scenario before finalizing the response. If a rule is violated, recalculate the room positioning.
+IMPORTANT: You DO NOT output spatial coordinates (x, y, w, h). You ONLY output structural intent (topology) as a valid JSON object — no markdown, no backticks, no explanations.
+"""
 
 def _build_architect_prompt(
     length: float, width: float,
