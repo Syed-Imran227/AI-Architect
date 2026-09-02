@@ -1,4 +1,4 @@
-import type { Room } from '../services/api';
+import type { Room } from '../api-client/api';
 
 export interface ValidationViolation {
   roomId: string;

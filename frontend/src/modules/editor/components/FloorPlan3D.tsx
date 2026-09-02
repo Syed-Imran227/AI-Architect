@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky } from '@react-three/drei';
-import type { Room } from '../services/api';
+import type { Room } from '../../../shared/api-client/api';
 
 interface FloorPlan3DProps {
   rooms: Room[];
@@ -878,7 +878,7 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function FloorPlan3D({ rooms, entryDir = 'north' }: FloorPlan3DProps) {
+export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
   if (!rooms || rooms.length === 0) return null;
 
   const minX = Math.min(...rooms.map(r => r.x));

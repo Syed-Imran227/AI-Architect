@@ -57,6 +57,9 @@ export interface VastuFixResult {
   converged?: boolean;
   message?: string;
   imageUrl?: string;
+  new_energy_result?: EnergyResult;
+  new_sunlight_result?: SunlightResult;
+  new_bom_result?: BomResult;
 }
 
 export interface NbcFixResult {
@@ -70,6 +73,9 @@ export interface NbcFixResult {
   converged?: boolean;
   message?: string;
   imageUrl?: string;
+  new_energy_result?: EnergyResult;
+  new_sunlight_result?: SunlightResult;
+  new_bom_result?: BomResult;
 }
 
 export interface NbcRule {
@@ -100,6 +106,59 @@ export interface EnergyResult {
   rules: EnergyRule[];
 }
 
+export interface SunlightRule {
+  rule: string;
+  status: 'pass' | 'warn' | 'fail';
+  points: number;
+  max: number;
+  detail: string;
+}
+
+export interface SunlightResult {
+  score: number;
+  grade: string;
+  rules: SunlightRule[];
+  insights: string[];
+  windows_sunlight: Record<string, { direction: string; intensity: number }>;
+}
+
+export interface BomRoomCost {
+  wall: number;
+  flooring: number;
+  ceiling: number;
+  electrical: number;
+  plumbing: number;
+  painting: number;
+  doors: number;
+  windows: number;
+  structure: number;
+  material: number;
+  labour: number;
+  total: number;
+}
+
+export interface BomRoom {
+  name: string;
+  area_sqft: number;
+  wall_area_sqft: number;
+  num_doors: number;
+  num_windows: number;
+  costs: BomRoomCost;
+}
+
+export interface BomSummary {
+  total_area_sqft: number;
+  material_total: number;
+  labour_total: number;
+  grand_total: number;
+  rate_per_sqft: number;
+}
+
+export interface BomResult {
+  rooms: BomRoom[];
+  summary: BomSummary;
+}
+
 export interface CirculationPath {
   to: string;
   waypoints: [number, number][];
@@ -124,6 +183,9 @@ export interface LayoutUpdatePayload {
   imageUrl?: string;
   status?: string;
   design_rationale?: string;
+  new_energy_result?: EnergyResult;
+  new_sunlight_result?: SunlightResult;
+  new_bom_result?: BomResult;
 }
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
@@ -160,6 +222,8 @@ export interface LayoutData {
   vastuResult?: VastuResult;
   nbcResult?: NbcResult;
   energyResult?: EnergyResult;
+  sunlightResult?: SunlightResult;
+  bomResult?: BomResult;
 }
 
 export interface ProjectMeta {
@@ -421,4 +485,20 @@ export const exportReport = async (
   URL.revokeObjectURL(url);
 };
 
-
+export const recalculateBOM = async (
+  layout: LayoutData,
+  sqft: number,
+  tier: string
+): Promise<{ status: string; bomResult: BomResult }> => {
+  const res = await authFetch(`${API_BASE_URL}/bom/recalculate`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      layout,
+      sqft,
+      tier,
+    }),
+  });
+  if (!res.ok) throw new Error(`BOM recalculation failed: ${await res.text()}`);
+  return res.json();
+};

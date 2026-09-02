@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import type { Room, FloorCirculation } from '../services/api';
+import type { Room, FloorCirculation, SunlightResult } from '../../../shared/api-client/api';
 import CirculationOverlay from './CirculationOverlay';
-import { validateRoomPlacement } from '../utils/validateRooms';
+import SunlightOverlay from './SunlightOverlay';
+import { validateRoomPlacement } from '../../../shared/utils/validateRooms';
 import { toast } from 'react-hot-toast';
 
 interface Props {
@@ -11,41 +12,43 @@ interface Props {
   onRoomDrop?: (updatedRooms: Room[], imageUrl?: string) => void;
   circulation?: FloorCirculation | null;
   showCirculation?: boolean;
+  sunlightResult?: SunlightResult | null;
+  showSunlight?: boolean;
   entryDir?: string;
   plotWidth?: number;
   plotHeight?: number;
 }
 
-// Professional 2D architectural color scheme per room type
+// Professional 2D CAD clean white color scheme per room type
 function getRoomStyle(name: string): { fill: string; stroke: string; labelColor: string; icon: string } {
   const n = name.toLowerCase();
   if (n.includes('master') || (n.includes('bedroom') && n.includes('1')))
-    return { fill: '#e4eef8', stroke: '#7a9ec0', labelColor: '#1a3a5c', icon: '\uD83D\uDECF' };
+    return { fill: '#EFF6FF', stroke: '#3B82F6', labelColor: '#1E3A8A', icon: '🛏' };
   if (n.includes('bedroom'))
-    return { fill: '#eaf2ea', stroke: '#7ab07a', labelColor: '#1e4a1e', icon: '\uD83D\uDECF' };
+    return { fill: '#F0FDF4', stroke: '#22C55E', labelColor: '#14532D', icon: '🛏' };
   if (n.includes('bath') || n.includes('toilet') || n.includes('wc'))
-    return { fill: '#dff2f5', stroke: '#6aaabb', labelColor: '#0c4a6e', icon: '\uD83D\uDEB0' };
+    return { fill: '#ECFEFF', stroke: '#06B6D4', labelColor: '#164E63', icon: '🚽' };
   if (n.includes('kitchen'))
-    return { fill: '#fff0d8', stroke: '#d4a060', labelColor: '#7c3400', icon: '\uD83C\uDF73' };
+    return { fill: '#FEFCE8', stroke: '#EAB308', labelColor: '#713F12', icon: '🍳' };
   if (n.includes('living') || n.includes('lounge'))
-    return { fill: '#ede8f8', stroke: '#9a84d0', labelColor: '#3b0764', icon: '\uD83D\uDECB' };
+    return { fill: '#FAF5FF', stroke: '#A855F7', labelColor: '#581C87', icon: '🛋' };
   if (n.includes('dining'))
-    return { fill: '#fce8f4', stroke: '#c07098', labelColor: '#831843', icon: '\uD83C\uDF7D' };
+    return { fill: '#FDF2F8', stroke: '#EC4899', labelColor: '#831843', icon: '🍽' };
   if (n.includes('balcony') || n.includes('terrace'))
-    return { fill: '#e0f5e8', stroke: '#70b480', labelColor: '#065f46', icon: '\uD83C\uDF3F' };
+    return { fill: '#F0FDFA', stroke: '#14B8A6', labelColor: '#134E4A', icon: '🌿' };
   if (n.includes('stair'))
-    return { fill: '#f5f0e0', stroke: '#c0aa70', labelColor: '#5a4400', icon: '\u25E4' };
+    return { fill: '#FFFBEB', stroke: '#F59E0B', labelColor: '#78350F', icon: '◤' };
   if (n.includes('parking') || n.includes('garage'))
-    return { fill: '#efefef', stroke: '#aaaaaa', labelColor: '#374151', icon: '\uD83D\uDE97' };
+    return { fill: '#F1F5F9', stroke: '#64748B', labelColor: '#0F172A', icon: '🚗' };
   if (n.includes('hall') || n.includes('lobby') || n.includes('foyer') || n.includes('entrance'))
-    return { fill: '#fefae8', stroke: '#d0b060', labelColor: '#78350f', icon: '\uD83D\uDEAA' };
+    return { fill: '#FFF7ED', stroke: '#F97316', labelColor: '#7C2D12', icon: '🚪' };
   if (n.includes('corridor'))
-    return { fill: '#f8f8f8', stroke: '#cccccc', labelColor: '#4b5563', icon: '' };
+    return { fill: '#F8FAFC', stroke: '#94A3B8', labelColor: '#334155', icon: '' };
   if (n.includes('store') || n.includes('utility') || n.includes('laundry'))
-    return { fill: '#f0f0f0', stroke: '#b4b4b4', labelColor: '#4b5563', icon: '\uD83D\uDCE6' };
+    return { fill: '#F4F4F5', stroke: '#71717A', labelColor: '#27272A', icon: '📦' };
   if (n.includes('landing'))
-    return { fill: '#f8f6f0', stroke: '#c8c0a8', labelColor: '#555', icon: '' };
-  return { fill: '#f3f4f6', stroke: '#aaaaaa', labelColor: '#374151', icon: '\u25FB' };
+    return { fill: '#FAFAFA', stroke: '#A3A3A3', labelColor: '#404040', icon: '' };
+  return { fill: '#FFFFFF', stroke: '#CBD5E1', labelColor: '#334155', icon: '◻' };
 }
 
 // Draw a simple furniture symbol inside a room
@@ -446,7 +449,7 @@ function WindowMarks({ room }: { room: Room }) {
   );
 }
 
-const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation, entryDir = 'north', plotWidth, plotHeight }) => {
+const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation, sunlightResult, showSunlight, entryDir = 'north', plotWidth, plotHeight }) => {
   // Drag overlay: only maintain local state during an active drag.
   // When not dragging, the parent prop is the source of truth (no sync needed).
   const [dragRooms, setDragRooms] = useState<Room[] | null>(null);
@@ -573,44 +576,43 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       width="100%"
       height="100%"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ display: 'block', background: 'var(--bg-secondary, #f0f2f5)' }}
+      style={{ display: 'block', background: 'var(--input-bg, #FFFFFF)' }}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
       <defs>
         {/* Fine blueprint grid */}
         <pattern id="finegrid" width="1" height="1" patternUnits="userSpaceOnUse">
-          <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e2e8f0" strokeWidth="0.04" />
+          <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#F1F5F9" strokeWidth="0.04" />
         </pattern>
         <pattern id="coarsegrid" width="5" height="5" patternUnits="userSpaceOnUse">
           <rect width="5" height="5" fill="url(#finegrid)" />
-          <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#cbd5e1" strokeWidth="0.1" />
+          <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#E2E8F0" strokeWidth="0.1" />
         </pattern>
         {/* Wall hatch pattern */}
         <pattern id="hatch" width="1" height="1" patternUnits="userSpaceOnUse">
-          <line x1="0" y1="1" x2="1" y2="0" stroke="#94a3b8" strokeWidth="0.25" />
+          <path d="M-0.5,0.5 l1,-1 M0,1 l1,-1 M0.5,1.5 l1,-1" stroke="#CBD5E1" strokeWidth="0.15" />
         </pattern>
-        <filter id="selglow">
-          <feGaussianBlur stdDeviation="0.4" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        
+        {/* Dropshadow for 3D effect */}
+        <filter id="dropshadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0.2" dy="0.3" stdDeviation="0.4" floodColor="#0F172A" floodOpacity="0.15" />
         </filter>
       </defs>
 
-      {/* Paper background */}
-      <rect x={minX} y={minY} width={vbW} height={vbH} fill="#fafcfd" />
-      {/* Subtle grid */}
+      {/* Grid background */}
       <rect x={minX} y={minY} width={vbW} height={vbH} fill="url(#coarsegrid)" opacity={0.7} />
 
       {/* Title block */}
       <text x={minX + PAD * 0.5} y={minY + PAD * 0.35}
         fontSize={1.2} fontFamily="Inter, sans-serif" fontWeight="700"
-        fill="#1e293b" letterSpacing="0.05">
+        fill="#E0E0E0" letterSpacing="0.05">
         FLOOR PLAN
       </text>
       <text x={minX + PAD * 0.5} y={minY + PAD * 0.65}
         fontSize={0.75} fontFamily="Inter, sans-serif"
-        fill="#64748b">
-        Interactive Blueprint · {displayRooms.length} Rooms
+        fill="#A0A0A0">
+        Interactive Blueprint • {displayRooms.length} Rooms
       </text>
 
       {/* Outer building boundary */}
@@ -827,6 +829,8 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       })()}
       {/* Circulation path overlay — toggled by the parent via showCirculation prop */}
       <CirculationOverlay circulation={circulation ?? null} visible={showCirculation ?? false} />
+      {/* Sunlight overlay */}
+      <SunlightOverlay rooms={rooms} sunlightResult={sunlightResult ?? undefined} visible={showSunlight ?? false} floorIndex={0} />
     </svg>
   );
 });

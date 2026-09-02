@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import '../App.css';
-import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, regenerateRoom } from '../services/api';
+
+import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, regenerateRoom } from '../../../shared/api-client/api';
 import toast from 'react-hot-toast';
-import type { Room, VastuResult, NbcResult, EnergyResult, LayoutData, LayoutUpdatePayload, Floor } from '../services/api';
+import type { Room, VastuResult, NbcResult, EnergyResult, SunlightResult, BomResult, LayoutData, LayoutUpdatePayload, Floor } from '../../../shared/api-client/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
 import FloorPlan3D from '../components/FloorPlan3D';
-import { ErrorBoundary } from '../components/ErrorBoundary';
+import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 import RoomEditor from '../components/RoomEditor';
 import ComplianceSidebar from '../components/ComplianceSidebar';
+import EditorInputPanel from '../components/EditorInputPanel';
+import EditorActionPanel from '../components/EditorActionPanel';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import FloatingOrbs from '../components/FloatingOrbs';
-import ThemeToggle from '../components/ThemeToggle';
+import { useAuth } from '../../auth/store/AuthContext';
+
 
 interface Plan {
   id: string;
@@ -22,6 +23,8 @@ interface Plan {
   nbcResult?: NbcResult;
   nbcScore?: number;
   energyResult?: EnergyResult;
+  sunlightResult?: SunlightResult;
+  bomResult?: BomResult;
   circulationWarnings?: string[];
   validationReport?: any[];
 }
@@ -48,6 +51,7 @@ export default function Editor() {
   const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [showCirculation, setShowCirculation] = useState(false);
+  const [showSunlight, setShowSunlight] = useState(false);
   const [show3D, setShow3D] = useState(false);
 
   // Keep a ref always mirroring activeFloorIndex so memoised callbacks
@@ -91,6 +95,7 @@ export default function Editor() {
         vastuResult: project.layout_data?.vastuResult,
         nbcResult: project.layout_data?.nbcResult,
         energyResult: project.layout_data?.energyResult,
+        sunlightResult: project.layout_data?.sunlightResult,
       };
       if (project.layout_data?.form) {
         setFormData(project.layout_data.form);
@@ -205,11 +210,20 @@ export default function Editor() {
     
     setActivePlan(prevPlan => prevPlan ? {
       ...prevPlan,
+      sunlightResult: data.new_sunlight_result || prevPlan.sunlightResult,
+      energyResult: data.new_energy_result || prevPlan.energyResult,
+      bomResult: data.new_bom_result || prevPlan.bomResult,
       layout: {
         ...prevPlan.layout,
-        floors: computeNewFloors(prevPlan.layout?.floors || [])
+        floors: computeNewFloors(prevPlan.layout?.floors || []),
+        sunlightResult: data.new_sunlight_result || prevPlan.layout?.sunlightResult,
+        energyResult: data.new_energy_result || prevPlan.layout?.energyResult,
+        bomResult: data.new_bom_result || prevPlan.layout?.bomResult,
       },
-      ...(imageUrl ? { imageUrl } : {})
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(data.new_energy_result ? { energyResult: data.new_energy_result } : {}),
+      ...(data.new_sunlight_result ? { sunlightResult: data.new_sunlight_result } : {}),
+      ...(data.new_bom_result ? { bomResult: data.new_bom_result } : {})
     } : prevPlan);
   }, []);
 
@@ -315,6 +329,7 @@ export default function Editor() {
           vastuResult: activePlan.vastuResult,
           nbcResult: activePlan.nbcResult,
           energyResult: activePlan.energyResult,
+          sunlightResult: activePlan.sunlightResult,
         },
         image_url: activePlan.imageUrl
       });
@@ -357,146 +372,85 @@ export default function Editor() {
   }, []);
 
   return (
-    <div className="app-container" style={{ position: 'relative', overflow: 'hidden' }}>
-      <FloatingOrbs />
-
+    <div className="app-container" style={{ position: 'relative', overflow: 'hidden', background: 'var(--bg-primary)' }}>
+      
       {/* ── Header ── */}
       <header style={{
-        padding: '1rem 2rem',
+        padding: '1.25rem 2.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'var(--nav-bg)',
-        borderBottom: '1px solid var(--nav-border)',
+        background: 'var(--bg-primary)',
+        boxShadow: 'var(--shadow-elevated)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
         gap: '1rem',
       }}>
         {/* Left: back + logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button className="back-btn" onClick={() => navigate('/dashboard')}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <button className="neu-btn-ghost" onClick={() => navigate('/dashboard')} style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
             ← Dashboard
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '1.4rem', background: 'var(--accent-gradient)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>⬡</span>
+            <span style={{ fontSize: '1.4rem', color: 'var(--accent-color)', fontWeight: 800 }}>⬡</span>
             <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>AI Architect</span>
-            <span style={{ padding: '0.2rem 0.6rem', background: 'rgba(138,255,196,0.1)', border: '1px solid var(--accent-color)', borderRadius: '6px', fontSize: '0.72rem', color: 'var(--accent-color)', fontWeight: 700, letterSpacing: '0.05em' }}>EDITOR</span>
+            <span style={{ padding: '0.2rem 0.6rem', background: 'var(--input-bg)', boxShadow: 'var(--shadow-inset)', borderRadius: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: '0.05em' }}>EDITOR</span>
           </div>
         </div>
 
         {/* Right: theme toggle + user info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <ThemeToggle />
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+          <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
             {user?.name || 'Architect'}
           </span>
+          <button className="neu-btn-ghost" onClick={() => {
+            localStorage.removeItem('token');
+            navigate('/login');
+          }} style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
+            Logout
+          </button>
         </div>
       </header>
 
       <div className={`content-grid ${activePlan ? 'active-plan-view' : ''}`}>
         {/* ── Sidebar Form ── */}
-        <aside className="form-pane panel-scroll-area">
-          <h2 className="sidebar-title">Requirements</h2>
+        <aside className="neu-panel panel-scroll-area" style={{ padding: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1.5rem', color: 'var(--text-primary)' }}>Requirements</h2>
 
-          <div className="form-group">
-            <label>Plot Size (sq ft)</label>
-            <input
-              type="number"
-              value={formData.length * formData.width}
-              readOnly
-              style={{ opacity: 0.6, cursor: 'not-allowed' }}
-              title="Computed from Length × Width"
-            />
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Length (ft)</label>
-              <input type="number" name="length" min={15} value={formData.length} onChange={handleChange} />
-            </div>
-            <div className="form-group">
-              <label>Width (ft)</label>
-              <input type="number" name="width" min={15} value={formData.width} onChange={handleChange} />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Floors</label>
-              <input type="number" name="floors" min={1} max={10} value={formData.floors} onChange={handleChange} />
-            </div>
-            <div className="form-group">
-              <label>Bedrooms</label>
-              <input type="number" name="bedrooms" min={1} value={formData.bedrooms} onChange={handleChange} />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Bathrooms</label>
-              <input type="number" name="bathrooms" min={1} value={formData.bathrooms} onChange={handleChange} />
-            </div>
-            <div className="form-group">
-              <label>Balconies</label>
-              <input type="number" name="balcony" min={0} value={formData.balcony} onChange={handleChange} />
-            </div>
-          </div>
+          <EditorInputPanel
+            formData={formData}
+            onChange={handleChange}
+            loading={loading}
+            onGenerate={handleGenerate}
+          />
 
-          <div className="form-group">
-            <label>Entry Direction</label>
-            <select name="entryDir" value={formData.entryDir} onChange={handleChange}>
-              <option value="east">East</option>
-              <option value="west">West</option>
-              <option value="north">North</option>
-              <option value="south">South</option>
-            </select>
-          </div>
-
-          <div className="toggle-grid">
-            {([
-              ['duplex', 'Duplex'],
-              ['terrace', 'Terrace'],
-              ['lift', 'Lift'],
-              ['parking', 'Parking'],
-              ['vastuToggle', 'Vastu Rules'],
-            ] as [string, string][]).map(([name, label]) => (
-              <label key={name} className="toggle-label">
-                <input
-                  type="checkbox"
-                  name={name}
-                  checked={formData[name as keyof typeof formData] as boolean}
-                  onChange={handleChange}
-                />
-                <span className="toggle-track"><span className="toggle-thumb" /></span>
-                {label}
-              </label>
-            ))}
-          </div>
-
-          <button
-            id="generate-btn"
-            className="primary-btn"
-            onClick={handleGenerate}
-            disabled={loading}
-          >
-            {loading
-              ? <><span className="btn-spinner" /> Generating…</>
-              : '✦ Generate Plans'}
-          </button>
-
-          {genError && <p className="gen-error">⚠ {genError}</p>}
+          {genError && <p className="gen-error" style={{ color: 'var(--error)', marginTop: '1rem', fontSize: '0.9rem' }}>⚠ {genError}</p>}
 
           {plans.length > 0 && !loading && (
-            <div className="history-strip">
-              <p className="section-label" style={{ marginBottom: '0.5rem' }}>Current Session</p>
-              {plans.map(p => (
-                <button
-                  key={p.id}
-                  className={`history-item ${activePlan?.id === p.id ? 'active' : ''}`}
-                  onClick={() => openPlan(p)}
-                >
-                  <span style={{ fontWeight: 500 }}>{formData.bedrooms}BHK · {formData.entryDir.charAt(0).toUpperCase() + formData.entryDir.slice(1)} · {formData.length}×{formData.width}ft</span>
-                  <span style={{ fontSize: '0.65rem', opacity: 0.6, marginLeft: '0.5rem' }}>{p.id.slice(0, 8)}</span>
-                </button>
-              ))}
+            <div style={{ marginTop: '2rem' }}>
+              <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem' }}>Current Session</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {plans.map(p => (
+                  <button
+                    key={p.id}
+                    className={activePlan?.id === p.id ? "neu-panel-inset" : "neu-panel"}
+                    onClick={() => openPlan(p)}
+                    style={{
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      cursor: 'pointer',
+                      border: 'none',
+                      color: activePlan?.id === p.id ? 'var(--accent-color)' : 'var(--text-primary)'
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{formData.bedrooms}BHK · {formData.entryDir.charAt(0).toUpperCase() + formData.entryDir.slice(1)} · {formData.length}×{formData.width}ft</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{p.id.slice(0, 8)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </aside>
@@ -505,28 +459,30 @@ export default function Editor() {
         {activePlan ? (
           <>
             {/* Center Panel: Interactive Blueprint & Concept Sketch */}
-            <section className="workspace-pane card panel-scroll-area" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.1)' }}>
+            <section className="workspace-pane panel-scroll-area neu-panel" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', background: 'var(--bg-primary)', boxShadow: '0 4px 6px -4px rgba(163,177,198,0.3)', zIndex: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <p className="panel-label" style={{ margin: 0, fontWeight: 700 }}>Interactive Blueprint</p>
-                  <span className="plan-id-badge" style={{ fontSize: '0.7rem' }}>{activePlan.id}</span>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-primary)' }}>Interactive Blueprint</p>
+                  <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--input-bg)', borderRadius: '4px', boxShadow: 'var(--shadow-inset)', color: 'var(--text-secondary)', fontWeight: 600 }}>{activePlan.id}</span>
                 </div>
                 
                 {floors.length > 1 && (
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', background: 'var(--input-bg)', padding: '0.25rem', borderRadius: '8px', boxShadow: 'var(--shadow-inset)' }}>
                     {floors.map((f, i) => (
                       <button
                         key={i}
                         onClick={() => { setActiveFloorIndex(i); setSelectedRoomIndex(null); }}
+                        className={i === activeFloorIndex ? "neu-panel" : ""}
                         style={{
-                          padding: '0.35rem 0.9rem',
+                          padding: '0.4rem 1rem',
                           borderRadius: '6px',
-                          border: `1px solid ${i === activeFloorIndex ? 'var(--accent-color)' : 'var(--glass-border)'}`,
-                          background: i === activeFloorIndex ? 'var(--accent-gradient)' : 'transparent',
-                          color: i === activeFloorIndex ? '#000' : 'var(--text-primary)',
+                          border: 'none',
+                          background: i === activeFloorIndex ? 'var(--bg-primary)' : 'transparent',
+                          color: i === activeFloorIndex ? 'var(--accent-color)' : 'var(--text-secondary)',
+                          boxShadow: i === activeFloorIndex ? 'var(--shadow-elevated)' : 'none',
                           cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
                           transition: 'all 0.2s'
                         }}
                       >
@@ -536,11 +492,11 @@ export default function Editor() {
                   </div>
                 )}
               </div>
-              <div className="blueprint-wrapper" style={{ minHeight: '60vh', flexShrink: 0, position: 'relative', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+              <div style={{ minHeight: '60vh', flexShrink: 0, position: 'relative', background: 'var(--input-bg)', boxShadow: 'var(--shadow-inset)', overflow: 'hidden' }}>
                 {currentRooms.length > 0
                   ? (
                     show3D ? (
-                      <ErrorBoundary fallback={<div className="blueprint-empty">Failed to load 3D view. WebGL may have crashed.</div>}>
+                      <ErrorBoundary fallback={<div style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>Failed to load 3D view. WebGL may have crashed.</div>}>
                         <FloorPlan3D rooms={currentRooms} entryDir={plotContext.entryDir} />
                       </ErrorBoundary>
                     ) : (
@@ -551,23 +507,24 @@ export default function Editor() {
                         onRoomDrop={(rooms, img) => handleLayoutUpdate({ rooms }, img, activeFloorIndexRef.current)}
                         circulation={floorCirculation}
                         showCirculation={showCirculation}
+                        sunlightResult={activePlan.sunlightResult}
+                        showSunlight={showSunlight}
                         entryDir={plotContext.entryDir}
                       />
                     )
                   )
-                  : <div className="blueprint-empty"><p>No layout data for this floor.</p></div>
+                  : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}><p>No layout data for this floor.</p></div>
                 }
               </div>
 
               {/* Large Concept Sketch */}
-              <div style={{ padding: '1.5rem', borderTop: '1px solid var(--glass-border)' }}>
-                <p className="panel-label" style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>Concept Sketch</p>
-                <div className="concept-img-wrapper" style={{ width: '100%', height: 'auto', maxHeight: '80vh', borderRadius: '12px', overflow: 'hidden', background: 'var(--glass-bg)', boxShadow: 'var(--glass-shadow)', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <div style={{ padding: '1rem', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <p style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Concept Sketch</p>
+                <div className="neu-panel-inset" style={{ width: '100%', flex: 1, minHeight: '50vh', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0' }}>
                   <img
                     src={floors[activeFloorIndex]?.imageUrl || activePlan.imageUrl}
                     alt="Concept sketch"
-                    className="concept-img"
-                    style={{ width: '100%', height: 'auto', maxHeight: '80vh', objectFit: 'contain', display: 'block' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '8px' }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
@@ -575,12 +532,12 @@ export default function Editor() {
             </section>
 
             {/* Right Panel: Analytics & Actions */}
-            <aside className="analytics-pane card panel-scroll-area" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem' }}>
+            <aside className="neu-panel panel-scroll-area" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
 
               {/* Header: close + score */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button className="btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setActivePlan(null)}>← Close Plan</button>
-                <div className={`vastu-score ${activePlan.vastuScore >= 60 ? 'high' : (activePlan.vastuScore >= 40 ? 'medium' : 'low')}`} style={{ padding: '0.3rem 0.7rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, border: '1px solid currentColor' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem' }}>
+                <button className="neu-btn-ghost" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => setActivePlan(null)}>← Close</button>
+                <div className="neu-panel-inset" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', fontWeight: 800, color: activePlan.vastuScore >= 60 ? 'var(--success)' : (activePlan.vastuScore >= 40 ? 'var(--warning)' : 'var(--error)') }}>
                   Vastu {activePlan.vastuScore}/100
                 </div>
               </div>
@@ -590,6 +547,8 @@ export default function Editor() {
                 vastuResult={activePlan.vastuResult}
                 nbcResult={activePlan.nbcResult}
                 energyResult={activePlan.energyResult}
+                sunlightResult={activePlan.sunlightResult}
+                bomResult={activePlan.bomResult}
                 layout={currentLayout ?? {}}
                 plotContext={plotContext}
                 onLayoutUpdate={handleLayoutUpdate}
@@ -598,80 +557,51 @@ export default function Editor() {
               />
 
               {/* Action bar */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <button className="btn-primary" onClick={handleSaveToDatabase} disabled={saveLoading || !currentRooms.length} style={{ width: '100%', justifyContent: 'center' }}>
-                  {saveLoading ? 'Saving...' : '💾 Save to My Plans'}
-                </button>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                  <button className="btn-ghost" onClick={handleExportDxf} disabled={dxfLoading || !currentRooms.length} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
-                    {dxfLoading ? '...' : '⬇ DXF'}
-                  </button>
-                  <button className="btn-ghost" onClick={handleExportReport} disabled={reportLoading || !currentRooms.length} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
-                    {reportLoading ? '...' : '📄 Report'}
-                  </button>
-                  <button className="btn-ghost" onClick={handleGenerate} disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}>
-                    {loading ? '...' : '↻ Redraw'}
-                  </button>
-                  
-                  <button
-                    className="btn-ghost"
-                    onClick={() => setShowCirculation(v => !v)}
-                    disabled={!floorCirculation}
-                    title={floorCirculation ? 'Toggle circulation path overlay' : 'Generate a plan to see paths'}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem',
-                      background: showCirculation ? 'rgba(34,197,94,0.15)' : undefined,
-                      borderColor: showCirculation ? '#22c55e' : undefined,
-                      color:       showCirculation ? '#22c55e' : undefined,
-                    }}
-                  >
-                    {showCirculation ? '🟢 Paths On' : '🛤 Show Paths'}
-                  </button>
-                  <button
-                    className="btn-ghost"
-                    onClick={() => setShow3D(v => !v)}
-                    disabled={!currentRooms.length}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
-                  >
-                    {show3D ? '2D View' : '3D View'}
-                  </button>
-                </div>
-              </div>
+              <EditorActionPanel
+                currentRoomsLength={currentRooms.length}
+                saveLoading={saveLoading}
+                dxfLoading={dxfLoading}
+                reportLoading={reportLoading}
+                loading={loading}
+                showCirculation={showCirculation}
+                floorCirculation={!!floorCirculation}
+                showSunlight={showSunlight}
+                hasSunlightResult={!!activePlan?.sunlightResult}
+                show3D={show3D}
+                onSaveToDatabase={handleSaveToDatabase}
+                onExportDxf={handleExportDxf}
+                onExportReport={handleExportReport}
+                onGenerate={handleGenerate}
+                onToggleCirculation={setShowCirculation}
+                onToggleSunlight={setShowSunlight}
+                onToggle3D={setShow3D}
+              />
 
               {/* Copilot Chat UI */}
-              <div style={{ background: 'var(--glass-bg)', padding: '1.25rem', borderRadius: '12px', boxShadow: 'var(--glass-shadow)', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <p className="panel-label" style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className="neu-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+                <p style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ fontSize: '1.2rem' }}>✨</span> AI Copilot
                 </p>
-                <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', border: '1px solid var(--glass-border)' }}>
+                <div className="neu-panel-inset" style={{ padding: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   Describe changes to the layout. The AI will recalculate topology and generate a new blueprint.
                 </div>
-                <form onSubmit={handleCopilotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <form onSubmit={handleCopilotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <textarea
                     rows={3}
                     value={copilotInput}
                     onChange={e => setCopilotInput(e.target.value)}
-                    placeholder="e.g. Add an attached bath to the Master Bedroom and make the kitchen larger..."
+                    placeholder="e.g. Add an attached bath to the Master Bedroom..."
                     disabled={copilotLoading || !currentRooms.length}
+                    className="neu-input"
                     style={{ 
-                      width: '100%', 
-                      padding: '0.85rem 1rem', 
-                      fontSize: '0.85rem', 
-                      borderRadius: '8px', 
-                      border: '2px solid rgba(59, 130, 246, 0.5)', 
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.05)', 
-                      background: 'var(--bg-primary)', 
                       resize: 'none', 
-                      color: 'var(--text-primary)', 
-                      fontFamily: 'inherit',
-                      outline: 'none',
                       opacity: (!currentRooms.length || copilotLoading) ? 0.6 : 1,
                       cursor: (!currentRooms.length || copilotLoading) ? 'not-allowed' : 'text'
                     }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="submit" className="btn-primary" disabled={copilotLoading || !copilotInput.trim()} style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', borderRadius: '20px' }}>
-                      {copilotLoading ? 'Generating...' : '↑ Send to AI Copilot'}
+                    <button type="submit" className="neu-btn" disabled={copilotLoading || !copilotInput.trim()} style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem' }}>
+                      {copilotLoading ? 'Generating...' : '↑ Send to Copilot'}
                     </button>
                   </div>
                 </form>
@@ -679,43 +609,45 @@ export default function Editor() {
 
               {/* Room Editor — slides in below actions when a room is selected */}
                 {selectedRoomIndex !== null && currentRooms[selectedRoomIndex] ? (
-                  <RoomEditor
-                    room={currentRooms[selectedRoomIndex]}
-                    index={selectedRoomIndex}
-                    allRooms={currentRooms}
-                    plotContext={plotContext}
-                    onRoomUpdate={handleRoomUpdate}
-                    onLayoutUpdate={handleLayoutUpdate}
-                    onClose={() => setSelectedRoomIndex(null)}
-                  />
+                  <div className="neu-panel" style={{ padding: '1.5rem', marginTop: '0.5rem' }}>
+                    <RoomEditor
+                      room={currentRooms[selectedRoomIndex]}
+                      index={selectedRoomIndex}
+                      allRooms={currentRooms}
+                      plotContext={plotContext}
+                      onRoomUpdate={handleRoomUpdate}
+                      onLayoutUpdate={handleLayoutUpdate}
+                      onClose={() => setSelectedRoomIndex(null)}
+                    />
+                  </div>
                 ) : null}
 
               {/* Circulation Warning — sourced from the computed floor circulation data */}
               {(() => {
                 const unreachable = floorCirculation?.unreachable ?? activePlan.circulationWarnings ?? [];
                 return unreachable.length > 0 ? (
-                  <div style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.45)', borderRadius: '8px', padding: '0.6rem 0.9rem', fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-                    <span style={{ fontSize: '1rem' }}>⚠️</span> <strong>Circulation Warning:</strong>{' '}
+                  <div className="neu-panel-inset" style={{ padding: '1rem', color: 'var(--warning)', fontWeight: 600 }}>
+                    <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>⚠️</span> <strong>Circulation Warning:</strong>{' '}
                     {unreachable.length} room(s) unreachable: {unreachable.join(', ')}
                   </div>
                 ) : null;
               })()}
 
               {/* Validation Report */}
-              <details style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.6rem', fontSize: '0.78rem' }}>
+              <details className="neu-panel" style={{ padding: '1rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                 {(() => {
                   const realIssues = (activePlan.validationReport ?? []).filter(
                     (e: any) => !(e.severity === 'info' && (e.room === '-' || e.message?.toLowerCase().includes('no issues')))
                   );
                   return (
                     <>
-                      <summary style={{ fontWeight: 600, cursor: 'pointer' }}>🔧 Auto-Corrections ({realIssues.length})</summary>
-                      <ul style={{ margin: 0, padding: '0.5rem 0 0 1.5rem', opacity: 0.85, fontSize: '0.9rem' }}>
+                      <summary style={{ fontWeight: 700, color: 'var(--text-primary)' }}>🔧 Auto-Corrections ({realIssues.length})</summary>
+                      <ul style={{ margin: 0, padding: '1rem 0 0 1.5rem', color: 'var(--text-secondary)' }}>
                         {realIssues.length === 0 ? (
                           <li>[INFO] -: No issues found.</li>
                         ) : (
                           realIssues.map((entry: any, i: number) => (
-                            <li key={i}>
+                            <li key={i} style={{ marginBottom: '0.4rem' }}>
                               {typeof entry === 'string'
                                 ? entry
                                 : `[${entry.severity?.toUpperCase() || 'INFO'}] ${entry.room}: ${entry.message}`}
@@ -733,33 +665,37 @@ export default function Editor() {
             
           </>
         ) : plans.length > 0 ? (
-          <main className="results-pane panel-scroll-area">
-            <p className="panel-label" style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Generated Plans — click to inspect</p>
-            <div className="gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.5rem' }}>
+          <main className="neu-panel panel-scroll-area" style={{ padding: '1.5rem' }}>
+            <p style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1.5rem', color: 'var(--text-primary)' }}>Generated Plans — click to inspect</p>
+            <div className="gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2rem' }}>
               {plans.map(plan => (
-                <div key={plan.id} className="card" onClick={() => openPlan(plan)} style={{ cursor: 'pointer', padding: 0, overflow: 'hidden', border: '1px solid var(--glass-border)', transition: 'transform 0.2s' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
-                  <div style={{ height: '180px', background: '#fff' }}>
+                <div key={plan.id} className="neu-panel" onClick={() => openPlan(plan)} style={{ cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
+                  <div style={{ height: '220px', background: 'var(--input-bg)', boxShadow: 'var(--shadow-inset)', position: 'relative' }}>
                     <img src={plan.imageUrl} alt="Concept" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
-                  <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{plan.id.slice(0, 8)}</span>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-color)' }}>{plan.vastuScore} Vastu</span>
+                  <div style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{plan.id.slice(0, 8)}</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--accent-color)' }}>{plan.vastuScore} Vastu</span>
                   </div>
                 </div>
               ))}
             </div>
           </main>
         ) : (
-          <main className="results-pane" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-            <div style={{ fontSize: '4rem', background: 'var(--accent-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '1rem' }}>⬡</div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>No Plans Yet</h2>
-            <p style={{ opacity: 0.7, maxWidth: '400px', margin: '0 auto 2rem', lineHeight: 1.6 }}>Configure your requirements on the left and click <strong>Generate Plans</strong> to get started.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', textAlign: 'left' }}>
-              <div style={{ background: 'var(--glass-bg)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                <strong>🤖 Generative Layouts</strong><br/><span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Llama-3 calculates precise rooms.</span>
-              </div>
-              <div style={{ background: 'var(--glass-bg)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                <strong>🗂 Export to CAD</strong><br/><span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Download perfectly scaled DXFs.</span>
+          <main className="neu-panel panel-scroll-area" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '4rem 2rem' }}>
+            <div className="neu-panel-inset" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 3rem', maxWidth: '600px', width: '100%' }}>
+              <div style={{ fontSize: '4.5rem', color: 'var(--accent-color)', marginBottom: '1.5rem', filter: 'drop-shadow(2px 4px 6px rgba(163,177,198,0.4))' }}>⬡</div>
+              <h2 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '0 0 1rem 0', color: 'var(--text-primary)' }}>No Plans Yet</h2>
+              <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto 2.5rem', lineHeight: 1.6, fontSize: '1.05rem' }}>Configure your requirements on the left and click <strong style={{ color: 'var(--text-primary)' }}>Generate Plans</strong> to get started.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', textAlign: 'left', width: '100%' }}>
+                <div className="neu-panel" style={{ padding: '1.25rem' }}>
+                  <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '0.4rem', fontSize: '0.95rem' }}>🤖 Generative Layouts</strong>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Gemini calculates precise rooms.</span>
+                </div>
+                <div className="neu-panel" style={{ padding: '1.25rem' }}>
+                  <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '0.4rem', fontSize: '0.95rem' }}>🗂 Export to CAD</strong>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Download perfectly scaled DXFs.</span>
+                </div>
               </div>
             </div>
           </main>

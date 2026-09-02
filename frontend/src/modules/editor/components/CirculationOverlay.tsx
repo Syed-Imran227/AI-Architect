@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FloorCirculation } from '../services/api';
+import type { FloorCirculation } from '../../../shared/api-client/api';
 
 interface Props {
   /** Circulation data for the current floor from the backend */

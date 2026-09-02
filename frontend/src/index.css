@@ -1,116 +1,64 @@
-﻿/* ═══════════════════════════════════════════════════════════════════════
-   DARK MODE — Linear/OLED Aesthetic
-   Deep blacks, crisp edges, violet accent
-   Skill: ui-ux-pro-max / dark-mode-oled — text contrast ≥ 4.5:1
-═══════════════════════════════════════════════════════════════════════ */
-:root,
-[data-theme="dark"] {
+:root {
   --font-primary: 'Inter', system-ui, sans-serif;
-  --font-mono: 'Roboto Mono', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  /* Surfaces — three distinct levels */
-  --bg-primary:    #0d0d0d;
-  --bg-secondary:  #111111;
-  --bg-card:       #1a1a1a;
+  /* Surfaces — Precision Blueprint White Theme */
+  --bg-primary:   #F8FAFC;
+  --bg-secondary: #FFFFFF;
+  --bg-card:      #FFFFFF;
 
-  /* Glass / panels */
-  --glass-bg:      #161616;
-  --glass-border:  rgba(255, 255, 255, 0.08);
-  --glass-hover:   #1f1f1f;
-  --glass-shadow:  0 1px 3px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4);
+  /* Minimal Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-elevated: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-elevated-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-inset: none;
+  
+  /* Text */
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-muted:     #94A3B8;
 
-  /* Text — contrast ≥ 4.5:1 on #0d0d0d */
-  --text-primary:   #f2f2f2;
-  --text-secondary: #a3a3a3;
-  --text-muted:     #6b6b6b;
+  /* Accent — Vibrant Blue */
+  --accent-color:    #2563EB;
+  --accent-fg:       #FFFFFF;
+  --accent-glow: rgba(59, 130, 246, 0.2);
 
-  /* Accent — violet/indigo */
-  --accent-color:    #7c6cf8;
-  --accent-fg:       #ffffff;
-  --accent-purple:   #a89cf7;
-  --accent-gradient: linear-gradient(135deg, #7c6cf8, #a89cf7);
-  --accent-glow:     0 0 0 3px rgba(124, 108, 248, 0.35);
+  /* Fallback aliases for legacy App.css components (to automatically upgrade them) */
+  --glass-bg: var(--bg-card);
+  --glass-border: var(--border-color);
+  --glass-hover: var(--surface-hover);
+  --glass-shadow: var(--shadow-sm);
+  --input-shadow: none;
+
+  /* CTA */
+  --cta-color:       #2563EB;
+  --cta-hover:       #1D4ED8;
 
   /* Inputs */
-  --input-bg:     #141414;
-  --input-shadow: none;
-  --input-border: rgba(255, 255, 255, 0.1);
+  --input-bg:     #FFFFFF;
+  --input-shadow: var(--shadow-sm);
+  --input-border: #E2E8F0;
+  
+  /* Borders */
+  --border-color: #F3F4F6;
+  --border-focus: #2563EB;
 
   /* Nav */
-  --nav-bg:        rgba(13, 13, 13, 0.92);
-  --nav-border:    rgba(255, 255, 255, 0.07);
+  --nav-bg:       #FFFFFF;
+  --nav-border:   #F3F4F6;
 
-  /* Toggles */
-  --toggle-off-bg: #2e2e2e;
-
-  /* Semantic status — visually distinct, not white */
-  --success:      #34d399;
-  --error:        #f87171;
-  --warning:      #fbbf24;
-  --success-text: #34d399;
-  --error-text:   #f87171;
-
-  /* Scrollbar */
-  --scrollbar-track: #0d0d0d;
-  --scrollbar-thumb: #2e2e2e;
-
-  color-scheme: dark;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   LIGHT MODE — Swiss/Minimal Aesthetic
-   Pure white, clear borders, violet accent
-   Skill: ui-ux-pro-max / minimalism — text contrast ≥ 4.5:1
-═══════════════════════════════════════════════════════════════════════ */
-[data-theme="light"] {
-  --font-primary: 'Inter', system-ui, sans-serif;
-  --font-mono: 'Roboto Mono', monospace;
-
-  /* Surfaces — three distinct levels */
-  --bg-primary:   #f5f5f5;
-  --bg-secondary: #ebebeb;
-  --bg-card:      #ffffff;
-
-  /* Glass / panels */
-  --glass-bg:     #ffffff;
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --glass-hover:  #f9f9f9;
-  --glass-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
-
-  /* Text — contrast ≥ 4.5:1 on #f5f5f5 */
-  --text-primary:   #111111;
-  --text-secondary: #4b4b4b;
-  --text-muted:     #8a8a8a;
-
-  /* Accent — violet/indigo (same brand) */
-  --accent-color:    #6254f3;
-  --accent-fg:       #ffffff;
-  --accent-purple:   #7c6cf8;
-  --accent-gradient: linear-gradient(135deg, #6254f3, #9181fa);
-  --accent-glow:     0 0 0 3px rgba(98, 84, 243, 0.25);
-
-  /* Inputs */
-  --input-bg:     #ffffff;
-  --input-shadow: none;
-  --input-border: rgba(0, 0, 0, 0.15);
-
-  /* Nav */
-  --nav-bg:       rgba(255, 255, 255, 0.92);
-  --nav-border:   rgba(0, 0, 0, 0.08);
-
-  /* Toggles */
-  --toggle-off-bg: #d4d4d4;
-
-  /* Semantic status — real colors, not black */
-  --success:      #059669;
-  --error:        #dc2626;
-  --warning:      #d97706;
-  --success-text: #059669;
-  --error-text:   #dc2626;
+  /* Semantic status */
+  --success:      #10B981;
+  --error:        #EF4444;
+  --warning:      #F59E0B;
+  --success-text: #047857;
+  --error-text:   #B91C1C;
+  --success-bg:   #ECFDF5;
+  --success-border: #A7F3D0;
 
   /* Scrollbar */
-  --scrollbar-track: #ebebeb;
-  --scrollbar-thumb: #c4c4c4;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #CBD5E1;
 
   color-scheme: light;
 }
@@ -152,20 +100,147 @@ h1, h2, h3, h4, h5, h6 {
 
 button {
   font-family: var(--font-primary);
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: none;
+  outline: none;
 }
 
-input, select {
+input, select, textarea {
   font-family: var(--font-primary);
+  outline: none;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  border-radius: 4px;
+  padding: 8px 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent-color);
+  box-shadow: var(--accent-glow);
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
 /* Smooth theme transition */
 div, header, nav, aside, main, section, footer, button, input, select, a {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MODERN PANELS & BUTTONS (Replacing Neu-styles)
+═══════════════════════════════════════════════════════════════════════ */
+
+/* Replaces neu-panel */
+.neu-panel {
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.neu-panel:hover {
+  box-shadow: var(--shadow-elevated);
+}
+
+/* Replaces neu-panel-inset (no longer inset, just a slightly different card) */
+.neu-panel-inset {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+/* Primary modern button (replaces neu-btn) */
+.neu-btn, .primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-color);
+  color: var(--accent-fg);
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  border: none;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+.neu-btn:hover:not(:disabled), .primary-btn:hover:not(:disabled) {
+  background: var(--cta-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-elevated);
+}
+.neu-btn:active:not(:disabled), .primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.neu-btn:disabled, .primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Ghost modern button (replaces neu-btn-ghost) */
+.neu-btn-ghost, .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  border: 2px solid #d1d5db; /* Thicker, visible border */
+  transition: all 0.2s ease;
+}
+.neu-btn-ghost:hover:not(:disabled), .btn-ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: #9ca3af; /* Darker border on hover */
+}
+.neu-btn-ghost:active:not(:disabled), .btn-ghost:active:not(:disabled) {
+  background: #f3f4f6;
+}
+.neu-input {
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  border-radius: 4px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  width: 100%;
+}
+.neu-input:focus {
+  border-color: var(--accent-color);
+  box-shadow: var(--accent-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LAYOUT
+═══════════════════════════════════════════════════════════════════════ */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.content-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  flex: 1;
+  height: calc(100vh - 80px);
+  overflow: hidden;
+}
+/* When viewing a plan, use a 3-column professional layout */
+.content-grid.active-plan-view {
+  grid-template-columns: 330px 1fr 360px;
+  gap: 0;
+  padding: 0;
+  height: calc(100vh - 65px);
 }

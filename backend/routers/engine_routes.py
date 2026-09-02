@@ -14,6 +14,7 @@ from engines.vastu_engine import score_vastu
 from engines.nbc_engine import score_nbc
 from engines.energy_engine import score_energy
 from engines.bom_engine import compute_bom
+from engines.sunlight_engine import evaluate_sunlight
 from exporters.pdf_report import generate_report_pdf
 
 router = APIRouter(tags=["engine"])
@@ -54,11 +55,11 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         )
     except ValueError as ve:
         raise HTTPException(status_code=422, detail=str(ve))
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
         raise HTTPException(
-            status_code=503,
-            detail="AI inference engine is currently unavailable. Please try again later."
+            status_code=500,
+            detail=f"AI inference engine failed: {str(e)}"
         )
 
     if "error" in json_layout:
@@ -125,6 +126,13 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         entry_dir = req.entryDir,
     )
 
+    sunlight_result = evaluate_sunlight(
+        layout    = json_layout,
+        entry_dir = req.entryDir,
+    )
+
+    bom_result = compute_bom(json_layout)
+
     return {
         "status": "success",
         "candidates": [
@@ -136,11 +144,28 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
                 "vastuResult":          vastu_result,
                 "nbcResult":            nbc_result,
                 "energyResult":         energy_result,
+                "sunlightResult":       sunlight_result,
+                "bomResult":            bom_result,
                 "validationReport":     json_layout.get("validation_report", []),
                 "circulationWarnings":  json_layout.get("circulation_warnings", []),
             }
         ],
     }
+
+
+class BomRecalculateRequest(BaseModel):
+    layout: dict
+    sqft: float = 0.0
+    tier: str = "standard"
+
+@router.post("/bom/recalculate")
+def recalculate_bom(req: BomRecalculateRequest, current_user: dict = Depends(get_current_user)):
+    try:
+        new_bom = compute_bom(req.layout, req.sqft, req.tier)
+        return {"status": "success", "bomResult": new_bom}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to recalculate BOM: {str(e)}")
 
 
 class DxfExportRequest(BaseModel):
@@ -197,9 +222,9 @@ def export_pdf(req: PdfExportRequest, current_user: dict = Depends(get_current_u
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Failed to generate PDF Report due to an internal server error.")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF Report due to an internal server error: {str(e)}")
 
 
 class VastuFixRequest(BaseModel):
@@ -318,6 +343,11 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             floor_images.append(image_url)
         image_url = floor_images[0]  # primary (ground floor) image for backward compat
 
+        sqft_plot = round(req.plot_width * req.plot_height)
+        new_energy = score_energy(ground_rooms, req.plot_width, req.plot_height, req.entry_dir)
+        new_sunlight = evaluate_sunlight(new_layout, req.entry_dir)
+        new_bom = compute_bom(new_layout, sqft_plot)
+
         return {
             "status": "success",
             "before_score": before_score,
@@ -329,12 +359,15 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
             "fixed_layout": ground_rooms,
             "imageUrl": image_url,
             "full_layout": new_layout,
+            "new_energy_result": new_energy,
+            "new_sunlight_result": new_sunlight,
+            "new_bom_result": new_bom,
         }
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Auto-fix failed due to an internal server error.")
+        raise HTTPException(status_code=500, detail=f"Auto-fix failed due to an internal server error: {str(e)}")
 
 
 class NbcFixRequest(BaseModel):
@@ -445,6 +478,11 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
             floor_images2.append(image_url)
         image_url = floor_images2[0]
 
+        sqft_plot = round(req.plot_width * req.plot_height)
+        new_energy = score_energy(ground_rooms, req.plot_width, req.plot_height, req.entry_dir)
+        new_sunlight = evaluate_sunlight(new_layout, req.entry_dir)
+        new_bom = compute_bom(new_layout, sqft_plot)
+
         return {
             "status": "success",
             "before_score": before_score,
@@ -456,12 +494,15 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
             "fixed_layout": ground_rooms,
             "imageUrl": image_url,
             "full_layout": new_layout,
+            "new_energy_result": new_energy,
+            "new_sunlight_result": new_sunlight,
+            "new_bom_result": new_bom,
         }
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Auto-fix failed due to an internal server error.")
+        raise HTTPException(status_code=500, detail=f"Auto-fix failed due to an internal server error: {str(e)}")
 
 
 class RegenerateRoomRequest(BaseModel):
@@ -508,12 +549,20 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
             b64_str = base64.b64encode(png_bytes).decode("utf-8")
             image_url = f"data:image/png;base64,{b64_str}"
 
+            sqft_plot = round(req.plot_width * req.plot_height)
+            new_energy = score_energy(ground_rooms, req.plot_width, req.plot_height, req.entry_dir)
+            new_sunlight = evaluate_sunlight(result["layout"], req.entry_dir)
+            new_bom = compute_bom(result["layout"], sqft_plot)
+
             return {
                 "rooms": ground_rooms,
                 "imageUrl": image_url,
                 "llm_called": True,
                 "design_rationale": result["design_rationale"],
                 "full_layout": result["layout"],
+                "new_energy_result": new_energy,
+                "new_sunlight_result": new_sunlight,
+                "new_bom_result": new_bom,
             }
 
         raise HTTPException(
@@ -522,6 +571,6 @@ def regenerate_room(req: RegenerateRoomRequest, current_user: dict = Depends(get
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Regeneration failed due to an internal server error.")
+        raise HTTPException(status_code=500, detail=f"Regeneration failed due to an internal server error: {str(e)}")

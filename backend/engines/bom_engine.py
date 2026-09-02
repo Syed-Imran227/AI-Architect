@@ -16,6 +16,7 @@ Output schema (returned by compute_bom):
             "num_doors":      int,
             "num_windows":    int,
             "costs": {
+                "structure":  float,   # RCC
                 "wall":       float,   # brick + plaster
                 "flooring":   float,
                 "ceiling":    float,
@@ -43,13 +44,14 @@ Output schema (returned by compute_bom):
 
 from __future__ import annotations
 from engines.cost_rates import (
-    BRICK_WALL_PER_SQFT, PLASTER_PER_SQFT,
+    STRUCTURE_RCC_PER_SQFT, BRICK_WALL_PER_SQFT, PLASTER_PER_SQFT,
     FLOORING_TILE_PER_SQFT, FLOORING_MARBLE_PER_SQFT,
     CEILING_PER_SQFT,
     ELECTRICAL_PER_SQFT, PLUMBING_PER_SQFT, PAINTING_PER_SQFT,
     DOOR_UNIT_COST, WINDOW_UNIT_COST,
     LABOUR_RATIO, CEILING_HEIGHT_FT,
     WET_ROOM_KEYWORDS, PREMIUM_FLOOR_KEYWORDS,
+    TIER_MULTIPLIERS
 )
 
 
@@ -63,7 +65,7 @@ def _is_premium_floor(name: str) -> bool:
     return any(k in n for k in PREMIUM_FLOOR_KEYWORDS)
 
 
-def _room_bom(room: dict) -> dict:
+def _room_bom(room: dict, tier: str = "standard") -> dict:
     """Compute the BOM breakdown for a single room dict."""
     name       = room.get("name", "Room")
     width_ft   = float(room.get("width",  0))
@@ -74,20 +76,23 @@ def _room_bom(room: dict) -> dict:
     area_sqft      = width_ft * height_ft
     perimeter_ft   = 2 * (width_ft + height_ft)
     wall_area_sqft = perimeter_ft * CEILING_HEIGHT_FT
+    
+    tier_mult = TIER_MULTIPLIERS.get(tier, 1.0)
 
     # ── Material costs ────────────────────────────────────────────────────────
-    wall_cost      = wall_area_sqft * (BRICK_WALL_PER_SQFT + PLASTER_PER_SQFT)
+    structure_cost = area_sqft * STRUCTURE_RCC_PER_SQFT * tier_mult
+    wall_cost      = wall_area_sqft * (BRICK_WALL_PER_SQFT + PLASTER_PER_SQFT) * tier_mult
     floor_rate     = FLOORING_MARBLE_PER_SQFT if _is_premium_floor(name) else FLOORING_TILE_PER_SQFT
-    flooring_cost  = area_sqft   * floor_rate
-    ceiling_cost   = area_sqft   * CEILING_PER_SQFT
-    electrical_cost= area_sqft   * ELECTRICAL_PER_SQFT
-    plumbing_cost  = area_sqft   * PLUMBING_PER_SQFT if _is_wet_room(name) else 0.0
-    painting_cost  = area_sqft   * PAINTING_PER_SQFT
-    door_cost      = num_doors   * DOOR_UNIT_COST
-    window_cost    = num_windows * WINDOW_UNIT_COST
+    flooring_cost  = area_sqft   * floor_rate * tier_mult
+    ceiling_cost   = area_sqft   * CEILING_PER_SQFT * tier_mult
+    electrical_cost= area_sqft   * ELECTRICAL_PER_SQFT * tier_mult
+    plumbing_cost  = (area_sqft   * PLUMBING_PER_SQFT * tier_mult) if _is_wet_room(name) else 0.0
+    painting_cost  = area_sqft   * PAINTING_PER_SQFT * tier_mult
+    door_cost      = num_doors   * DOOR_UNIT_COST * tier_mult
+    window_cost    = num_windows * WINDOW_UNIT_COST * tier_mult
 
     material_total = (
-        wall_cost + flooring_cost + ceiling_cost
+        structure_cost + wall_cost + flooring_cost + ceiling_cost
         + electrical_cost + plumbing_cost + painting_cost
         + door_cost + window_cost
     )
@@ -101,6 +106,7 @@ def _room_bom(room: dict) -> dict:
         "num_doors":      num_doors,
         "num_windows":    num_windows,
         "costs": {
+            "structure":  round(structure_cost,  2),
             "wall":       round(wall_cost,       2),
             "flooring":   round(flooring_cost,   2),
             "ceiling":    round(ceiling_cost,    2),
@@ -116,13 +122,14 @@ def _room_bom(room: dict) -> dict:
     }
 
 
-def compute_bom(layout_or_rooms: dict | list, sqft: float = 0.0) -> dict:
+def compute_bom(layout_or_rooms: dict | list, sqft: float = 0.0, tier: str = "standard") -> dict:
     """
     Compute a full BOM for all rooms across all floors or a raw list of rooms.
 
     Args:
         layout_or_rooms: The full {floors: [{rooms: [...]}]} dict, or {rooms: [...]}, or list of room dicts.
         sqft: Optional square footage float.
+        tier: Material quality tier ("economy", "standard", "premium").
 
     Returns:
         BOM dict with per-room breakdown and project summary.
@@ -134,13 +141,13 @@ def compute_bom(layout_or_rooms: dict | list, sqft: float = 0.0) -> dict:
         if floors:
             for floor in floors:
                 for room in floor.get("rooms", []):
-                    all_room_boms.append(_room_bom(room))
+                    all_room_boms.append(_room_bom(room, tier))
         elif "rooms" in layout_or_rooms:
             for room in layout_or_rooms.get("rooms", []):
-                all_room_boms.append(_room_bom(room))
+                all_room_boms.append(_room_bom(room, tier))
     elif isinstance(layout_or_rooms, list):
         for room in layout_or_rooms:
-            all_room_boms.append(_room_bom(room))
+            all_room_boms.append(_room_bom(room, tier))
 
     # ── Summary ───────────────────────────────────────────────────────────────
     total_area     = sum(r["area_sqft"]          for r in all_room_boms)

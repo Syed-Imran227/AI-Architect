@@ -14,6 +14,9 @@ Sources:
 
 from __future__ import annotations
 
+# ── Structural & Core (per sqft of floor area) ─────────────────────────────
+STRUCTURE_RCC_PER_SQFT = 400.0   # ₹/sqft — RCC framework and slab
+
 # ── Wall construction (per sqft of wall face area) ────────────────────────────
 BRICK_WALL_PER_SQFT   = 55.0   # ₹/sqft — 9-inch brick masonry
 PLASTER_PER_SQFT      = 18.0   # ₹/sqft — both sides (internal + external)
@@ -38,6 +41,13 @@ WINDOW_UNIT_COST      = 5_500.0   # ₹ per standard aluminium window
 
 # ── Labour rate ───────────────────────────────────────────────────────────────
 LABOUR_RATIO          = 0.30   # 30% of all material costs
+
+# ── Tiers Multiplier ────────────────────────────────────────────────────────
+TIER_MULTIPLIERS = {
+    "economy": 0.8,
+    "standard": 1.0,
+    "premium": 1.5
+}
 
 # ── Ceiling height assumed throughout ─────────────────────────────────────────
 CEILING_HEIGHT_FT     = 10.0

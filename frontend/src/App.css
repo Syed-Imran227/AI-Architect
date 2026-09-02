@@ -29,12 +29,11 @@ header {
 }
 
 .header-logo {
-  font-size: 2rem;
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-size: 1.5rem;
+  color: var(--accent-color);
   font-weight: 700;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
 }
 
 .content-grid {
@@ -49,7 +48,7 @@ header {
 
 /* When viewing a plan, use a 3-column professional layout */
 .content-grid.active-plan-view {
-  grid-template-columns: 320px 1fr 360px;
+  grid-template-columns: 330px 1fr 360px;
 }
 
 /* ── UI Components (Linear / Rayon solid panels) ── */
@@ -57,11 +56,11 @@ header {
 .panel-card,
 .form-pane,
 .results-pane {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
   padding: 1.25rem;
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -96,9 +95,9 @@ button {
 .btn-primary {
   background: var(--accent-color);
   color: var(--accent-fg);
-  border: none;
-  box-shadow: var(--glass-shadow);
-  border-radius: 6px;
+  border: 1px solid var(--accent-color);
+  box-shadow: none;
+  border-radius: 2px;
   padding: 0.55rem 1.25rem;
   font-weight: 600;
   font-size: 0.875rem;
@@ -109,21 +108,25 @@ button {
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.85;
+  background: transparent;
+  color: var(--accent-color);
 }
 
 .btn-primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  border-color: #555;
+  background: #333;
+  color: #888;
 }
 
 /* Ghost button — secondary actions */
 .btn-ghost {
-  background: var(--glass-bg);
+  background: transparent;
   color: var(--text-secondary);
-  border: none;
-  box-shadow: var(--glass-shadow);
-  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+  border-radius: 2px;
   padding: 0.55rem 1.25rem;
   font-weight: 500;
   font-size: 0.875rem;
@@ -136,8 +139,7 @@ button {
 .btn-ghost:hover:not(:disabled) {
   background: var(--glass-hover);
   color: var(--text-primary);
-  
-  box-shadow: var(--input-shadow);
+  border-color: var(--text-secondary);
 }
 
 .btn-ghost:disabled {

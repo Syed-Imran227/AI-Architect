@@ -17,10 +17,8 @@ async def lifespan(app: FastAPI):
     process exits immediately instead of silently misbehaving at runtime."""
     if not os.getenv("JWT_SECRET"):
         raise ValueError("CRITICAL: JWT_SECRET environment variable is missing. Cannot boot securely.")
-    if not os.getenv("GROQ_API_KEY"):
-        raise ValueError("CRITICAL: GROQ_API_KEY environment variable is missing. Cannot generate AI layouts.")
-    if not os.getenv("HF_API_KEY"):
-        raise ValueError("CRITICAL: HF_API_KEY environment variable is missing. Cannot generate AI layouts via HuggingFace.")
+    if not os.getenv("GEMINI_API_KEY"):
+        raise ValueError("CRITICAL: GEMINI_API_KEY environment variable is missing. Cannot generate AI layouts via Gemini.")
     yield  # App is live
 
 app = FastAPI(title="AI Architect API", lifespan=lifespan)
@@ -31,6 +29,7 @@ app = FastAPI(title="AI Architect API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { regenerateRoom, type Room, type LayoutUpdatePayload } from '../services/api';
-import { validateRoomPlacement } from '../utils/validateRooms';
+import { regenerateRoom, type Room, type LayoutUpdatePayload } from '../../../shared/api-client/api';
+import { validateRoomPlacement } from '../../../shared/utils/validateRooms';
 import { toast } from 'react-hot-toast';
 
 interface PlotContext {
@@ -51,8 +51,6 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
     };
   }, []);
 
-  // Sync local state when the selected room prop changes using the during-render pattern
-  // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
   if (room.name !== prevRoomName) {
     setPrevRoomName(room.name);
     setLocal({ ...room });
@@ -66,7 +64,6 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
   };
 
   const handleApply = () => {
-    // Validate bounds and overlaps using the full list, pretending the local room replaced the original
     const newRooms = allRooms.map((r, i) => i === index ? local : r);
     const violations = validateRoomPlacement(newRooms, plotContext.plotWidth, plotContext.plotHeight);
     if (violations.length > 0) {
@@ -107,27 +104,29 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
   };
 
   return (
-    <div className="room-editor">
-      <div className="room-editor-header">
-        <div className="room-editor-title">
-          <div className="room-color-dot" style={{ background: getRoomDotColor(room.name) }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: getRoomDotColor(room.name), boxShadow: 'var(--shadow-elevated)' }} />
           <div>
-            <h3>{room.name}</h3>
-            <span className="room-orig-dims">{room.width} × {room.height} ft</span>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>{room.name}</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{room.width} × {room.height} ft</span>
           </div>
         </div>
-        <button className="close-btn" onClick={onClose} title="Close editor">✕</button>
+        <button className="neu-btn-ghost" onClick={onClose} title="Close editor" style={{ padding: '0.4rem', fontSize: '1rem', borderRadius: '8px' }}>✕</button>
       </div>
 
       {/* Numeric precision editing */}
-      <div className="room-editor-section">
-        <p className="section-label">Precise Dimensions</p>
-        <div className="field-grid">
+      <div className="neu-panel-inset" style={{ padding: '1.25rem' }}>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Precise Dimensions</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
           {(Object.keys(FIELD_LABELS) as NumericRoomKey[]).map(field => (
-            <div className="mini-form-group" key={field}>
-              <label>{FIELD_LABELS[field]}</label>
+            <div key={field} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{FIELD_LABELS[field]}</label>
               <input
                 type="number"
+                className="neu-input"
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                 value={local[field]}
                 min={field === 'width' || field === 'height' ? 4 : 0}
                 step={0.5}
@@ -136,35 +135,42 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
             </div>
           ))}
         </div>
-        <div className="editor-btn-row">
-          <button className="action-btn success" onClick={handleApply}>✓ Apply</button>
-          <button className="action-btn" onClick={handleReset}>↺ Reset</button>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button className="neu-btn" onClick={handleApply} style={{ flex: 1, padding: '0.6rem', fontSize: '0.85rem' }}>✓ Apply</button>
+          <button className="neu-btn-ghost" onClick={handleReset} style={{ flex: 1, padding: '0.6rem', fontSize: '0.85rem' }}>↺ Reset</button>
         </div>
       </div>
 
       {/* AI natural language editing */}
-      <div className="room-editor-section nl-section">
-        <p className="section-label">✦ AI Assistant</p>
-        <div className="nl-input-row">
+      <div className="neu-panel-inset" style={{ padding: '1.25rem' }}>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>✦ AI Assistant</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <input
             type="text"
-            className="nl-input"
+            className="neu-input"
             placeholder={`e.g. "Make the ${room.name} 3 ft wider"`}
             value={instruction}
             onChange={e => setInstruction(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !aiLoading && handleAskAI()}
             disabled={aiLoading}
+            style={{ width: '100%', padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}
           />
           <button
-            className={`ai-btn ${aiLoading ? 'loading' : ''} ${aiSuccess ? 'success' : ''}`}
+            className="neu-btn"
             onClick={handleAskAI}
             disabled={aiLoading || !instruction.trim()}
+            style={{ 
+              width: '100%', padding: '0.6rem', fontSize: '0.85rem',
+              color: aiSuccess ? 'var(--success)' : undefined
+            }}
           >
-            {aiLoading ? <span className="spinner" /> : aiSuccess ? '✓' : 'Ask AI'}
+            {aiLoading ? 'Thinking...' : aiSuccess ? '✓ Applied!' : 'Ask AI'}
           </button>
         </div>
-        {aiError && <p className="nl-error">⚠ {aiError}</p>}
-        <p className="nl-hint">AI will recalculate the entire floor plan to fulfil your request.</p>
+        {aiError && <p style={{ color: 'var(--error)', fontSize: '0.8rem', marginTop: '0.5rem', fontWeight: 500 }}>⚠ {aiError}</p>}
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.75rem', lineHeight: 1.4 }}>
+          AI will recalculate the entire floor plan to fulfil your request.
+        </p>
       </div>
     </div>
   );

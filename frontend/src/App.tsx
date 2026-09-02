@@ -1,11 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider, useTheme } from './context/ThemeContext';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Editor from './pages/Editor';
-import Landing from './pages/Landing';
+import { AuthProvider, useAuth } from './modules/auth/store/AuthContext';
+import Login from './modules/auth/pages/Login';
+import Register from './modules/auth/pages/Register';
+import Dashboard from './modules/dashboard/pages/Dashboard';
+import Editor from './modules/editor/pages/Editor';
+import Landing from './modules/dashboard/pages/Landing';
 import { Toaster, ToastBar, toast } from 'react-hot-toast';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -29,14 +28,11 @@ function AppRoutes() {
 }
 
 function ThemedToaster() {
-  const { isDark } = useTheme();
   return (
     <Toaster
       position="bottom-right"
       toastOptions={{
-        style: isDark
-          ? { background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)' }
-          : { background: 'rgba(255,255,255,0.9)', color: '#0f172a', border: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(100,120,180,0.15)' },
+        style: { background: 'rgba(255,255,255,0.9)', color: '#0f172a', border: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(100,120,180,0.15)' },
       }}
     >
       {(t) => (
@@ -62,13 +58,11 @@ function ThemedToaster() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <Router>
-        <AuthProvider>
-          <ThemedToaster />
-          <AppRoutes />
-        </AuthProvider>
-      </Router>
-    </ThemeProvider>
+    <Router>
+      <AuthProvider>
+        <ThemedToaster />
+        <AppRoutes />
+      </AuthProvider>
+    </Router>
   );
 }
