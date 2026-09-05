@@ -94,7 +94,7 @@ def _draw_door_inward(msp, room_x, room_y, room_w, room_h,
         msp.add_line((hx, hy), (hx, hy + door_w), dxfattribs={"layer": "WALLOPENING", "lineweight": 5})
 
 
-def export_to_dxf(rooms: list, plot_w: float = None, plot_h: float = None) -> bytes:
+def export_to_dxf(rooms: list, plot_w: float | None = None, plot_h: float | None = None) -> bytes:
     """
     Converts a list of room dicts (x, y, width, height in feet, name, doors)
     into an AutoCAD R2010-compatible DXF file.

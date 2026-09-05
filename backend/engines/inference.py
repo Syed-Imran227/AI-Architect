@@ -15,7 +15,7 @@ The Python Drafter (architectural_layout.py) turns topology into exact coordinat
 from __future__ import annotations
 import os
 import re
-from typing import Optional
+from typing import Optional, List, Dict, Tuple, Any
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, ValidationError
@@ -37,15 +37,15 @@ _hf_client = None
 if HF_API_KEY:
     _hf_client = OpenAI(api_key=HF_API_KEY, base_url="https://router.huggingface.co/v1")
 
-# List of dicts configuring fallback models
+# List of dicts configuring fallback models — Gemini primary, DeepSeek via HF as last resort
 FALLBACK_MODELS = [
+    {"provider": "gemini", "model": "gemini-3.1-pro-preview", "client": _gemini_client},
     {"provider": "gemini", "model": "gemini-3.7-flash", "client": _gemini_client},
     {"provider": "gemini", "model": "gemini-3.5-flash-lite", "client": _gemini_client},
-    {"provider": "gemini", "model": "gemini-3.1-pro-preview", "client": _gemini_client},
 ]
 
 if _hf_client:
-    FALLBACK_MODELS.insert(0, {
+    FALLBACK_MODELS.append({
         "provider": "openai", 
         "model": "deepseek-ai/DeepSeek-V3-0324", 
         "client": _hf_client
@@ -60,8 +60,6 @@ class LeftBayTopology(BaseModel):
 
 class RightBayTopology(BaseModel):
     rooms: list[str]
-    open_plan_living_dining: bool = False
-    kitchen_position: str = "rear"   # "front" | "middle" | "rear"
 
 class SpineTopology(BaseModel):
     rooms: list[str]
@@ -85,6 +83,7 @@ _ARCHITECT_SYSTEM = """You are an advanced Architectural Layout Generation Engin
 - WET ZONE CLUSTERING: Kitchens, bathrooms, and utility areas MUST share common plumbing walls vertically (across floors) and horizontally to optimize shafts.
 - FENESTRATION (LIGHT/AIR): Every Living Room, Bedroom, and Kitchen MUST have at least one exterior wall for windows. Internal bathrooms must connect to an internal ventilation shaft.
 - CIRCULATION: Hallways and corridors must not exceed 15% of the total floor area. Rooms must not be placed in a linear sequence that requires walking through one private room to reach another.
+- BALCONY PLACEMENT: Balconies MUST NEVER be attached to or share a boundary with a Staircase. They must ONLY be attached to a Bedroom, Living Room, or Family Lounge.
 
 [2. SCENARIO 1: GROUND FLOOR (FLOOR 1) - ACTIVE / PUBLIC ZONE]
 - MAIN ENTRANCE: Must act as the layout anchor, leading directly into a Foyer or the Living Room.
@@ -136,6 +135,26 @@ def _build_architect_prompt(
 
     vastu_str = "Strict Vastu Shastra compliance required." if vastu else "Modern layout preferred."
 
+    # Build vastu-specific overrides so the LLM prompt is unambiguous
+    if vastu:
+        kitchen_rule = (
+            "VASTU OVERRIDE — Kitchen MUST go in the RIGHT BAY at the REAR (South-East for North/East entry). "
+            "Left Bay ground floor holds: Parking at front, then Utility/Study. "
+            "Right Bay ground floor holds (top-to-bottom): Living Room, Dining Room, Kitchen (at rear-SE)."
+        )
+        bedroom_rule = (
+            "VASTU OVERRIDE — Master Bedroom MUST be in the LEFT BAY on upper floors (South-West position). "
+            "Avoid placing any bedroom in the North-East zone."
+        )
+        balcony_rule = (
+            "VASTU OVERRIDE — Balcony/open spaces MUST face North or East. "
+            "Place balconies on the left bay (North side) if entry is from North."
+        )
+    else:
+        kitchen_rule = "Left Bay ground floor holds Parking + Kitchen (private/service zone). Right Bay holds Living Room + Dining Room (public zone)."
+        bedroom_rule = "Upper floor bedrooms distributed evenly between Left Bay and Right Bay."
+        balcony_rule = ""
+
     return f"""
 You are the Lead AI Architect. Design the optimal zoning topology for a floor plan.
 
@@ -149,10 +168,10 @@ You are the Lead AI Architect. Design the optimal zoning topology for a floor pl
 
 # Rules
 1. The building is divided into 3 vertical bays: Left Bay (left ~35%), Spine (central corridor/stair, ~20%), Right Bay (right ~45%).
-2. Ground Floor: Left Bay holds Parking + Kitchen (private/service zone). Right Bay holds Living + Dining (public zone). Spine holds Foyer + Corridor + Staircase.
+2. {kitchen_rule}
 3. Upper Floors: Left Bay and Right Bay hold Bedrooms with their attached Bathrooms. Spine holds Corridor + Staircase.
-4. If Vastu=True: place Kitchen in South-East (right bay rear is ideal), Master Bedroom in South-West (left bay).
-5. kitchen_position options: "front" (near entry), "middle", "rear" (opposite entry). Default is "rear".
+4. {bedroom_rule}
+5. {balcony_rule if balcony_rule else "No specific balcony placement required."}
 6. bathrooms_allocated = how many of the {bathrooms} bathrooms go to that bay's bedrooms. The total across both bays must equal {bathrooms}.
 7. "rooms" in each bay should list high-level room types in top-to-bottom order (e.g. ["Master Bedroom", "Bedroom 2"]).
 
@@ -164,9 +183,7 @@ You are the Lead AI Architect. Design the optimal zoning topology for a floor pl
       "bathrooms_allocated": 2
     }},
     "right_bay": {{
-      "rooms": ["Living Room", "Dining Room", "Kitchen"],
-      "open_plan_living_dining": false,
-      "kitchen_position": "rear"
+      "rooms": ["Living Room", "Dining Room", "Kitchen"]
     }},
     "spine": {{
       "rooms": ["Foyer", "Corridor", "Staircase"]
@@ -204,7 +221,7 @@ def _call_architect_llm(prompt: str, retries: int = 2) -> Optional[TopologyRespo
         model_cfg = FALLBACK_MODELS[min(attempt, len(FALLBACK_MODELS) - 1)]
         provider = model_cfg["provider"]
         model_name = model_cfg["model"]
-        client = model_cfg["client"]
+        client: Any = model_cfg["client"]
         
         try:
             print(f"[architect:{provider}] Attempt {attempt+1}: using model {model_name}")
@@ -265,8 +282,7 @@ def _call_architect_llm(prompt: str, retries: int = 2) -> Optional[TopologyRespo
 
 class FloorPlanGenerator:
     def __init__(self):
-        self.llm_client = _gemini_client
-        self.fallback_models = FALLBACK_MODELS
+        pass
 
     def generate_floorplan_json(
         self,
@@ -294,7 +310,7 @@ class FloorPlanGenerator:
                 length, width, bedrooms, bathrooms,
                 duplex, balcony, terrace, lift, vastu, entry_dir
             )
-            topology = _call_architect_llm(prompt, retries=1)
+            topology = _call_architect_llm(prompt, retries=len(FALLBACK_MODELS)-1)
 
             if topology is None:
                 print("[architect] LLM failed — using default topology fallback.")
@@ -336,7 +352,7 @@ class FloorPlanGenerator:
 
 # ── Phase 3: Boundary-only validator (safety net, not fixer) ─────────────────
 
-def _run_boundary_check(layout: dict, plot_w: float = None, plot_h: float = None) -> dict:
+def _run_boundary_check(layout: dict, plot_w: float | None = None, plot_h: float | None = None) -> dict:
     """
     Runs boundary-clamp ONLY (no overlap push-apart).
     The Drafter guarantees no overlaps by construction.
@@ -525,9 +541,7 @@ Revise the topology to address these violations. You MUST:
       "bathrooms_allocated": 1
     }},
     "right_bay": {{
-      "rooms": ["Living Room", "Dining Room", "Kitchen"],
-      "open_plan_living_dining": true,
-      "kitchen_position": "rear"
+      "rooms": ["Living Room", "Dining Room", "Kitchen"]
     }},
     "spine": {{
       "rooms": ["Foyer", "Corridor", "Staircase"]

@@ -17,6 +17,7 @@ interface Props {
   entryDir?: string;
   plotWidth?: number;
   plotHeight?: number;
+  floorIndex?: number;
 }
 
 // Professional 2D CAD clean white color scheme per room type
@@ -449,7 +450,9 @@ function WindowMarks({ room }: { room: Room }) {
   );
 }
 
-const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation, sunlightResult, showSunlight, entryDir = 'north', plotWidth, plotHeight }) => {
+const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom, onRoomSelect, onRoomDrop, circulation, showCirculation, sunlightResult, showSunlight, entryDir = 'north', plotWidth, plotHeight,
+  floorIndex = 0,
+}) => {
   // Drag overlay: only maintain local state during an active drag.
   // When not dragging, the parent prop is the source of truth (no sync needed).
   const [dragRooms, setDragRooms] = useState<Room[] | null>(null);
@@ -616,17 +619,27 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       </text>
 
       {/* Outer building boundary */}
-      {displayRooms.length > 0 ? (
-        <rect
-          x={Math.min(...displayRooms.map(r => r.x)) - WALL} 
-          y={Math.min(...displayRooms.map(r => r.y)) - WALL}
-          width={Math.max(...displayRooms.map(r => r.x + r.width)) - Math.min(...displayRooms.map(r => r.x)) + WALL * 2}
-          height={Math.max(...displayRooms.map(r => r.y + r.height)) - Math.min(...displayRooms.map(r => r.y)) + WALL * 2}
+      {(() => {
+        const enclosedRooms = displayRooms.filter(r => 
+          !r.name.toLowerCase().includes('balcony') && 
+          !r.name.toLowerCase().includes('terrace') && 
+          !r.name.toLowerCase().includes('parking') &&
+          !r.name.toLowerCase().includes('open area')
+        );
+        const boundsRooms = enclosedRooms.length > 0 ? enclosedRooms : displayRooms;
+        if (boundsRooms.length === 0) return null;
+        return (
+          <rect
+            x={Math.min(...boundsRooms.map(r => r.x)) - WALL} 
+            y={Math.min(...boundsRooms.map(r => r.y)) - WALL}
+            width={Math.max(...boundsRooms.map(r => r.x + r.width)) - Math.min(...boundsRooms.map(r => r.x)) + WALL * 2}
+            height={Math.max(...boundsRooms.map(r => r.y + r.height)) - Math.min(...boundsRooms.map(r => r.y)) + WALL * 2}
           fill="url(#hatch)"
           stroke="#1e293b"
           strokeWidth={WALL * 1.5}
-        />
-      ) : null}
+          />
+        );
+      })()}
 
       {/* Rooms */}
       {displayRooms.map((room, i) => {
@@ -639,6 +652,50 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
         const labelSize = Math.max(0.75, Math.min(room.width, room.height) * 0.12, 1);
         const subSize = labelSize * 0.68;
         const sqft = Math.round(room.width * room.height);
+
+        const isBalcony = room.name.toLowerCase().includes('balcony') || 
+                          room.name.toLowerCase().includes('terrace');
+
+        if (isBalcony) {
+          return (
+            <g key={`${room.name}-${i}`}
+              className={`room-group ${isSelected ? 'selected' : ''}`}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (onRoomSelect) onRoomSelect(room, i);
+                handlePointerDown(e, room, i);
+              }}
+              style={{ cursor: draggingRoomIndex === i ? 'grabbing' : 'grab', touchAction: 'none' }}>
+              
+              {/* Light open-air fill */}
+              <rect x={room.x} y={room.y} width={room.width} height={room.height}
+                    fill="rgba(147, 197, 253, 0.15)" stroke="none" />
+              {/* Inner wall — solid (shared with room above) */}
+              <line x1={room.x} y1={room.y} x2={room.x + room.width} y2={room.y}
+                    stroke="#1e293b" strokeWidth={WALL * 0.8} />
+              {/* Outer boundary — thin dashed line indicating open edge */}
+              <rect x={room.x} y={room.y} width={room.width} height={room.height}
+                    stroke="#64748b" strokeWidth={WALL * 0.2} strokeDasharray="4 4" fill="none" />
+              
+              {/* Railing pattern — diagonal hatch lines inside */}
+              <line x1={room.x} y1={room.y} x2={room.x + room.width} y2={room.y + room.height}
+                    stroke="rgba(147,197,253,0.3)" strokeWidth={0.15} />
+              <line x1={room.x + room.width} y1={room.y} x2={room.x} y2={room.y + room.height}
+                    stroke="rgba(147,197,253,0.3)" strokeWidth={0.15} />
+
+              <text x={cx} y={cy - subSize * 0.5} textAnchor="middle" dominantBaseline="middle"
+                    fill="#1d4ed8" fontSize={labelSize} fontWeight="700"
+                    fontFamily="Inter, system-ui, sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                🌿 {room.name}
+              </text>
+              <text x={cx} y={cy + labelSize * 0.5} textAnchor="middle" dominantBaseline="middle"
+                    fill="#3b82f6" fontSize={subSize} fontFamily="Inter, system-ui, sans-serif" opacity={0.8}
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                {Math.round(room.width)}×{Math.round(room.height)} ft · {sqft} sqft
+              </text>
+            </g>
+          );
+        }
 
         return (
           <g key={`${room.name}-${i}`}
@@ -829,8 +886,7 @@ const InteractiveBlueprint: React.FC<Props> = React.memo(({ rooms, selectedRoom,
       })()}
       {/* Circulation path overlay — toggled by the parent via showCirculation prop */}
       <CirculationOverlay circulation={circulation ?? null} visible={showCirculation ?? false} />
-      {/* Sunlight overlay */}
-      <SunlightOverlay rooms={rooms} sunlightResult={sunlightResult ?? undefined} visible={showSunlight ?? false} floorIndex={0} />
+      <SunlightOverlay rooms={rooms} sunlightResult={sunlightResult ?? undefined} visible={showSunlight ?? false} floorIndex={floorIndex} />
     </svg>
   );
 });

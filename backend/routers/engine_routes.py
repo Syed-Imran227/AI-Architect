@@ -27,7 +27,7 @@ class GenerateRequest(BaseModel):
     duplex: bool
     bedrooms: int = Field(..., ge=0, le=20)
     bathrooms: int = Field(..., ge=0, le=20)
-    balcony: int
+    balcony: int  # 0 = no balcony, 1 = has balcony (boolean flag, not a count)
     terrace: bool
     lift: bool
     vastuToggle: bool
@@ -322,6 +322,7 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
 
         new_layout = best_layout
         ground_rooms = new_layout["floors"][0]["rooms"]
+        assert best_vastu is not None
         new_vastu = best_vastu
 
         new_nbc = score_nbc(
@@ -453,6 +454,7 @@ def nbc_fix(req: NbcFixRequest, current_user: dict = Depends(get_current_user)):
 
         new_layout = best_layout
         ground_rooms = new_layout["floors"][0]["rooms"]
+        assert best_nbc is not None
         new_nbc = best_nbc
 
         vastu_rooms = list(ground_rooms)

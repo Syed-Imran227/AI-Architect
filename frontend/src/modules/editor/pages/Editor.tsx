@@ -13,7 +13,11 @@ import EditorActionPanel from '../components/EditorActionPanel';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/store/AuthContext';
 
-
+export type ValidationReportEntry = {
+  severity?: string;
+  room?: string;
+  message?: string;
+} | string;
 interface Plan {
   id: string;
   imageUrl: string;
@@ -26,7 +30,7 @@ interface Plan {
   sunlightResult?: SunlightResult;
   bomResult?: BomResult;
   circulationWarnings?: string[];
-  validationReport?: any[];
+  validationReport?: ValidationReportEntry[];
 }
 
 const INITIAL_FORM = {
@@ -116,6 +120,7 @@ export default function Editor() {
     const params = new URLSearchParams(location.search);
     const projectId = params.get("project");
     if (projectId) {
+      // eslint-disable-next-line
       loadSavedProject(projectId);
     }
   }, [location.search, loadSavedProject]);
@@ -186,7 +191,7 @@ export default function Editor() {
         if (newFloors[targetIdx]) {
           newFloors[targetIdx] = {
             ...newFloors[targetIdx],
-            rooms: updatedRooms,
+            rooms: JSON.parse(JSON.stringify(updatedRooms)),
           };
         }
       }
@@ -225,6 +230,22 @@ export default function Editor() {
       ...(data.new_sunlight_result ? { sunlightResult: data.new_sunlight_result } : {}),
       ...(data.new_bom_result ? { bomResult: data.new_bom_result } : {})
     } : prevPlan);
+  }, []);
+
+  const handleVastuUpdate = useCallback((result: VastuResult, score: number) => {
+    setActivePlan(prev => prev ? {
+      ...prev,
+      vastuResult: result,
+      vastuScore: score
+    } : prev);
+  }, []);
+
+  const handleNbcUpdate = useCallback((result: NbcResult, score: number) => {
+    setActivePlan(prev => prev ? {
+      ...prev,
+      nbcResult: result,
+      nbcScore: score
+    } : prev);
   }, []);
 
   const handleExportDxf = async () => {
@@ -269,8 +290,19 @@ export default function Editor() {
         entry_dir: formData.entryDir,
         vastu:     formData.vastuToggle,
       };
+      // Merge all analysis results into layout so the premium PDF
+      // generator can include NBC, Energy, Sunlight sections.
+      const enrichedLayout = {
+        ...activePlan.layout,
+        floors,                                          // current floor state (with images)
+        nbcResult:      activePlan.nbcResult,
+        energyResult:   activePlan.energyResult,
+        sunlightResult: activePlan.sunlightResult,
+        bomResult:      activePlan.bomResult,
+        vastuScore:     activePlan.vastuScore,
+      };
       await exportReport(
-        activePlan.layout,
+        enrichedLayout,
         activePlan.vastuResult,
         activePlan.id,
         meta,
@@ -363,13 +395,6 @@ export default function Editor() {
     lift:       formData.lift ? 1 : 0,
   };
 
-  const handleVastuUpdate = useCallback((newVastuResult: VastuResult, newScore: number) => {
-    setActivePlan(prev => prev ? { ...prev, vastuScore: newScore, vastuResult: newVastuResult } : prev);
-  }, []);
-
-  const handleNbcUpdate = useCallback((newNbcResult: NbcResult, newScore: number) => {
-    setActivePlan(prev => prev ? { ...prev, nbcResult: newNbcResult, nbcScore: newScore } : prev);
-  }, []);
 
   return (
     <div className="app-container" style={{ position: 'relative', overflow: 'hidden', background: 'var(--bg-primary)' }}>
@@ -510,6 +535,7 @@ export default function Editor() {
                         sunlightResult={activePlan.sunlightResult}
                         showSunlight={showSunlight}
                         entryDir={plotContext.entryDir}
+                        floorIndex={activeFloorIndex}
                       />
                     )
                   )
@@ -637,7 +663,10 @@ export default function Editor() {
               <details className="neu-panel" style={{ padding: '1rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                 {(() => {
                   const realIssues = (activePlan.validationReport ?? []).filter(
-                    (e: any) => !(e.severity === 'info' && (e.room === '-' || e.message?.toLowerCase().includes('no issues')))
+                    (e: ValidationReportEntry) => {
+                      if (typeof e === 'string') return true;
+                      return !(e.severity === 'info' && (e.room === '-' || e.message?.toLowerCase().includes('no issues')));
+                    }
                   );
                   return (
                     <>
@@ -646,7 +675,7 @@ export default function Editor() {
                         {realIssues.length === 0 ? (
                           <li>[INFO] -: No issues found.</li>
                         ) : (
-                          realIssues.map((entry: any, i: number) => (
+                          realIssues.map((entry: ValidationReportEntry, i: number) => (
                             <li key={i} style={{ marginBottom: '0.4rem' }}>
                               {typeof entry === 'string'
                                 ? entry

@@ -24,39 +24,37 @@ const SunlightOverlay: React.FC<Props> = React.memo(({ rooms, sunlightResult, vi
           if (!sunData || sunData.intensity <= 0) return null;
 
           // Determine window exact coordinates in SVG space
-          // Window position is along the wall
+          // Window position is along the wall (start edge), so we add window.width / 2 to get the center
+          const wHalf = (window.width ?? 3) / 2;
           let wx = room.x;
           let wy = room.y;
           let dx = 0;
           let dy = 0;
 
           if (window.wall === 'top') {
-            wx = room.x + window.position;
+            wx = room.x + (window.position ?? 0) + wHalf;
             wy = room.y;
             dx = 0;
             dy = 1; // Sun rays go down into the room
           } else if (window.wall === 'bottom') {
-            wx = room.x + window.position;
+            wx = room.x + (window.position ?? 0) + wHalf;
             wy = room.y + room.height;
             dx = 0;
             dy = -1; // Sun rays go up into the room
           } else if (window.wall === 'left') {
             wx = room.x;
-            wy = room.y + window.position;
+            wy = room.y + (window.position ?? 0) + wHalf;
             dx = 1;
             dy = 0; // Sun rays go right into the room
           } else if (window.wall === 'right') {
             wx = room.x + room.width;
-            wy = room.y + window.position;
+            wy = room.y + (window.position ?? 0) + wHalf;
             dx = -1;
             dy = 0; // Sun rays go left into the room
           }
 
           // Length of the ray based on intensity (max ~ 4 feet)
           const rayLength = Math.max(1, (sunData.intensity / 100) * 4);
-          
-          // Draw a soft trapezoid or polygon for light
-          const wHalf = window.width / 2;
           
           let p1x = wx; let p1y = wy;
           let p2x = wx; let p2y = wy;

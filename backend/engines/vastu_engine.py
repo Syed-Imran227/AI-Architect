@@ -5,10 +5,8 @@ Assigns rooms to compass zones, applies 10 weighted rules,
 returns score/100 with a per-rule breakdown.
 """
 
-from typing import Dict, Tuple
-
 # ── Zone grid ─────────────────────────────────────────────────────────────────
-def get_zone_map(entry_dir: str) -> Dict[Tuple[int, int], str]:
+def get_zone_map(entry_dir: str) -> dict[tuple[int, int], str]:
     ed = entry_dir.strip().lower()
     if ed in ["east", "e"]:
         return {

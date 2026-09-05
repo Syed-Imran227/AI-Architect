@@ -13,6 +13,7 @@ interface ProjectData {
   layout_data: { 
     rooms?: Room[];
     floors?: { rooms?: Room[] }[];
+    vastuScore?: number;
   };
   image_url: string;
 }
@@ -40,6 +41,7 @@ export default function Dashboard() {
   }, [logout]);
 
   useEffect(() => {
+    // eslint-disable-next-line
     fetchProjects();
   }, [fetchProjects]);
 
@@ -70,7 +72,7 @@ export default function Dashboard() {
   const filteredProjects = useMemo(() => {
     return Array.isArray(projects) ? projects.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const isVastuCompliant = (p.layout_data as any)?.vastuScore && (p.layout_data as any).vastuScore > 0;
+      const isVastuCompliant = p.layout_data?.vastuScore && p.layout_data.vastuScore > 0;
       const matchesVastu = vastuFilter ? isVastuCompliant : true;
       return matchesSearch && matchesVastu;
     }) : [];
@@ -122,7 +124,7 @@ export default function Dashboard() {
           {[
             { label: 'Total Designs', value: projects.length, icon: '🏗️', color: 'var(--accent-color)' },
             { label: 'Rooms Designed', value: totalRooms, icon: '🛏️', color: 'var(--text-primary)' },
-            { label: 'Vastu Projects', value: projects.filter(p => (p.layout_data as any).vastuScore && (p.layout_data as any).vastuScore > 0).length, icon: '⛩️', color: 'var(--success)' },
+            { label: 'Vastu Projects', value: projects.filter(p => p.layout_data?.vastuScore && p.layout_data.vastuScore > 0).length, icon: '⛩️', color: 'var(--success)' },
           ].map((stat, i) => (
             <div key={i} style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '16px', boxShadow: 'var(--shadow-sm)' }}>
               <div>

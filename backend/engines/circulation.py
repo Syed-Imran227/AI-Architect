@@ -154,9 +154,11 @@ def compute_paths(
             step = name
             while visited[step] is not None:
                 parent = visited[step]
+                assert parent is not None
                 # Add the shared wall midpoint
-                if via[step] is not None:
-                    waypoints.append(list(via[step]))
+                mid = via[step]
+                if mid is not None:
+                    waypoints.append(list(mid))
                 waypoints.append(list(_room_centre(room_map[parent])))
                 step = parent
 

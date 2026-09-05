@@ -1,6 +1,6 @@
 import datetime
 from typing import Dict, List, Any
-import pysolar.solar as solar
+import pysolar.solar as solar # type: ignore
 from pydantic import BaseModel
 
 # Bengaluru Coordinates
@@ -63,7 +63,7 @@ def _get_global_wall_direction(entry_dir: str, local_wall: str) -> str:
     dirs = ['North', 'East', 'South', 'West']
     
     try:
-        base_idx = dirs.index(entry_dir)
+        base_idx = dirs.index(entry_dir.capitalize())
     except ValueError:
         base_idx = 0 # Default North
         
@@ -81,7 +81,7 @@ def evaluate_sunlight(layout: dict, entry_dir: str = "East") -> dict:
     """
     sun_profile = _calculate_cardinal_sunlight()
     
-    total_score = 0
+    total_score: float = 0.0
     max_score = 0
     insights = []
     windows_sunlight = {}
@@ -93,7 +93,7 @@ def evaluate_sunlight(layout: dict, entry_dir: str = "East") -> dict:
             room_name = room.get("name", "Unknown")
             windows = room.get("windows", [])
             
-            room_light = 0
+            room_light: float = 0.0
             for w_idx, window in enumerate(windows):
                 local_wall = window.get("wall")
                 global_dir = _get_global_wall_direction(entry_dir, local_wall)

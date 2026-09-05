@@ -1,8 +1,22 @@
 import React from 'react';
 import { Layers, Sun, ArrowUpDown, Car, Compass } from 'lucide-react';
 
+export interface EditorFormData {
+  length: number;
+  width: number;
+  floors: number;
+  duplex: boolean;
+  bedrooms: number;
+  bathrooms: number;
+  balcony: number;
+  terrace: boolean;
+  lift: boolean;
+  vastuToggle: boolean;
+  entryDir: string;
+}
+
 interface EditorInputPanelProps {
-  formData: Record<string, any>;
+  formData: EditorFormData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   loading: boolean;
   onGenerate: () => void;
@@ -31,27 +45,11 @@ export default function EditorInputPanel({ formData, onChange, loading, onGenera
     letterSpacing: '0.05em'
   };
 
-  const rowStyle = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '1rem',
-    marginBottom: '1rem'
-  };
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div className="form-group">
-        <label style={labelStyle}>Plot Size (sq ft)</label>
-        <input
-          type="number"
-          value={formData.length * formData.width}
-          readOnly
-          style={{ ...inputStyle, background: 'var(--border-color)', color: 'var(--text-secondary)', cursor: 'not-allowed' }}
-          title="Computed from Length × Width"
-        />
-      </div>
-
-      <div style={rowStyle}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         <div className="form-group">
           <label style={labelStyle}>Length (ft)</label>
           <input type="number" name="length" min={15} value={formData.length} onChange={onChange} style={inputStyle} />
@@ -62,7 +60,7 @@ export default function EditorInputPanel({ formData, onChange, loading, onGenera
         </div>
       </div>
 
-      <div style={rowStyle}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         <div className="form-group">
           <label style={labelStyle}>Floors</label>
           <input type="number" name="floors" min={1} max={10} value={formData.floors} onChange={onChange} style={inputStyle} />
@@ -73,9 +71,9 @@ export default function EditorInputPanel({ formData, onChange, loading, onGenera
         </div>
       </div>
 
-      <div style={rowStyle}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         <div className="form-group">
-          <label style={labelStyle}>Bathrooms</label>
+          <label style={labelStyle}>Baths</label>
           <input type="number" name="bathrooms" min={1} value={formData.bathrooms} onChange={onChange} style={inputStyle} />
         </div>
         <div className="form-group">

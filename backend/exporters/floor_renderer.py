@@ -55,7 +55,7 @@ def _room_fill(name: str) -> tuple:
             return clr
     return ROOM_FILLS["default"]
 
-def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+def _font(size: int, bold: bool = False):
     """Load Arial from Windows Fonts; fall back to Pillow default."""
     paths = [
         (r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf"),
@@ -81,7 +81,7 @@ def _center_text(draw, text, cx, cy, font, color):
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def render_floor_plan(rooms: list, unit_label: str = "Architectural Plan", plot_w: float = None, plot_h: float = None, entry_dir: str = "north") -> bytes:
+def render_floor_plan(rooms: list, unit_label: str = "Architectural Plan", plot_w: float | None = None, plot_h: float | None = None, entry_dir: str = "north") -> bytes:
     """Generates a professional 2D floor plan PNG."""
     if not rooms and not plot_w:
         raise ValueError("No rooms or plot boundaries to render")

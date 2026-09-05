@@ -61,7 +61,7 @@ def boundary_check_only(
     Returns (rooms, clamped_names) where clamped_names lists any rooms that were
     out of bounds (should be empty if the Drafter is working correctly).
     """
-    clamped = []
+    clamped: list[str] = []
     if not plot_width or not plot_height:
         return rooms, clamped  # Skip if plot dimensions unknown
 
@@ -141,7 +141,7 @@ def validate_and_fix_layout(
 
     # Step 5 — Circulation reachability + corridor insertion
     rooms, report = _ensure_circulation(
-        rooms, entrance_point, report, MIN_CORRIDOR_WIDTH_FT, plot_width, plot_height
+        rooms, entrance_point, report, plot_width, plot_height
     )
 
     # Final sanity: re-clamp after corridor insertion (corridor itself may push)
@@ -409,7 +409,6 @@ def _rooms_block_path(
     origin: dict,
     target: dict,
     all_rooms: list[dict],
-    corridor_width: float,
 ) -> bool:
     """
     Simple check: is there a room whose bounding box fully blocks the
@@ -438,7 +437,6 @@ def _ensure_circulation(
     rooms: list[dict],
     entrance_point: tuple[float, float],
     report: list[str],
-    corridor_width: float,
     plot_w: float,
     plot_h: float,
 ) -> tuple[list[dict], list[str]]:

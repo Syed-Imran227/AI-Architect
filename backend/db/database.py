@@ -10,7 +10,8 @@ if not MONGO_URI:
     raise ValueError("MONGO_URI is missing. Please add it to backend/.env")
 
 # Global client
-client = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where())
+from typing import Any
+client: Any = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client.ai_architect
 
 # Collections

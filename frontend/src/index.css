@@ -239,7 +239,7 @@ div, header, nav, aside, main, section, footer, button, input, select, a {
 }
 /* When viewing a plan, use a 3-column professional layout */
 .content-grid.active-plan-view {
-  grid-template-columns: 330px 1fr 360px;
+  grid-template-columns: 300px 1fr 320px;
   gap: 0;
   padding: 0;
   height: calc(100vh - 65px);

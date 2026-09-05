@@ -22,6 +22,7 @@ frontend InteractiveBlueprint.tsx require no changes.
 
 from __future__ import annotations
 import math
+import itertools
 from typing import Any
 from engines.window_placer import place_windows
 from engines.circulation import compute_paths
@@ -52,7 +53,7 @@ def default_topology(bedrooms: int, bathrooms: int) -> Any:
     return TopologyResponse(
         topology=TopologyBody(
             left_bay=LeftBayTopology(rooms=left_rooms, bathrooms_allocated=left_baths),
-            right_bay=RightBayTopology(rooms=right_rooms, open_plan_living_dining=False, kitchen_position="rear"),
+            right_bay=RightBayTopology(rooms=right_rooms),
             spine=SpineTopology(rooms=["Foyer", "Corridor", "Staircase"]),
         ),
         design_rationale="Default layout: Master Bedroom SW, Living/Dining/Kitchen in right bay."
@@ -99,27 +100,33 @@ def build_layout_from_topology(
 
     remaining_baths = bathrooms
     remaining_beds  = bedrooms
+    remaining_balconies = balcony
 
     for floor_idx in range(floors):
         if floor_idx == 0:
+            use_balcony = 1 if (remaining_balconies > 0 and not (duplex and floors > 1)) else 0
             fl = _build_ground_floor(
                 int(buildable_L), int(buildable_W), topology,
-                remaining_baths, balcony, lift, vastu, entry_dir, duplex
+                remaining_baths, use_balcony, lift, vastu, entry_dir, duplex
             )
             gf_baths = sum(1 for r in fl["rooms"] if "bathroom" in r["name"].lower())
             gf_beds  = sum(1 for r in fl["rooms"] if "bedroom"  in r["name"].lower())
+            gf_balc  = sum(1 for r in fl["rooms"] if "balcony"  in r["name"].lower())
             remaining_baths = max(0, remaining_baths - gf_baths)
             remaining_beds  = max(0, remaining_beds  - gf_beds)
+            remaining_balconies = max(0, remaining_balconies - gf_balc)
         else:
             is_top      = (floor_idx == floors - 1)
             upper_beds  = remaining_beds   # only bedrooms not yet placed
             upper_baths = remaining_baths
+            use_balcony = 1 if remaining_balconies > 0 else 0
             fl = _build_upper_floor(
                 int(buildable_L), int(buildable_W), floor_idx, upper_beds, upper_baths,
-                topology, terrace if is_top else 0, lift
+                topology, terrace if is_top else 0, lift, use_balcony
             )
             remaining_baths = 0
             remaining_beds  = 0
+            remaining_balconies = 0
 
 
         # Apply setback shift
@@ -151,14 +158,16 @@ def build_layout_from_topology(
     place_windows(layout, plot_w=float(L), plot_h=float(W))
     compute_paths(layout)
 
-    layout["circulation_warnings"] = []
-    layout["validation_report"] = []
-    import itertools
+    circulation_warnings: list[str] = []
+    layout["circulation_warnings"] = circulation_warnings # type: ignore
+    validation_report: list[dict[str, str]] = []
+    layout["validation_report"] = validation_report
+    
     for floor in layout["floors"]:
         lvl = floor.get("level", "Floor")
         unreachable = floor.get("circulation", {}).get("unreachable", [])
         for u in unreachable:
-            layout["circulation_warnings"].append(f"{lvl}: {u} is unreachable.")
+            circulation_warnings.append(f"{lvl}: {u} is unreachable.")
 
         rs = floor.get("rooms", [])
         names = [r["name"] for r in rs]
@@ -166,22 +175,22 @@ def build_layout_from_topology(
             ox = min(a["x"]+a["width"], b["x"]+b["width"]) - max(a["x"], b["x"])
             oy = min(a["y"]+a["height"], b["y"]+b["height"]) - max(a["y"], b["y"])
             if ox > 0.01 and oy > 0.01:
-                layout["validation_report"].append({"severity": "error", "room": f"{a['name']}, {b['name']}", "message": f"Rooms overlap by {ox:.1f}x{oy:.1f}ft."})
+                validation_report.append({"severity": "error", "room": f"{a['name']}, {b['name']}", "message": f"Rooms overlap by {ox:.1f}x{oy:.1f}ft."})
         
         for r in rs:
             if r["x"] < -0.01 or r["y"] < -0.01 or r["x"] + r["width"] > float(L) + 0.01 or r["y"] + r["height"] > float(W) + 0.01:
-                layout["validation_report"].append({"severity": "error", "room": r["name"], "message": f"Room is outside plot envelope ({L}x{W})."})
+                validation_report.append({"severity": "error", "room": r["name"], "message": f"Room is outside plot envelope ({L}x{W})."})
             if r["width"] < MIN_ROOM_DIM or r["height"] < MIN_ROOM_DIM:
-                layout["validation_report"].append({"severity": "warn", "room": r["name"], "message": f"Room dimension below minimum {MIN_ROOM_DIM}ft."})
+                validation_report.append({"severity": "warn", "room": r["name"], "message": f"Room dimension below minimum {MIN_ROOM_DIM}ft."})
             if not r.get("doors") and r["name"].lower() not in ["parking", "balcony", "terrace", "open area", "corridor"]:
-                layout["validation_report"].append({"severity": "error", "room": r["name"], "message": "Room has no door."})
+                validation_report.append({"severity": "error", "room": r["name"], "message": "Room has no door."})
         
         for n in set(names):
             if names.count(n) > 1:
-                layout["validation_report"].append({"severity": "warn", "room": n, "message": f"Duplicate room name ({names.count(n)} instances)."})
+                validation_report.append({"severity": "warn", "room": n, "message": f"Duplicate room name ({names.count(n)} instances)."})
 
-    if not layout["validation_report"]:
-        layout["validation_report"].append({"severity": "info", "room": "-", "message": "No issues found."})
+    if not validation_report:
+        validation_report.append({"severity": "info", "room": "-", "message": "No issues found."})
 
     return layout
 
@@ -222,11 +231,13 @@ def _build_ground_floor(
     Ground Floor 3-bay layout with dynamic packing based on LLM topology.
 
     Guarantees:
-      - Living Room / Dining Room / Kitchen are ALWAYS in the right bay.
-      - Bathrooms are injected immediately after each bedroom in both bays,
-        using the bathrooms_allocated count from the topology (same mechanic
-        as _build_upper_floor / _fill_bay).
+      - When vastu=False: Living Room / Dining Room / Kitchen are pinned to the
+        right bay and Living Room is forced to the front.
+      - When vastu=True: the LLM topology's room order is trusted so compass
+        placement (Kitchen-SE, Master-SW etc.) survives into the geometry.
+      - Bathrooms are injected immediately after each bedroom in both bays.
     """
+    # vastu flag flows through to guardrail logic below
     rooms = []
     left_w, spine_w, right_w = _bay_widths(L)
     spine_x = left_w
@@ -248,7 +259,6 @@ def _build_ground_floor(
     #             All bedrooms belong on the upper floor (private zone).
     #             Left bay gets Parking + Utility instead of bedrooms.
     # SINGLE-FLOOR: Ground floor has all bedrooms (no upper floor).
-    BEDROOM_NAMES = {"Master Bedroom", "Bedroom", "Bedroom 2", "Bedroom 3", "Bedroom 4"}
     is_bedroom = lambda r: "bedroom" in r.lower()
 
     if duplex:
@@ -266,8 +276,13 @@ def _build_ground_floor(
         left_baths_alloc = min(topology.topology.left_bay.bathrooms_allocated, remaining_baths)
 
     # ── GUARDRAIL: Living/Dining/Kitchen MUST occupy the right bay ───────────
+    # When Vastu=True: trust the LLM topology for room order (it placed rooms
+    # for compass compliance). Only apply the hard override if the LLM
+    # completely forgot the Living Room.
     LIVING_SPACES = {"Living Room", "Dining Room", "Kitchen"}
-    if "Living Room" not in right_rooms:
+    living_missing_from_right = "Living Room" not in right_rooms
+    if living_missing_from_right:
+        # LLM failed — emergency correction: force public zone into right bay
         left_rooms  = [r for r in left_rooms  if r not in LIVING_SPACES]
         right_rooms = [r for r in right_rooms if r not in LIVING_SPACES]
         right_rooms = ["Living Room", "Dining Room", "Kitchen"] + [r for r in right_rooms if not is_bedroom(r)]
@@ -277,15 +292,21 @@ def _build_ground_floor(
         right_rooms = [r for r in right_rooms if not is_bedroom(r)]
 
     # ── GUARDRAIL: pin anchor rooms to front of each bay ─────────────────────
+    # Parking always goes to left-bay front (structural / access requirement)
     if "Parking" in left_rooms:
         left_rooms.remove("Parking")
         left_rooms.insert(0, "Parking")
+    # Foyer always at spine front (entry-spine rule, Vastu-neutral)
     if "Foyer" in spine_rooms:
         spine_rooms.remove("Foyer")
         spine_rooms.insert(0, "Foyer")
-    if "Living Room" in right_rooms:
-        right_rooms.remove("Living Room")
-        right_rooms.insert(0, "Living Room")
+    # Living Room front-pin: ONLY when Vastu=False or when the LLM had it missing
+    # When Vastu=True the LLM topology may have ordered the right bay differently
+    # (e.g. Kitchen at front for SE entry) — preserve that order for Vastu compliance
+    if not vastu or living_missing_from_right:
+        if "Living Room" in right_rooms:
+            right_rooms.remove("Living Room")
+            right_rooms.insert(0, "Living Room")
 
 
     bath_num = [0]  # shared mutable counter so bathrooms are numbered 1,2,3… globally
@@ -294,7 +315,7 @@ def _build_ground_floor(
         """Pack a bay column with rooms + inline bathrooms after each bedroom."""
         packed = []
         door_wall = "right" if is_left else "left"
-        y_cursor  = 0
+        y_cursor: float  = 0.0
         baths_left = n_baths
 
         n_beds = sum(1 for r in room_names if "bedroom" in r.lower())
@@ -309,12 +330,18 @@ def _build_ground_floor(
             if remaining_y < 4:
                 break
 
-            if is_anchor:
-                h = front_h
-            else:
+            h: float
+            if r_name == "Living Room":
+                # Living Room must always be the largest room in the right bay.
+                # Give it at least 45 % of the remaining depth (capped at remaining_y).
+                # This prevents Utility / gap-fill from dwarfing it.
+                equal_share = remaining_y / max(1, remaining_slots)
+                h = min(remaining_y, max(MIN_ROOM_H, round(max(equal_share, remaining_y * 0.45))))
+            elif r_name.startswith("Dining"):
+                # Dining gets a normal equal share; slightly smaller than Living
                 h = max(MIN_ROOM_H, remaining_y // max(1, remaining_slots))
-
-            h = min(h, remaining_y)
+            else:
+                h = min(front_h if is_anchor else max(MIN_ROOM_H, remaining_y // max(1, remaining_slots)), remaining_y)
 
             # Assign door
             if r_name == "Parking":
@@ -346,6 +373,38 @@ def _build_ground_floor(
                     })
                     y_cursor += bath_h
 
+        # Gap fill: if there's leftover space before stair_y
+        gap_h = stair_y - y_cursor
+        # Cap the gap-fill utility to a reasonable size (max 10 ft) so it
+        # never becomes larger than the Living Room when the plot is deep.
+        MAX_UTILITY_H = 10.0
+        if gap_h >= MIN_ROOM_H:
+            if not is_left and packed:
+                # On the right bay (Kitchen side), just stretch the last room (Kitchen/Dining) to fill the gap
+                packed[-1]["height"] = float(str(packed[-1]["height"])) + float(gap_h)
+                y_cursor += gap_h
+            else:
+                # If the gap is too large for a Utility room, also grow the
+                # last packed room (e.g. a bedroom) to absorb the excess,
+                # then add a reasonably sized Utility for the rest.
+                if gap_h > MAX_UTILITY_H and packed:
+                    extra = gap_h - MAX_UTILITY_H
+                    packed[-1]["height"] = float(str(packed[-1]["height"])) + float(extra)
+                    y_cursor += extra
+                    gap_h = MAX_UTILITY_H
+                # Avoid creating a second Utility if one already exists in the bay
+                existing_utility = next(
+                    (p for p in packed if str(p["name"]).lower() in ("utility", "store room")), None
+                )
+                if existing_utility:
+                    existing_utility["height"] = float(str(existing_utility["height"])) + float(gap_h)
+                else:
+                    packed.append({
+                        "name": "Utility" if is_left else "Store Room",
+                        "x": bay_x, "y": y_cursor, "width": bay_w, "height": gap_h,
+                        "doors": [_door(door_wall, gap_h * 0.3)], "furniture": []
+                    })
+            
         return packed
 
     # ── Pack left bay ────────────────────────────────────────────────────────
@@ -356,11 +415,19 @@ def _build_ground_floor(
     right_baths_alloc = max(0, remaining_baths - left_baths_placed)
 
     # ── Left bay companion (Balcony / Utility at rear) ───────────────────────
-    left_companion = "Balcony" if balcony else "Utility"
+    # If balcony=0 but the left bay already has a Utility from the topology,
+    # use "Laundry" for the rear zone to avoid a duplicate name.
+    left_has_utility = any("utility" in r["name"].lower() for r in left_result)
+    if balcony:
+        left_companion = "Balcony"
+    elif left_has_utility:
+        left_companion = "Laundry"
+    else:
+        left_companion = "Utility"
     rooms.append({
         "name": left_companion,
         "x": 0, "y": stair_y, "width": left_w, "height": stair_h,
-        "doors": [_door("right", stair_h * 0.3)], "furniture": []
+        "doors": [_door("top", left_w * 0.4)], "furniture": []
     })
 
     # ── Pack right bay ───────────────────────────────────────────────────────
@@ -419,7 +486,7 @@ def _build_ground_floor(
 def _build_upper_floor(
     L: int, W: int, floor_idx: int,
     beds: int, baths: int,
-    topology: Any, terrace: int, lift: int,
+    topology: Any, terrace: int, lift: int, balcony: int = 0
 ) -> dict:
     """
     Upper Floor 3-bay layout using topology zoning.
@@ -482,7 +549,7 @@ def _build_upper_floor(
         """
         bay_rooms = []
         door_wall = "right" if is_left else "left"
-        y_cursor  = 0
+        y_cursor: float  = 0.0
 
         if n_beds == 0:
             # Empty bay: open terrace/balcony
@@ -578,11 +645,12 @@ def _build_upper_floor(
                 })
 
         # Stair companion zone (always stair_h deep at the bottom)
-        companion = "Balcony" if is_left else ("Terrace" if terrace else "Landing")
+        companion = "Balcony" if (is_left and balcony > 0) else ("Terrace" if terrace else "Landing")
+        companion_door = _door("top", bay_w * 0.4) if companion in ("Balcony", "Terrace") else _door(door_wall, stair_h * 0.3)
         bay_rooms.append({
             "name": companion,
             "x": bay_x, "y": stair_y, "width": bay_w, "height": stair_h,
-            "doors": [_door(door_wall, stair_h * 0.3)],
+            "doors": [companion_door],
             "furniture": []
         })
 
@@ -613,7 +681,7 @@ def build_layout(
     topo = TopologyResponse(
         topology=TopologyBody(
             left_bay=LeftBayTopology(rooms=left_rooms, bathrooms_allocated=left_baths),
-            right_bay=RightBayTopology(rooms=right_rooms, open_plan_living_dining=False, kitchen_position="rear"),
+            right_bay=RightBayTopology(rooms=right_rooms),
             spine=SpineTopology(rooms=["Foyer", "Corridor", "Staircase"]),
         ),
         design_rationale="Shim-generated default topology."
@@ -951,363 +1019,7 @@ def inject_furniture(layout: dict) -> dict:
 
             room["furniture"] = placed
 
-
-
-# ── Legacy build_layout shim (keeps old callers working) ─────────────────────
-
-def build_layout(
-    length: float, width: float, bedrooms: int, bathrooms: int,
-    floors: int = 1, balcony: int = 0, terrace: int = 0, lift: int = 0,
-    vastu: bool = False, entry_dir: str = "East"
-) -> dict:
-    """Legacy shim for tests/fallback that don't have an LLM topology yet."""
-    from engines.inference import LeftBayTopology, RightBayTopology, SpineTopology, TopologyBody, TopologyResponse
-
-    left_beds  = math.ceil(bedrooms / 2)
-    left_baths  = min(left_beds, bathrooms)
-
-    left_rooms = ["Master Bedroom"] + [f"Bedroom {i+2}" for i in range(left_beds - 1)]
-    right_rooms = ["Living Room", "Dining Room", "Kitchen"]
-
-    topo = TopologyResponse(
-        topology=TopologyBody(
-            left_bay=LeftBayTopology(rooms=left_rooms, bathrooms_allocated=left_baths),
-            right_bay=RightBayTopology(rooms=right_rooms, open_plan_living_dining=False, kitchen_position="rear"),
-            spine=SpineTopology(rooms=["Foyer", "Corridor", "Staircase"]),
-        ),
-        design_rationale="Shim-generated default topology."
-    )
-
-    return build_layout_from_topology(
-        topology=topo, length=length, width=width,
-        bedrooms=bedrooms, bathrooms=bathrooms, floors=floors,
-        balcony=balcony, terrace=terrace, lift=lift,
-        vastu=vastu, entry_dir=entry_dir,
-    )
-
-
-# ── Furniture injection (Phase 6 — unchanged from original but validated) ─────
-
-FURNITURE_CATALOG: dict[str, list[tuple]] = {
-    # ── Living / Lounge ─────────────────────────────────────────────────────────
-    "living": [
-        ("3-Seat Sofa",    7, 3),
-        ("Coffee Table",   3, 2),
-        ("TV Unit",        5, 1),
-        ("Armchair",       2.5, 2.5),
-        ("Side Table",     1.5, 1.5),
-        ("Floor Lamp",     1, 1),
-    ],
-    # ── Dining Room ──────────────────────────────────────────────────────────────
-    "dining": [
-        ("Dining Table",   5, 3),
-        ("Dining Chair",   1.5, 1.5),
-        ("Dining Chair",   1.5, 1.5),
-        ("Dining Chair",   1.5, 1.5),
-        ("Dining Chair",   1.5, 1.5),
-        ("Sideboard",      4, 1.5),
-    ],
-    # ── Kitchen ──────────────────────────────────────────────────────────────────
-    "kitchen": [
-        ("Counter Top",    8, 2),
-        ("Kitchen Island", 4, 2.5),
-        ("Refrigerator",   2.5, 2),
-        ("Oven",           2, 2),
-        ("Sink",           2, 1.5),
-    ],
-    # ── Master Bedroom ───────────────────────────────────────────────────────────
-    "master bedroom": [
-        ("King Bed",        7, 6),
-        ("Bedside Table",   1.5, 1.5),
-        ("Bedside Table",   1.5, 1.5),
-        ("Wardrobe",        6, 2),
-        ("Dressing Table",  4, 1.5),
-        ("Vanity Mirror",   2, 0.5),
-        ("Bench",           4, 1.5),
-    ],
-    # ── Regular Bedrooms ─────────────────────────────────────────────────────────
-    "bedroom": [
-        ("Double Bed",     6, 5),
-        ("Bedside Table",  1.5, 1.5),
-        ("Wardrobe",       5, 2),
-        ("Study Desk",     4, 2),
-        ("Study Chair",    2, 2),
-        ("Bookshelf",      3, 1),
-    ],
-    # ── Bathrooms ────────────────────────────────────────────────────────────────
-    "bathroom": [
-        ("WC",             2, 2.5),
-        ("Bathtub",        5, 3),
-        ("Vanity Sink",    2.5, 1.5),
-        ("Shower",         2.5, 2.5),
-    ],
-    "guest bathroom": [
-        ("WC",             2, 2.5),
-        ("Pedestal Sink",  2, 1.5),
-        ("Shower",         2.5, 2.5),
-    ],
-
-    # ── Corridors / Foyer ────────────────────────────────────────────────────────
-    "foyer": [
-        ("Shoe Rack",      3, 1),
-        ("Console Table",  3, 1),
-        ("Coat Hanger",    1, 1),
-    ],
-    "corridor": [
-        ("Wall Art",       2, 0.2),
-    ],
-    # ── Balcony / Terrace ────────────────────────────────────────────────────────
-    "balcony": [
-        ("Outdoor Chair",  2, 2),
-        ("Outdoor Chair",  2, 2),
-        ("Outdoor Table",  2, 2),
-        ("Plant Pot",      1, 1),
-        ("Plant Pot",      1, 1),
-    ],
-    "terrace": [
-        ("Patio Sofa",     4, 2),
-        ("Patio Table",    3, 3),
-        ("Patio Chair",    2, 2),
-        ("Plant Pot",      1, 1),
-        ("BBQ Grill",      2, 1.5),
-        ("Sun Lounger",    2, 5),
-    ],
-    # ── Parking / Utility ────────────────────────────────────────────────────────
-    "parking": [
-        ("Car",            8, 16),
-        ("Storage Shelf", 4, 1),
-    ],
-    "utility": [
-        ("Washing Machine", 2, 2),
-        ("Dryer",           2, 2),
-        ("Shelf Unit",      4, 1),
-    ],
-    "landing": [
-        ("Bookshelf",      3, 1),
-        ("Bench",          3, 1.5),
-    ],
-}
-
-SWING = 3.0   # door swing radius in ft
-
-
-def inject_furniture(layout: dict) -> dict:
-    """
-    Place furniture using wall-hugging strategy (architecturally correct):
-      - Beds:    against the wall opposite the door, centred.
-      - Sofas:   against the back wall, facing toward the room centre.
-      - Counters: against the walls (L-shape for kitchen).
-      - Tables:  centred in the room with chairs arranged around.
-      - WC/Bath: against walls adjacent to plumbing (rear/side).
-      - Wardrobes: against the side wall next to the bed.
-    Falls back to margin-based row packing for any item that doesn't fit.
-    """
-    MARGIN = 1.2
-
-    def _door_wall(room: dict) -> str:
-        doors = room.get("doors", [])
-        return doors[0].get("wall", "right") if doors else "right"
-
-    def _swing_zones(room: dict) -> list[tuple]:
-        zones = []
-        rw, rh = room["width"], room["height"]
-        n = room.get("name", "").lower()
-        # Increased clearance for bedrooms and bathrooms
-        swing_dist = 5.0 if ("bed" in n or "bath" in n or "toilet" in n or "wc" in n) else 3.0
-        
-        for door in room.get("doors", []):
-            wall = door.get("wall", "")
-            pos  = door.get("position", 0)
-            if wall == "bottom":  zones.append((pos - 1.5, 0,               pos + swing_dist, swing_dist))
-            elif wall == "top":   zones.append((pos - 1.5, rh - swing_dist, pos + swing_dist, rh))
-            elif wall == "left":  zones.append((0,         pos - 1.5,       swing_dist,       pos + swing_dist))
-            elif wall == "right": zones.append((rw - swing_dist, pos - 1.5, rw,               pos + swing_dist))
-        return zones
-
-    def _overlaps(fx, fy, fw, fh, zones, placed):
-        for (zx0, zy0, zx1, zy1) in zones:
-            if fx < zx1 and fx + fw > zx0 and fy < zy1 and fy + fh > zy0:
-                return True
-        for p in placed:
-            if (fx < p["x"] + p["width"] and fx + fw > p["x"] and
-                fy < p["y"] + p["height"] and fy + fh > p["y"]):
-                return True
-        return False
-
-    def _try_place(fname: str, fx: float, fy: float, fw: float, fh: float, rw: float, rh: float, zones: list, placed: list) -> bool:
-        """Return True and append to placed if the position is valid."""
-        if fx < MARGIN or fy < MARGIN:
-            return False
-        if fx + fw + MARGIN > rw or fy + fh + MARGIN > rh:
-            return False
-        if _overlaps(fx, fy, fw, fh, zones, placed):
-            return False
-        placed.append({"name": fname, "x": round(fx, 1), "y": round(fy, 1),
-                        "width": fw, "height": fh})
-        return True
-
-    def _wall_place(fname, fw, fh, rw, rh, dwall, zones, placed) -> bool:
-        """Try to hug a wall appropriate for this furniture type."""
-        n = fname.lower()
-        cx = rw / 2
-        cy = rh / 2
-
-        # Compute wall-hugged positions for each cardinal wall
-        candidates: list[tuple[float, float]] = []
-
-        # Bed: opposite wall to door, centred horizontally
-        if any(k in n for k in ('bed', 'king', 'double', 'single')):
-            opp = {"right": "left", "left": "right", "top": "bottom", "bottom": "top"}.get(dwall, "left")
-            if opp == "left":    candidates = [(MARGIN,          cy - fh / 2)]
-            elif opp == "right": candidates = [(rw - fw - MARGIN, cy - fh / 2)]
-            elif opp == "top":   candidates = [(cx - fw / 2,      MARGIN)]
-            else:                candidates = [(cx - fw / 2,      rh - fh - MARGIN)]
-
-        # Sofa: back wall (opposite door), centred
-        elif any(k in n for k in ('sofa', 'couch')):
-            if dwall == "bottom": candidates = [(cx - fw/2, MARGIN)]
-            elif dwall == "top":  candidates = [(cx - fw/2, rh - fh - MARGIN)]
-            elif dwall == "left": candidates = [(rw - fw - MARGIN, cy - fh/2)]
-            else:                 candidates = [(MARGIN, cy - fh/2)]
-
-        # TV unit: wall opposite sofa (same as door wall side)
-        elif 'tv' in n:
-            if dwall == "bottom": candidates = [(cx - fw/2, rh - fh - MARGIN)]
-            elif dwall == "top":  candidates = [(cx - fw/2, MARGIN)]
-            elif dwall == "left": candidates = [(MARGIN, cy - fh/2)]
-            else:                 candidates = [(rw - fw - MARGIN, cy - fh/2)]
-
-        # Counter/island/sink: back wall or side wall
-        elif any(k in n for k in ('counter', 'island', 'sink', 'oven', 'refrigerator', 'fridge')):
-            candidates = [
-                (MARGIN, rh - fh - MARGIN),          # back wall
-                (rw - fw - MARGIN, rh - fh - MARGIN), # right-back corner
-                (MARGIN, MARGIN),                      # front wall
-                (rw - fw - MARGIN, MARGIN),
-            ]
-
-        # WC / toilet: corner of bathroom
-        elif any(k in n for k in ('wc', 'toilet')):
-            candidates = [
-                (MARGIN, MARGIN),
-                (rw - fw - MARGIN, MARGIN),
-                (MARGIN, rh - fh - MARGIN),
-                (rw - fw - MARGIN, rh - fh - MARGIN),
-            ]
-
-        # Bathtub: long wall
-        elif any(k in n for k in ('bathtub', 'bath tub')):
-            if rw >= rh:  # wider room → along bottom or top
-                candidates = [(MARGIN, rh - fh - MARGIN), (MARGIN, MARGIN)]
-            else:
-                candidates = [(rw - fw - MARGIN, MARGIN), (MARGIN, MARGIN)]
-
-        # Shower: corner
-        elif 'shower' in n:
-            candidates = [
-                (rw - fw - MARGIN, rh - fh - MARGIN),
-                (MARGIN, rh - fh - MARGIN),
-                (rw - fw - MARGIN, MARGIN),
-            ]
-
-        # Wardrobe: side wall
-        elif any(k in n for k in ('wardrobe', 'cabinet', 'bookshelf', 'shelf')):
-            candidates = [
-                (rw - fw - MARGIN, MARGIN),
-                (MARGIN, MARGIN),
-                (rw - fw - MARGIN, rh - fh - MARGIN),
-            ]
-
-        # Dining/coffee table: centred
-        elif 'table' in n:
-            candidates = [(cx - fw/2, cy - fh/2)]
-
-        # Chairs: around dining table (inferred from placed items)
-        elif 'chair' in n:
-            tbl = next((p for p in placed if 'table' in p.get('name','').lower()), None)
-            if tbl:
-                tx, ty, tw, th = tbl['x'], tbl['y'], tbl['width'], tbl['height']
-                candidates = [
-                    (tx + tw/2 - fw/2, ty - fh - 0.5),           # top
-                    (tx + tw/2 - fw/2, ty + th + 0.5),            # bottom
-                    (tx - fw - 0.5,    ty + th/2 - fh/2),         # left
-                    (tx + tw + 0.5,    ty + th/2 - fh/2),         # right
-                ]
-            else:
-                candidates = [(cx - fw/2, cy - fh/2)]
-
-        # Desk: side wall
-        elif any(k in n for k in ('desk', 'dressing', 'console', 'vanity', 'sideboard', 'bench', 'shoe rack', 'coat')):
-            candidates = [
-                (MARGIN, MARGIN),
-                (rw - fw - MARGIN, MARGIN),
-                (MARGIN, rh - fh - MARGIN),
-            ]
-
-        # Car: centred
-        elif 'car' in n:
-            candidates = [(cx - fw/2, cy - fh/2)]
-
-        # Plant / Floor lamp: corners
-        elif any(k in n for k in ('plant', 'pot', 'lamp', 'floor lamp')):
-            candidates = [
-                (rw - fw - MARGIN, MARGIN),
-                (MARGIN, MARGIN),
-                (rw - fw - MARGIN, rh - fh - MARGIN),
-                (MARGIN, rh - fh - MARGIN),
-            ]
-
-        else:
-            candidates = [
-                (MARGIN, MARGIN),
-                (cx - fw/2, MARGIN),
-                (rw - fw - MARGIN, MARGIN),
-            ]
-
-        for (fx, fy) in candidates:
-            fx, fy = round(fx, 1), round(fy, 1)
-            if (fx >= MARGIN and fy >= MARGIN and
-                    fx + fw + MARGIN <= rw and fy + fh + MARGIN <= rh and
-                    not _overlaps(fx, fy, fw, fh, zones, placed)):
-                placed.append({"name": fname, "x": fx, "y": fy, "width": fw, "height": fh})
-                return True
-        return False
-
-    for floor in layout.get("floors", []):
-        for room in floor.get("rooms", []):
-            name_l = room["name"].lower()
-            rw, rh = room["width"], room["height"]
-            catalog = []
-            for key in sorted(FURNITURE_CATALOG, key=len, reverse=True):
-                if key in name_l:
-                    catalog = FURNITURE_CATALOG[key]
-                    break
-
-            dwall      = _door_wall(room)
-            swing_zones = _swing_zones(room)
-            placed: list[dict] = []
-
-            for (fname, fw, fh) in catalog:
-                # Try architectural wall-hugging placement first
-                if _wall_place(fname, fw, fh, rw, rh, dwall, swing_zones, placed):
-                    continue
-                # Fallback: row-based scan
-                x_cur, y_cur, row_h = MARGIN, MARGIN, 0
-                for _ in range(8):
-                    if x_cur + fw + MARGIN > rw:
-                        x_cur  = MARGIN
-                        y_cur += row_h + 0.8
-                        row_h  = 0
-                    if y_cur + fh + MARGIN > rh:
-                        break
-                    if not _overlaps(x_cur, y_cur, fw, fh, swing_zones, placed):
-                        placed.append({"name": fname, "x": round(x_cur, 1), "y": round(y_cur, 1),
-                                        "width": fw, "height": fh})
-                        row_h  = max(row_h, fh)
-                        x_cur += fw + 0.8
-                        break
-                    x_cur += fw + 0.8
-
-            room["furniture"] = placed
-
     return layout
+
+
+

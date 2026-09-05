@@ -3,7 +3,7 @@ energy_engine.py
 Evaluates thermal efficiency and sun path optimization for a floor plan.
 """
 
-from typing import Dict, Tuple
+
 from engines.vastu_engine import get_zone_map
 
 def _zone(room: dict, plot_w: float, plot_h: float, entry_dir: str) -> str:

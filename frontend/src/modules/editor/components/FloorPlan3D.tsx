@@ -1,6 +1,10 @@
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky } from '@react-three/drei';
+/* eslint-disable react-hooks/immutability */
+import React from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky, useTexture } from '@react-three/drei';
+import { EffectComposer, Vignette } from '@react-three/postprocessing';
 import type { Room } from '../../../shared/api-client/api';
+import * as THREE from 'three';
 
 interface FloorPlan3DProps {
   rooms: Room[];
@@ -10,21 +14,35 @@ interface FloorPlan3DProps {
 const ROOM_HEIGHT = 10;  // ft ceiling height — must match cost_rates.CEILING_HEIGHT_FT
 const WALL_T      = 0.3;
 
-// ── Architectural room palette ────────────────────────────────────────────────
-function getRoomColor(name: string): { floor: string; wall: string } {
+// ── PBR room material palette — roughness/metalness tuned per surface type ─────
+// Using the threejs-materials skill: MeshPhysicalMaterial for advanced realism
+function getRoomMaterial(name: string): { floorColor: string; wallColor: string; floorRoughness: number; wallRoughness: number } {
   const n = name.toLowerCase();
-  if (n.includes('master'))  return { floor: '#dce8f0', wall: '#bfcfdd' };
-  if (n.includes('bedroom')) return { floor: '#ddeedd', wall: '#bdd4bd' };
-  if (n.includes('bath'))    return { floor: '#cde8ec', wall: '#9ac5ca' };
-  if (n.includes('kitchen')) return { floor: '#fdecd2', wall: '#e5cfa8' };
-  if (n.includes('living'))  return { floor: '#e4dff5', wall: '#c2bde3' };
-  if (n.includes('dining'))  return { floor: '#f5dde8', wall: '#dbb8c8' };
-  if (n.includes('balcony') || n.includes('terrace')) return { floor: '#d0edda', wall: '#a6d4b2' };
-  if (n.includes('stair'))   return { floor: '#ece8d8', wall: '#d0c8a8' };
-  if (n.includes('foyer'))   return { floor: '#fef5dc', wall: '#e8d8a8' };
-  if (n.includes('parking')) return { floor: '#e0e0e0', wall: '#c4c4c4' };
-  if (n.includes('corridor'))return { floor: '#f2f2f2', wall: '#dadada' };
-  return { floor: '#f0f0f0', wall: '#d8d8d8' };
+  if (n.includes('master'))  return { floorColor: '#c8a878', wallColor: '#e8e0d8', floorRoughness: 0.3, wallRoughness: 0.85 };
+  if (n.includes('bedroom')) return { floorColor: '#c4a870', wallColor: '#e8ece0', floorRoughness: 0.3, wallRoughness: 0.85 };
+  if (n.includes('bath'))    return { floorColor: '#c0c8cc', wallColor: '#e4eeef', floorRoughness: 0.15, wallRoughness: 0.2 };
+  if (n.includes('kitchen')) return { floorColor: '#b0b8b0', wallColor: '#f2f0e8', floorRoughness: 0.15, wallRoughness: 0.25 };
+  if (n.includes('living'))  return { floorColor: '#c0a872', wallColor: '#ece8e0', floorRoughness: 0.3, wallRoughness: 0.85 };
+  if (n.includes('dining'))  return { floorColor: '#b8a060', wallColor: '#ede8e2', floorRoughness: 0.35, wallRoughness: 0.85 };
+  if (n.includes('balcony') || n.includes('terrace')) return { floorColor: '#909888', wallColor: '#d8dcd0', floorRoughness: 0.7, wallRoughness: 0.8 };
+  if (n.includes('stair'))   return { floorColor: '#a09880', wallColor: '#dcd8cc', floorRoughness: 0.5, wallRoughness: 0.85 };
+  if (n.includes('foyer'))   return { floorColor: '#b0a080', wallColor: '#eee8dc', floorRoughness: 0.2, wallRoughness: 0.8 };
+  if (n.includes('parking')) return { floorColor: '#606060', wallColor: '#888888', floorRoughness: 0.8, wallRoughness: 0.9 };
+  if (n.includes('corridor'))return { floorColor: '#909090', wallColor: '#d8d8d8', floorRoughness: 0.4, wallRoughness: 0.85 };
+  return { floorColor: '#b0a890', wallColor: '#dcd8d0', floorRoughness: 0.35, wallRoughness: 0.85 };
+}
+
+// External 3D assets removed for stability (Trees/Cars)
+
+// ── Scene renderer that uses gl for tonemapping ───────────────────────────────
+function SceneSetup() {
+  const { gl } = useThree();
+  React.useEffect(() => {
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = 1.1;
+    gl.outputColorSpace = THREE.SRGBColorSpace;
+  }, [gl]);
+  return null;
 }
 
 // ── Staircase — architecturally correct U-shape flight ────────────────────────
@@ -543,22 +561,13 @@ function FurnitureItem3D({ item, roomX, roomY }: {
     );
   }
 
-  // ── Car ───────────────────────────────────────────────────────────────────
+  // ── Car (Removed external GLTF) ─────────────
   if (n.includes('car')) {
     return (
       <group position={[wx, 0, wz]}>
-        <Box castShadow receiveShadow args={[fw, 2.0, fd]} position={[0, 1.0, 0]}>
-          <meshStandardMaterial color="#3355a0" roughness={0.4} />
+        <Box castShadow receiveShadow args={[fw, 1.4, fd]} position={[0, 0.7, 0]}>
+          <meshStandardMaterial color="#b23" roughness={0.4} metalness={0.6} />
         </Box>
-        <Box castShadow receiveShadow args={[fw*0.7, 1.6, fd*0.52]} position={[0, 2.8, -fd*0.06]}>
-          <meshStandardMaterial color="#2a4490" roughness={0.4} />
-        </Box>
-        {/* Wheels */}
-        {([[-fw/2+1.1,-fd/2+1.1],[fw/2-1.1,-fd/2+1.1],[-fw/2+1.1,fd/2-1.1],[fw/2-1.1,fd/2-1.1]] as [number,number][]).map(([lx,lz],i) => (
-          <Cylinder castShadow receiveShadow key={i} args={[0.7, 0.7, 0.5, 16]} rotation={[Math.PI/2, 0, 0]} position={[lx, 0.7, lz]}>
-            <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
-          </Cylinder>
-        ))}
       </group>
     );
   }
@@ -587,6 +596,8 @@ function FurnitureItem3D({ item, roomX, roomY }: {
   );
 }
 
+
+
 // ── Wall segment renderer with door/window openings ──────────────────────────
 // Renders a single wall as a series of segments with gaps for doors and windows.
 // wallLen: total length of wall, wallBase: world-space X or Z start of wall
@@ -600,6 +611,20 @@ function WallWithOpenings({
   isHoriz: boolean; openings: { pos: number; width: number; type: 'door' | 'window'; isStairDoor?: boolean }[];
   wallColor: string;
 }) {
+  const [wallDiff, wallBump] = useTexture([
+    '/assets/textures/brick_diffuse.jpg',
+    '/assets/textures/brick_bump.jpg'
+  ]);
+  
+  React.useEffect(() => {
+    wallDiff.wrapS = wallDiff.wrapT = THREE.RepeatWrapping;
+    wallDiff.repeat.set(wallLen / 5, ROOM_HEIGHT / 5);
+    wallDiff.needsUpdate = true;
+    wallBump.wrapS = wallBump.wrapT = THREE.RepeatWrapping;
+    wallBump.repeat.set(wallLen / 5, ROOM_HEIGHT / 5);
+    wallBump.needsUpdate = true;
+  }, [wallDiff, wallBump, wallLen]);
+
   const DOOR_H    = ROOM_HEIGHT * 0.82;   // door height (ft)
   const WIN_SILL  = ROOM_HEIGHT * 0.32;   // window sill height
   const WIN_H     = ROOM_HEIGHT * 0.38;   // window height
@@ -630,7 +655,7 @@ function WallWithOpenings({
           : [wallT, ROOM_HEIGHT, segLen];
         return (
           <Box key={i} castShadow receiveShadow args={args3} position={pos3}>
-            <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+            <meshStandardMaterial map={wallDiff} bumpMap={wallBump} bumpScale={0.02} color={wallColor} />
             <Edges color="#9aa0a8" />
           </Box>
         );
@@ -651,7 +676,7 @@ function WallWithOpenings({
           return (
             <group key={`door_${i}`}>
               <Box args={args3} position={pos3}>
-                <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+                <meshStandardMaterial map={wallDiff} bumpMap={wallBump} bumpScale={0.02} color={wallColor} />
               </Box>
               {/* Detailed Door leaf (swung open 90 degrees) */}
               {!op.isStairDoor && (() => {
@@ -739,10 +764,10 @@ function WallWithOpenings({
           return (
             <group key={`win_${i}`}>
               <Box args={args3Sill} position={pos3Sill}>
-                <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+                <meshStandardMaterial map={wallDiff} bumpMap={wallBump} bumpScale={0.02} color={wallColor} />
               </Box>
               <Box args={args3Lintel} position={pos3Lintel}>
-                <meshStandardMaterial color={wallColor} opacity={0.55} transparent />
+                <meshStandardMaterial map={wallDiff} bumpMap={wallBump} bumpScale={0.02} color={wallColor} />
               </Box>
               
               {/* Detailed Window Frame & Physical Glass */}
@@ -785,7 +810,6 @@ function WallWithOpenings({
 // ── Room 3D ──────────────────────────────────────────────────────────────────
 function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
   const n      = room.name.toLowerCase();
-  const colors = getRoomColor(room.name);
   const cx     = room.x + room.width  / 2;
   const cz     = room.y + room.height / 2;
 
@@ -820,37 +844,105 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
     if (wallOpenings[wall]) wallOpenings[wall].push({ pos: w.position, width: w.width, type: 'window' });
   }
 
+  const mat = getRoomMaterial(room.name);
+
+  // Load floor textures locally to prevent network crashes
+  const [floorDiff, floorBump] = useTexture([
+    '/assets/textures/hardwood2_diffuse.jpg',
+    '/assets/textures/hardwood2_bump.jpg'
+  ]);
+  
+  React.useEffect(() => {
+    floorDiff.wrapS = floorDiff.wrapT = THREE.RepeatWrapping;
+    floorDiff.repeat.set(room.width / 4, room.height / 4);
+    floorDiff.needsUpdate = true;
+    floorBump.wrapS = floorBump.wrapT = THREE.RepeatWrapping;
+    floorBump.repeat.set(room.width / 4, room.height / 4);
+    floorBump.needsUpdate = true;
+  }, [floorDiff, floorBump, room.width, room.height]);
+
+  const isBalcony = room.name.toLowerCase().includes('balcony') || 
+                    room.name.toLowerCase().includes('terrace');
+  const PARAPET_H = 3.5; // ft — NBC minimum 1.07m ≈ 3.5ft
+
+  if (isBalcony) {
+    return (
+      <group>
+        {/* Floor slab */}
+        <mesh castShadow receiveShadow position={[cx, -0.02, cz]} rotation={[-Math.PI/2, 0, 0]}>
+          <planeGeometry args={[room.width, room.height]} />
+          <meshPhysicalMaterial
+            map={floorDiff}
+            bumpMap={floorBump}
+            bumpScale={0.015}
+            color={mat.floorColor}
+            roughness={mat.floorRoughness}
+            metalness={0.02}
+            clearcoat={mat.floorRoughness < 0.25 ? 0.4 : 0}
+            clearcoatRoughness={0.1}
+          />
+        </mesh>
+        
+        {/* Outer railing (glass/metal) */}
+        <group position={[cx, PARAPET_H/2, room.y + room.height - WALL_T/2]}>
+          <Box args={[room.width, 0.2, WALL_T]} position={[0, PARAPET_H/2, 0]} castShadow receiveShadow>
+            <meshStandardMaterial color="#333" roughness={0.4} metalness={0.8} />
+          </Box>
+          <Box args={[room.width, PARAPET_H, 0.05]} position={[0, 0, 0]} castShadow>
+            <meshPhysicalMaterial color="#aaccff" transmission={0.9} opacity={1} transparent roughness={0.1} />
+          </Box>
+        </group>
+        
+        {/* Room label */}
+        <Text position={[cx, PARAPET_H + 0.5, cz]} font="/assets/fonts/Roboto.woff"
+              rotation={[-Math.PI/2, 0, 0]} fontSize={1.2}
+              color="#333" anchorX="center" anchorY="middle">
+          {room.name}
+        </Text>
+      </group>
+    );
+  }
+
   return (
     <group>
-      {/* Floor slab */}
-      <mesh position={[cx, -0.02, cz]} rotation={[-Math.PI/2, 0, 0]}>
+      {/* Floor slab — PBR MeshPhysicalMaterial per threejs-materials skill */}
+      <mesh castShadow receiveShadow position={[cx, -0.02, cz]} rotation={[-Math.PI/2, 0, 0]}>
         <planeGeometry args={[room.width, room.height]} />
-        <meshStandardMaterial color={colors.floor} />
+        <meshPhysicalMaterial
+          map={floorDiff}
+          bumpMap={floorBump}
+          bumpScale={0.015}
+          color={mat.floorColor}
+          roughness={mat.floorRoughness}
+          metalness={0.02}
+          clearcoat={mat.floorRoughness < 0.25 ? 0.4 : 0}
+          clearcoatRoughness={0.1}
+        />
       </mesh>
 
       {/* North wall (top in plan, z = room.y) — horizontal, openings offset from room.x */}
       <WallWithOpenings
         wallLen={room.width} wallBase={room.x} wallFixed={room.y}
         wallT={WALL_T} isHoriz={true}
-        openings={wallOpenings.top} wallColor={colors.wall}
+        openings={wallOpenings.top} wallColor={mat.wallColor}
       />
       {/* South wall (bottom in plan, z = room.y + room.height) */}
       <WallWithOpenings
         wallLen={room.width} wallBase={room.x} wallFixed={room.y + room.height}
         wallT={WALL_T} isHoriz={true}
-        openings={wallOpenings.bottom} wallColor={colors.wall}
+        openings={wallOpenings.bottom} wallColor={mat.wallColor}
       />
       {/* West wall (left in plan, x = room.x) — vertical, openings offset from room.y */}
       <WallWithOpenings
         wallLen={room.height} wallBase={room.y} wallFixed={room.x}
         wallT={WALL_T} isHoriz={false}
-        openings={wallOpenings.left} wallColor={colors.wall}
+        openings={wallOpenings.left} wallColor={mat.wallColor}
       />
       {/* East wall (right in plan, x = room.x + room.width) */}
       <WallWithOpenings
         wallLen={room.height} wallBase={room.y} wallFixed={room.x + room.width}
         wallT={WALL_T} isHoriz={false}
-        openings={wallOpenings.right} wallColor={colors.wall}
+        openings={wallOpenings.right} wallColor={mat.wallColor}
       />
 
       {/* Furniture or Stairs */}
@@ -863,7 +955,7 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
       )}
 
       {/* Room label (top-down) */}
-      <Text
+      <Text font="/assets/fonts/Roboto.woff"
         position={[cx, ROOM_HEIGHT + 0.8, cz]}
         rotation={[-Math.PI/2, 0, 0]}
         fontSize={1.2}
@@ -877,7 +969,30 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
   );
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ width: '100%', height: '500px', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171', borderRadius: '8px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h3>WebGL Crash Detected</h3>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>The 3D view failed to load. Your device might be out of VRAM or missing WebGL support.</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
   if (!rooms || rooms.length === 0) return null;
 
@@ -890,101 +1005,133 @@ export default function FloorPlan3D({ rooms }: FloorPlan3DProps) {
   const centerZ = (minZ + maxZ) / 2;
   const maxDim  = Math.max(maxX - minX, maxZ - minZ);
 
+  // Scatter trees around the house perimeter
+
+
   return (
     <div style={{ width: '100%', height: '100%', minHeight: '500px', background: '#0d1117', borderRadius: '8px', overflow: 'hidden' }}>
-      <Canvas
-        camera={{ position: [centerX + maxDim * 0.55, maxDim * 1.05, centerZ + maxDim * 0.9], fov: 48 }}
-        shadows
-        gl={{ antialias: true }}
-      >
-        <Sky sunPosition={[centerX + 50, maxDim * 1.5, centerZ + 50]} turbidity={0.2} rayleigh={0.1} />
-        <ambientLight intensity={0.8} />
-        <directionalLight
-          position={[centerX + maxDim * 0.7, maxDim * 1.4, centerZ + maxDim * 0.7]}
-          intensity={1.2}
-          castShadow
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
-        />
-        <directionalLight
-          position={[centerX - maxDim * 0.4, maxDim * 0.6, centerZ - maxDim * 0.3]}
-          intensity={0.3}
-        />
+      <ErrorBoundary>
+        <Canvas
+          camera={{ position: [centerX + maxDim * 0.55, maxDim * 1.05, centerZ + maxDim * 0.9], fov: 48 }}
+          shadows
+          gl={{ antialias: true }}
+        >
+          <React.Suspense fallback={null}>
+            <SceneSetup />
+            <Sky sunPosition={[centerX + 60, maxDim * 1.8, centerZ + 30]} turbidity={3} rayleigh={0.3} mieCoefficient={0.005} mieDirectionalG={0.8} />
+            {/* Environment map removed for stability */}
 
-        <group>
-          {rooms.map((r, i) => (
-            <Room3D key={i} room={r} allRooms={rooms} />
-          ))}
-        </group>
-        
-        {/* Grass / Ground */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.1, centerZ]} receiveShadow>
-          <planeGeometry args={[maxDim * 4, maxDim * 4]} />
-          <meshStandardMaterial color="#4ade80" roughness={0.9} />
-        </mesh>
+          {/* Simple Hemisphere & Directional Lights (Removed SoftShadows for stability) */}
+          <hemisphereLight args={['#c8d8f0', '#4a6030', 0.7]} />
 
-        <OrbitControls
-          target={[centerX, ROOM_HEIGHT / 2, centerZ]}
-          maxPolarAngle={Math.PI / 2 - 0.04}
-          minDistance={8}
-          maxDistance={maxDim * 3.5}
-          enableDamping
-          dampingFactor={0.08}
-        />
-        <gridHelper
-          args={[
-            Math.ceil(maxDim * 1.6 / 10) * 10,
-            Math.ceil(maxDim * 1.6 / 10),
-            '#1e2a3a',
-            '#111a24'
-          ]}
-          position={[centerX, -0.25, centerZ]}
-        />
-        {/* Street Environment */}
-        <group position={[centerX, 0.01, minZ - 14]}>
-          {/* Main Road */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-            <planeGeometry args={[maxDim * 3, 16]} />
-            <meshStandardMaterial color="#1e293b" roughness={0.9} />
-          </mesh>
-          {/* Road Markings (Center line) */}
-          <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[maxDim * 3, 0.4]} />
-            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.2} />
-          </mesh>
-          
-          {/* Connecting Path to House */}
-          <mesh position={[0, 0.02, 10]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-            <planeGeometry args={[6, 12]} />
-            <meshStandardMaterial color="#94a3b8" roughness={0.7} />
-          </mesh>
+          <directionalLight
+            position={[centerX + maxDim * 0.9, maxDim * 1.6, centerZ + maxDim * 0.6]}
+            intensity={1.8}
+            color="#fff5e0"
+            castShadow
+            shadow-mapSize-width={1024}
+            shadow-mapSize-height={1024}
+            shadow-camera-left={-maxDim * 1.2}
+            shadow-camera-right={maxDim * 1.2}
+            shadow-camera-top={maxDim * 1.2}
+            shadow-camera-bottom={-maxDim * 1.2}
+            shadow-camera-near={0.5}
+            shadow-camera-far={maxDim * 4}
+            shadow-bias={-0.0005}
+          />
+          <directionalLight
+            position={[centerX - maxDim * 0.5, maxDim * 0.5, centerZ - maxDim * 0.4]}
+            intensity={0.35}
+            color="#d0e8ff"
+          />
 
-          {/* Street Lights */}
-          <group position={[-maxDim * 0.4, 0, -6]}>
-            <mesh position={[0, 6, 0]}>
-              <cylinderGeometry args={[0.2, 0.3, 12]} />
-              <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
-            </mesh>
-            <mesh position={[0, 12, 1]}>
-              <sphereGeometry args={[0.6]} />
-              <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={2} />
-            </mesh>
-            <pointLight position={[0, 11.5, 1]} intensity={2.5} distance={40} decay={2} color="#fef08a" castShadow />
+          {/* Simplified Post-processing (Removed N8AO for stability) */}
+          <EffectComposer multisampling={4}>
+            <Vignette eskil={false} offset={0.35} darkness={0.6} />
+          </EffectComposer>
+
+          <group>
+            {rooms.map((r, i) => (
+              <Room3D key={i} room={r} allRooms={rooms} />
+            ))}
           </group>
+
+          {/* Trees removed for stability */}
           
-          <group position={[maxDim * 0.4, 0, -6]}>
-            <mesh position={[0, 6, 0]}>
-              <cylinderGeometry args={[0.2, 0.3, 12]} />
-              <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.1, centerZ]} receiveShadow>
+            <planeGeometry args={[maxDim * 5, maxDim * 5]} />
+            <meshStandardMaterial color="#3a6b30" roughness={0.95} metalness={0} />
+          </mesh>
+
+          <OrbitControls
+            target={[centerX, ROOM_HEIGHT / 2, centerZ]}
+            maxPolarAngle={Math.PI / 2 - 0.04}
+            minDistance={8}
+            maxDistance={maxDim * 3.5}
+            enableDamping
+            dampingFactor={0.08}
+          />
+          <gridHelper
+            args={[
+              Math.ceil(maxDim * 1.6 / 10) * 10,
+              Math.ceil(maxDim * 1.6 / 10),
+              '#1e2a3a',
+              '#111a24'
+            ]}
+            position={[centerX, -0.25, centerZ]}
+          />
+          
+          <group position={[centerX, 0.01, minZ - 14]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[maxDim * 4, 18]} />
+              <meshStandardMaterial color="#252525" roughness={0.88} metalness={0.05} />
             </mesh>
-            <mesh position={[0, 12, 1]}>
-              <sphereGeometry args={[0.6]} />
-              <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={2} />
+            <mesh position={[0, 0.04, 10.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[maxDim * 4, 4]} />
+              <meshStandardMaterial color="#c0bdb8" roughness={0.7} />
             </mesh>
-            <pointLight position={[0, 11.5, 1]} intensity={2.5} distance={40} decay={2} color="#fef08a" castShadow />
+            <Box receiveShadow castShadow args={[maxDim * 4, 0.3, 0.4]} position={[0, 0.15, 8.6]}>
+              <meshStandardMaterial color="#a0a0a0" roughness={0.6} />
+            </Box>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <mesh key={i} position={[-maxDim * 1.5 + i * maxDim * 0.44, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[maxDim * 0.2, 0.3]} />
+                <meshStandardMaterial color="#f5e642" emissive="#f5e642" emissiveIntensity={0.15} />
+              </mesh>
+            ))}
+            <mesh position={[0, 0.05, 13]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[5, 8]} />
+              <meshStandardMaterial color="#a8a49c" roughness={0.6} />
+            </mesh>
+
+            <group position={[-maxDim * 0.4, 0, -6]}>
+              <mesh position={[0, 6, 0]}>
+                <cylinderGeometry args={[0.2, 0.3, 12]} />
+                <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
+              </mesh>
+              <mesh position={[0, 12, 1]}>
+                <sphereGeometry args={[0.6]} />
+                <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={2} />
+              </mesh>
+              <pointLight position={[0, 11.5, 1]} intensity={2.5} distance={40} decay={2} color="#fef08a" castShadow />
+            </group>
+            
+            <group position={[maxDim * 0.4, 0, -6]}>
+              <mesh position={[0, 6, 0]}>
+                <cylinderGeometry args={[0.2, 0.3, 12]} />
+                <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
+              </mesh>
+              <mesh position={[0, 12, 1]}>
+                <sphereGeometry args={[0.6]} />
+                <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={2} />
+              </mesh>
+              <pointLight position={[0, 11.5, 1]} intensity={2.5} distance={40} decay={2} color="#fef08a" castShadow />
+            </group>
+            {/* Car instance in front yard removed for stability */}
           </group>
-        </group>
-      </Canvas>
+          </React.Suspense>
+        </Canvas>
+      </ErrorBoundary>
     </div>
   );
 }

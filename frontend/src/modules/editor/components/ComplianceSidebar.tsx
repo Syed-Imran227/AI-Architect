@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { VastuResult, NbcResult, EnergyResult, SunlightResult, BomResult, VastuFixResult, NbcFixResult, LayoutUpdatePayload } from '../../../shared/api-client/api';
+import type { LayoutData, VastuResult, NbcResult, EnergyResult, SunlightResult, BomResult, VastuFixResult, NbcFixResult, LayoutUpdatePayload } from '../../../shared/api-client/api';
 import { vastuFix, nbcFix, recalculateBOM } from '../../../shared/api-client/api';
 import toast from 'react-hot-toast';
 
@@ -45,7 +45,7 @@ export default function ComplianceSidebar({
   const [vastuOpen, setVastuOpen] = useState(false);
   const [nbcOpen, setNbcOpen] = useState(false);
   const [energyOpen, setEnergyOpen] = useState(false);
-  const [sunlightOpen, setSunlightOpen] = useState(false);
+
   const [bomOpen, setBomOpen] = useState(false);
   const [vastuFixing, setVastuFixing] = useState(false);
   const [lastFixResult, setLastFixResult] = useState<VastuFixResult | null>(null);
@@ -61,11 +61,12 @@ export default function ComplianceSidebar({
     const sqft = plotContext.plotWidth * plotContext.plotHeight;
     setBomRecalculating(true);
     try {
-      const res = await recalculateBOM(layout as any, sqft, newTier);
+      const res = await recalculateBOM(layout as LayoutData, sqft, newTier);
       onLayoutUpdate({ new_bom_result: res.bomResult });
       toast.success(`BOM updated for ${newTier} finish`);
-    } catch (err: any) {
-      toast.error(`BOM recalculation failed: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`BOM recalculation failed: ${msg}`);
     } finally {
       setBomRecalculating(false);
     }
@@ -281,19 +282,19 @@ export default function ComplianceSidebar({
         </div>
       )}
 
-      {/* Energy / Sun Path Panel */}
-      {energyResult && energyResult.rules.length > 0 && (
+      {/* Energy & Environment Panel */}
+      {((energyResult && energyResult.rules.length > 0) || sunlightResult) && (
         <div className="neu-panel" style={{ padding: '0', overflow: 'hidden' }}>
           <div 
             onClick={() => setEnergyOpen(!energyOpen)}
             style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: energyOpen ? 'var(--input-bg)' : 'transparent', transition: 'all 0.2s' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              <span style={{ fontSize: '1.2rem' }}>⚡</span> Energy Efficiency
+              <span style={{ fontSize: '1.2rem' }}>🌱</span> Climate & Environmental Analysis
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800, color: getBadgeColor(energyResult.score), background: 'var(--bg-primary)', boxShadow: 'var(--shadow-inset)' }}>
-                {energyResult.grade} ({energyResult.score}/100)
+              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800, color: getBadgeColor(energyResult?.score || sunlightResult?.score || 0), background: 'var(--bg-primary)', boxShadow: 'var(--shadow-inset)' }}>
+                {energyResult ? `Grade ${energyResult.grade}` : sunlightResult ? `Grade ${sunlightResult.grade}` : ''}
               </span>
               <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{energyOpen ? '▲' : '▼'}</span>
             </div>
@@ -301,59 +302,42 @@ export default function ComplianceSidebar({
           {energyOpen && (
             <div style={{ padding: '1rem', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {energyResult.rules.map((r, i) => {
-                  if (r.max === 0) return null;
-                  const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
-                  return (
-                    <div key={i} className="neu-panel-inset" style={{ padding: '0.75rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', alignItems: 'center' }}>
-                        <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-                          <span>{icon}</span>{r.rule}
-                        </strong>
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '0.8rem' }}>{r.points}/{r.max}</span>
+                
+                {/* Sunlight Insights */}
+                {sunlightResult?.insights && sunlightResult.insights.length > 0 && (
+                  <>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.5rem' }}>Natural Light Insights</strong>
+                    {sunlightResult.insights.map((insight, i) => (
+                      <div key={`sun-${i}`} className="neu-panel-inset" style={{ padding: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '1rem', marginTop: '-2px' }}>☀️</span>
+                        <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, fontSize: '0.8rem' }}>{insight}</div>
                       </div>
-                      <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, fontSize: '0.75rem' }}>{r.detail}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sunlight Analysis Panel */}
-      {sunlightResult && (
-        <div className="neu-panel" style={{ padding: '0', overflow: 'hidden' }}>
-          <div 
-            onClick={() => setSunlightOpen(!sunlightOpen)}
-            style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: sunlightOpen ? 'var(--input-bg)' : 'transparent', transition: 'all 0.2s' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              <span style={{ fontSize: '1.2rem' }}>☀️</span> Sunlight Analysis
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800, color: getBadgeColor(sunlightResult.score), background: 'var(--bg-primary)', boxShadow: 'var(--shadow-inset)' }}>
-                {sunlightResult.grade} ({sunlightResult.score}/100)
-              </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{sunlightOpen ? '▲' : '▼'}</span>
-            </div>
-          </div>
-          {sunlightOpen && (
-            <div style={{ padding: '1rem', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {sunlightResult.insights && sunlightResult.insights.length > 0 ? (
-                  sunlightResult.insights.map((insight, i) => (
-                    <div key={i} className="neu-panel-inset" style={{ padding: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: '1rem', marginTop: '-2px' }}>💡</span>
-                      <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, fontSize: '0.8rem' }}>{insight}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="neu-panel-inset" style={{ padding: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                    No specific sunlight insights available for this plan.
-                  </div>
+                    ))}
+                  </>
                 )}
+
+                {/* Energy Rules */}
+                {energyResult?.rules && energyResult.rules.length > 0 && (
+                  <>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.5rem' }}>Efficiency Checklist</strong>
+                    {energyResult.rules.map((r, i) => {
+                      if (r.max === 0) return null;
+                      const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
+                      return (
+                        <div key={`energy-${i}`} className="neu-panel-inset" style={{ padding: '0.75rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', alignItems: 'center' }}>
+                            <strong style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+                              <span>{icon}</span>{r.rule}
+                            </strong>
+                            <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '0.8rem' }}>{r.points}/{r.max}</span>
+                          </div>
+                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, fontSize: '0.75rem' }}>{r.detail}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                
               </div>
             </div>
           )}
