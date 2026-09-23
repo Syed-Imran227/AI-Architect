@@ -603,14 +603,14 @@ export default function Editor() {
                 }
               </div>
 
-              {/* Large Concept Sketch */}
-              <div style={{ padding: '1rem', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', flex: 1 }}>
+              {/* Large Concept Sketch — fixed height so it never zooms when the right sidebar panels (BOM, Energy) expand */}
+              <div style={{ padding: '1rem', background: 'var(--bg-primary)', flexShrink: 0 }}>
                 <p style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Concept Sketch</p>
-                <div className="neu-panel-inset" style={{ width: '100%', flex: 1, minHeight: '50vh', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0' }}>
+                <div className="neu-panel-inset" style={{ width: '100%', height: '320px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0' }}>
                   <img
                     src={floors[activeFloorIndex]?.imageUrl || activePlan.imageUrl}
                     alt="Concept sketch"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '8px' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
