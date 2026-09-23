@@ -327,6 +327,16 @@ export const saveProject = async (data: SaveProjectPayload) => {
   return res.json();
 };
 
+export const updateProject = async (id: string, data: SaveProjectPayload) => {
+  const res = await authFetch(`${API_BASE_URL}/projects/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update project");
+  return res.json();
+};
+
 export const deleteProject = async (id: string) => {
   const res = await authFetch(`${API_BASE_URL}/projects/${id}`, {
     method: "DELETE",

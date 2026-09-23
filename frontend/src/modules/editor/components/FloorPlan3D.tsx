@@ -608,7 +608,7 @@ function WallWithOpenings({
   openings, wallColor,
 }: {
   wallLen: number; wallBase: number; wallFixed: number; wallT: number;
-  isHoriz: boolean; openings: { pos: number; width: number; type: 'door' | 'window'; isStairDoor?: boolean }[];
+  isHoriz: boolean; openings: { pos: number; width: number; type: 'door' | 'window' | 'garage_door'; isStairDoor?: boolean }[];
   wallColor: string;
 }) {
   const [wallDiff, wallBump] = useTexture([
@@ -664,7 +664,7 @@ function WallWithOpenings({
       {/* Openings: door lintel above, window lintel above & sill below */}
       {sorted.map((op, i) => {
         const opMid = wallBase + op.pos + op.width / 2;
-        if (op.type === 'door') {
+        if (op.type === 'door' || op.type === 'garage_door') {
           // Thin lintel above door
           const lintelH = ROOM_HEIGHT - DOOR_H;
           const pos3: [number, number, number] = isHoriz
@@ -678,8 +678,8 @@ function WallWithOpenings({
               <Box args={args3} position={pos3}>
                 <meshStandardMaterial map={wallDiff} bumpMap={wallBump} bumpScale={0.02} color={wallColor} />
               </Box>
-              {/* Detailed Door leaf (swung open 90 degrees) */}
-              {!op.isStairDoor && (() => {
+              {/* Detailed Door leaf (swung open 90 degrees) or Garage roller */}
+              {op.type === 'door' && !op.isStairDoor && (() => {
                 const dw = op.width * 0.9;
                 const hingeCoord = wallBase + op.pos; // Left/Bottom hinge
                 const doorT = wallT * 0.25;
@@ -735,6 +735,19 @@ function WallWithOpenings({
                         <meshStandardMaterial color="#666" metalness={0.9} roughness={0.1} />
                       </Sphere>
                     </group>
+                  </group>
+                );
+              })()}
+              {op.type === 'garage_door' && (() => {
+                const dw = op.width * 0.9;
+                const pos3Leaf: [number, number, number] = isHoriz
+                  ? [opMid, DOOR_H, wallFixed]
+                  : [wallFixed, DOOR_H, opMid];
+                return (
+                  <group position={pos3Leaf} rotation={isHoriz ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]}>
+                    <Cylinder args={[0.3, 0.3, dw, 16]}>
+                      <meshStandardMaterial color="#444" roughness={0.6} metalness={0.5} />
+                    </Cylinder>
                   </group>
                 );
               })()}
@@ -816,7 +829,7 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
 
 
   // Parse doors and windows per wall
-  type Opening = { pos: number; width: number; type: 'door' | 'window'; isStairDoor?: boolean };
+  type Opening = { pos: number; width: number; type: 'door' | 'window' | 'garage_door'; isStairDoor?: boolean };
   const wallOpenings: Record<string, Opening[]> = { top: [], bottom: [], left: [], right: [] };
   
   for (const d of (room.doors ?? [])) {
@@ -836,7 +849,7 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
       return (hingeX >= rx1 - 0.1 && hingeX <= rx2 + 0.1 && hingeY >= ry1 - 0.1 && hingeY <= ry2 + 0.1);
     });
 
-    if (wallOpenings[wall]) wallOpenings[wall].push({ pos: d.position, width: d.width, type: 'door', isStairDoor });
+    if (wallOpenings[wall]) wallOpenings[wall].push({ pos: d.position, width: d.width, type: (d as { is_garage?: boolean }).is_garage ? 'garage_door' : 'door', isStairDoor });
   }
   
   for (const w of (room.windows ?? [])) {
@@ -862,10 +875,15 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
   }, [floorDiff, floorBump, room.width, room.height]);
 
   const isBalcony = room.name.toLowerCase().includes('balcony') || 
-                    room.name.toLowerCase().includes('terrace');
+                    room.name.toLowerCase().includes('terrace') || 
+                    room.name.toLowerCase().includes('open area');
+  const isParking = room.name.toLowerCase().includes('parking');
   const PARAPET_H = 3.5; // ft — NBC minimum 1.07m ≈ 3.5ft
 
   if (isBalcony) {
+    const wallsWithDoors = (room.doors ?? []).map((d: { wall: string }) => d.wall);
+    const edges = ['top', 'bottom', 'left', 'right'];
+
     return (
       <group>
         {/* Floor slab */}
@@ -884,14 +902,25 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
         </mesh>
         
         {/* Outer railing (glass/metal) */}
-        <group position={[cx, PARAPET_H/2, room.y + room.height - WALL_T/2]}>
-          <Box args={[room.width, 0.2, WALL_T]} position={[0, PARAPET_H/2, 0]} castShadow receiveShadow>
-            <meshStandardMaterial color="#333" roughness={0.4} metalness={0.8} />
-          </Box>
-          <Box args={[room.width, PARAPET_H, 0.05]} position={[0, 0, 0]} castShadow>
-            <meshPhysicalMaterial color="#aaccff" transmission={0.9} opacity={1} transparent roughness={0.1} />
-          </Box>
-        </group>
+        {edges.map(edge => {
+          if (wallsWithDoors.includes(edge)) return null;
+          let rx = cx, rz = cz, w = room.width, d = WALL_T;
+          if (edge === 'top') { rz = room.y + WALL_T/2; }
+          if (edge === 'bottom') { rz = room.y + room.height - WALL_T/2; }
+          if (edge === 'left') { rx = room.x + WALL_T/2; w = WALL_T; d = room.height; }
+          if (edge === 'right') { rx = room.x + room.width - WALL_T/2; w = WALL_T; d = room.height; }
+
+          return (
+            <group key={edge} position={[rx, PARAPET_H/2, rz]}>
+              <Box args={[w, 0.2, d]} position={[0, PARAPET_H/2, 0]} castShadow receiveShadow>
+                <meshStandardMaterial color="#333" roughness={0.4} metalness={0.8} />
+              </Box>
+              <Box args={[edge === 'left' || edge === 'right' ? 0.05 : room.width, PARAPET_H, edge === 'top' || edge === 'bottom' ? 0.05 : room.height]} position={[0, 0, 0]} castShadow>
+                <meshPhysicalMaterial color="#aaccff" transmission={0.9} opacity={1} transparent roughness={0.1} />
+              </Box>
+            </group>
+          );
+        })}
         
         {/* Room label */}
         <Text position={[cx, PARAPET_H + 0.5, cz]} font="/assets/fonts/Roboto.woff"
@@ -919,6 +948,15 @@ function Room3D({ room, allRooms }: { room: Room, allRooms: Room[] }) {
           clearcoatRoughness={0.1}
         />
       </mesh>
+
+      {isParking && (
+        <group position={[cx, 0.01, cz]} rotation={[-Math.PI/2, 0, 0]}>
+          <mesh position={[0, 0, 0]}>
+            <planeGeometry args={[room.width * 0.8, room.height * 0.8]} />
+            <meshBasicMaterial color="#f0d000" wireframe wireframeLinewidth={3} opacity={0.6} transparent />
+          </mesh>
+        </group>
+      )}
 
       {/* North wall (top in plan, z = room.y) — horizontal, openings offset from room.x */}
       <WallWithOpenings

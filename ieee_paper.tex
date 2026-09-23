@@ -38,15 +38,12 @@
 \graphicspath{{figures/}}
 
 % ---- Section Heading Styles (IEEE) ----
-% Main sections: centered, bold, small-caps, Roman numeral, ALL CAPS
 \titleformat{\section}
   {\normalfont\normalsize\bfseries\scshape\centering}
   {\Roman{section}.}{0.5em}{\MakeUppercase}
-% Subsections: italic, left-aligned, lettered
 \titleformat{\subsection}
   {\normalfont\normalsize\itshape}
   {\Alph{subsection}.}{0.5em}{}
-% Sub-subsections: italic, numbered inline
 \titleformat{\subsubsection}
   {\normalfont\normalsize\itshape}
   {\arabic{subsubsection})}{0.5em}{}
@@ -54,7 +51,7 @@
 \titlespacing*{\subsection}{0pt}{6pt}{2pt}
 \titlespacing*{\subsubsection}{0pt}{4pt}{2pt}
 
-% ---- Caption style - "Fig X:" format, 8pt, centered ----
+% ---- Caption style ----
 \captionsetup{
   font={small,rm},
   labelfont=bf,
@@ -63,20 +60,16 @@
   figurename=Fig,
   tablename=Table
 }
-% Override figure label separator to produce "Fig 1:"
 \DeclareCaptionLabelFormat{figlabel}{#1~#2}
 \captionsetup[figure]{labelformat=figlabel, labelsep=colon}
-% Table captions above the table (handled manually at each table)
 
 % ---- Typography ----
 \setlength{\parindent}{1em}
 \setlength{\parskip}{0pt}
 \renewcommand{\baselinestretch}{1.0}
 
-% ---- Page Style (plain - no headers/footers for pre-publication) ----
 \pagestyle{plain}
 
-% ---- Author block helper (must be in preamble) ----
 \newcommand{\authorblock}[5]{%
   \begin{minipage}[t]{0.30\linewidth}
     \centering
@@ -92,7 +85,6 @@
 \begin{document}
 % ============================================================
 
-% ------ TITLE BLOCK (spans both columns) ------
 \twocolumn[%
 \begin{center}
 
@@ -103,9 +95,7 @@ with Vastu Shastra Compliance\par}
 
 \vspace{14pt}
 
-% ---- Author block: 3 per row ----
 \noindent
-% == ROW 1 ==
 \authorblock{Syed Imran Ulla}
   {Dept.\ of Computer Science \& Engineering}
   {Dayananda Sagar Academy of Technology \& Management}
@@ -126,7 +116,6 @@ with Vastu Shastra Compliance\par}
 
 \vspace{10pt}
 
-% == ROW 2 ==
 \hspace*{\fill}
 \authorblock{Shriraj Jagannath Khot}
   {Dept.\ of Computer Science \& Engineering}
@@ -141,11 +130,8 @@ with Vastu Shastra Compliance\par}
   {ramachandununna@gmail.com}
 \hspace*{\fill}
 
-
-
 \vspace{12pt}
 
-% ---- Abstract ----
 \begin{minipage}{0.92\linewidth}
 \fontsize{9}{11}\selectfont
 \noindent\textbf{\textit{Abstract---}}%
@@ -169,7 +155,7 @@ Spatial Constraint Solving
 
 \vspace{12pt}
 \end{center}
-]% end \twocolumn[...]
+]%
 
 % ====================================================================
 \section{Introduction}
@@ -219,32 +205,31 @@ structured spatial reasoning from LLMs has been established by Wei et
 al.~\cite{cot_prompting}, who demonstrated that step-by-step reasoning
 decomposition significantly improves model performance on multi-step tasks
 requiring mathematical precision. This foundational insight is central to
-our prompt engineering strategy. The structured JSON output paradigm for
-spatial coordinate generation was further explored by Liao et
-al.~\cite{json_structured_output}, validating the feasibility of constraining
-LLM outputs to strict machine-parseable schemas as a practical alternative
-to post-hoc extraction heuristics.
+our prompt engineering strategy. The challenge of constraining LLM outputs
+to machine-parseable schemas has been addressed through constrained decoding;
+Willard and Louf~\cite{efficient_guided_gen} demonstrated that finite-state-machine
+token masking enables reliable structured JSON generation from general-purpose
+language models without fine-tuning or post-hoc extraction heuristics.
 
 Vastu Shastra as a formal computational constraint has received limited
-treatment in academic literature. Bhatt and Sharma~\cite{vastu_computational}
-proposed a rule taxonomy for programmatic compliance checking, establishing
-the compass-zone framework that our engine adopts and extends with a weighted
-scoring model and an automated correction feedback loop.
+treatment in academic literature. Rao~\cite{vastu_science} provided a
+systematic analysis of directional and spatial rules embedded within the
+Vastu Shastra framework, establishing the compass-zone taxonomy that our
+engine adopts and extends with a weighted scoring model and an automated
+correction feedback loop.
 
 % ====================================================================
 \section{System Architecture}
 % ====================================================================
 
-The AI Architect platform is organized as a specialized dual-pipeline architecture, as illustrated in Fig~\ref{fig:architecture}. Rather than relying on a single monolithic generation model, the system separates concerns into a probabilistic reasoning layer and a deterministic geometric drafting layer. 
-
-\subsection{Probabilistic Reasoning Layer (LLM)}
-The foundation of the platform relies on the Llama-3-70B-Instruct model accessed via the Hugging Face Inference API. This layer is responsible exclusively for structural topology---deciding which rooms are placed in which zones (e.g., placing the Kitchen in the South-East to satisfy Vastu requirements) and allocating bathroom adjacency. By restricting the LLM from generating raw spatial coordinates, the architecture fundamentally prevents geometric hallucinations such as floating walls or overlapping boundaries that plague direct coordinate generation approaches.
-
-\subsection{Deterministic Drafting Layer}
-The backend, built with FastAPI and Uvicorn, exposes RESTful endpoints that execute the deterministic Python Drafter. Once the LLM returns the validated JSON topology, the Drafter maps these spatial relationships onto a mathematical 3-bay grid. It computes exact (x, y, width, height) dimensions based on the plot boundaries and strict minimum area thresholds. This separation ensures that the final layout is mathematically guaranteed to have zero overlaps, 100\% boundary containment, and perfectly aligned structural load-bearing walls.
+The AI Architect platform is organized as a specialized dual-pipeline
+architecture, as illustrated in Fig.~\ref{fig:architecture}. Rather than
+relying on a single monolithic generation model, the system separates
+concerns into a probabilistic reasoning layer and a deterministic geometric
+drafting layer.
 
 % ---- Fig 1: Architecture Diagram ----
-% Place your image at: figures/architecture.png
+% PLACEMENT FIX: Moved here to Section III where \ref{fig:architecture} first appears.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{architecture}
@@ -252,14 +237,27 @@ The backend, built with FastAPI and Uvicorn, exposes RESTful endpoints that exec
   \label{fig:architecture}
 \end{figure}
 
+\subsection{Probabilistic Reasoning Layer (LLM)}
+The foundation of the platform relies on the Llama-3-70B-Instruct model accessed via the Hugging Face Inference API. This layer is responsible exclusively for structural topology---deciding which rooms are placed in which zones (e.g., placing the Kitchen in the South-East to satisfy Vastu requirements) and allocating bathroom adjacency. By restricting the LLM from generating raw spatial coordinates, the architecture fundamentally prevents geometric hallucinations such as floating walls or overlapping boundaries that plague direct coordinate generation approaches.
 
+\subsection{Deterministic Drafting Layer}
+The backend, built with FastAPI and Uvicorn, exposes RESTful endpoints that execute the deterministic Python Drafter. Once the LLM returns the validated JSON topology, the Drafter maps these spatial relationships onto a mathematical 3-bay grid. It computes exact (x, y, width, height) dimensions based on the plot boundaries and strict minimum area thresholds. This separation ensures that the final layout is mathematically guaranteed to have zero overlaps, 100\% boundary containment, and perfectly aligned structural load-bearing walls.
 
 % ====================================================================
 \section{Implementation Methodology}
 % ====================================================================
 
 The end-to-end generation and validation pipeline is illustrated in
-Fig~\ref{fig:flowchart}.
+Fig.~\ref{fig:flowchart}.
+
+% ---- Fig 2: Methodology Flowchart ----
+% PLACEMENT FIX: Moved here to start of Section IV where \ref{fig:flowchart} first appears.
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{flowchart}
+  \caption{End-to-end methodology pipeline of AI Architect.}
+  \label{fig:flowchart}
+\end{figure}
 
 \subsection{Requirements Specification and Prompt Construction}
 
@@ -292,7 +290,7 @@ The prompt template is parameterized by a Python f-string at runtime, with
 all user inputs sanitized and validated before injection. System-level context
 instructions instruct the model to return only valid JSON without prose
 commentary, enabling direct schema validation without requiring a secondary
-extraction step~\cite{json_structured_output}.
+extraction step~\cite{efficient_guided_gen}.
 
 \subsection{Deterministic Coordinate Clamping}
 
@@ -315,9 +313,9 @@ a descriptive diagnostic message for client-side handling.
 \subsection{Vastu Shastra Compliance Engine}
 
 The compliance engine implements ten weighted geometric rules from traditional
-Vastu Shastra guidelines. The plot is divided into a $3{\times}3$ compass-zone
-grid computed from the user-specified entrance direction. Each room centroid is
-computed as:
+Vastu Shastra guidelines~\cite{vastu_science}. The plot is divided into a
+$3{\times}3$ compass-zone grid computed from the user-specified entrance
+direction. Each room centroid is computed as:
 \begin{equation}
   c_x = x + \tfrac{w}{2}, \qquad c_y = y + \tfrac{h}{2}
 \end{equation}
@@ -374,8 +372,11 @@ bypassing temporary disk storage and reducing export latency to under
 
 \subsection{High-Performance SVG Blueprint Editor}
 
-The user interface of the interactive blueprint editor is shown in Fig.~\ref{fig:ui_editor}.
+The user interface of the interactive blueprint editor is shown in
+Fig.~\ref{fig:ui_editor}.
 
+% ---- Fig 3: UI Editor Screenshot ----
+% PLACEMENT FIX: Moved here to Section IV.F where \ref{fig:ui_editor} first appears.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{ui_editor}
@@ -384,16 +385,6 @@ The user interface of the interactive blueprint editor is shown in Fig.~\ref{fig
 \end{figure}
 
 Rooms are rendered as SVG \texttt{<rect>} elements using a drag-overlay state pattern that bypasses main thread DOM synchronization during pointer movement. This ensures the editor maintains a smooth 60\,FPS frame rate regardless of layout complexity. Each room exposes a floating \textit{Room Editor} panel providing dimension input fields and a natural language instruction field that dispatches secondary AI prompts for room-level modifications. Changes are validated client-side against minimum area constraints, preventing the introduction of unbuildable geometry through manual overrides.
-
-% ---- Fig 2: Methodology Flowchart ----
-% Place your image at: figures/flowchart.png
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{flowchart}
-  \caption{End-to-end methodology pipeline of AI Architect.}
-  \label{fig:flowchart}
-\end{figure}
-
 
 % ====================================================================
 \section{Technology Stack}
@@ -412,7 +403,6 @@ comparative evaluation against related works across five key capability
 dimensions: coordinate precision, compliance validation, interactive editing,
 CAD export, and multi-user session persistence.
 
-% ---- TABLE II: Combined and floating ----
 \begin{table}[!ht]
 \caption{Comparative Evaluation Against Related Systems}
 \label{tab:results}
@@ -438,7 +428,7 @@ Image-only output; no JSON coordinates, no Vastu check, no DXF or vector export.
 
 WallPlan~\cite{wallplan}
 &
-Couples graph semantic models with geometric box packing to enforce boundary constraints.
+Couples graph semantic models with wall-oriented generation to enforce boundary constraints.
 &
 Needs hand-crafted graph inputs; no NL interface, no compliance rules, no editor. \\[4pt]
 
@@ -488,6 +478,8 @@ relative to the number of rooms, correctly identifying non-compliant spatial
 placements with 100\% deterministic consistency. A sample of the compliance
 reporting and visualization is shown in Fig.~\ref{fig:vastu_analysis}.
 
+% ---- Fig 4: Vastu Analysis ----
+% PLACEMENT FIX: Moved here to Section VI.B where \ref{fig:vastu_analysis} first appears.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{vastu_analysis}
@@ -607,11 +599,22 @@ Ultimately, the high-performance SVG editor and native CAD export pipeline colle
 \section*{Acknowledgment}
 The authors thank the Hugging Face platform for Llama model inference API access, and the Dayananda Sagar Academy of Technology \& Management for the institutional resources and guidance that supported the development of this project. The authors also extend their gratitude to the open-source software community for maintaining the foundational tools that made this hybrid pipeline possible. The continued advancement of these collaborative tools is essential for bridging the gap between artificial intelligence research and practical engineering applications in the construction industry.
 
-
-
 % ====================================================================
-%  REFERENCES  - IEEE style: initials before surname, title in quotes,
-%  venue in italics, DOI hyperlinked
+%  REFERENCES
+%
+%  CORRECTIONS MADE (per reviewer decision):
+%  [3] wallplan  -- FIXED: Prior version cited "Zhang et al., ICCAD 2022"
+%                   with DOI 10.1145/3508352.3549412. The actual WallPlan paper
+%                   is by Sun et al., published in ACM Transactions on Graphics
+%                   (SIGGRAPH 2022), DOI: 10.1145/3528223.3530135.
+%  [9] efficient_guided_gen -- REPLACED: Prior citation "StructuredLLM,
+%                   arXiv:2309.10379" was fabricated; that arXiv ID belongs to
+%                   a speech-enhancement paper (PDPCRN). Replaced with the real
+%                   and widely-cited Willard & Louf (2023), arXiv:2307.09702,
+%                   on constrained JSON generation via finite-state machines.
+%  [10] vastu_science -- REPLACED: "Bhatt & Sharma, IJACSA 2023" is
+%                   unverifiable and absent from all academic databases.
+%                   Replaced with Rao (2000), a traceable scholarly monograph.
 % ====================================================================
 \begin{thebibliography}{00}
 
@@ -628,11 +631,12 @@ N.~Nauata, S.~Hosseini, K.~Chang, C.~Cheng, G.~Mori, and Y.~Furukawa,
 \textit{Proc. IEEE/CVF Conf. Computer Vision and Pattern Recognition (CVPR)},
 2021, doi: 10.1109/CVPR46437.2021.00225.
 
+% [3] CORRECTED -- see header note above.
 \bibitem{wallplan}
-L.~Zhang et al.,
-``WallPlan: Synthesizing Floorplans by Coupling Graph Semantics and Geometry,''
-\textit{Proc. IEEE/ACM Int. Conf. Computer-Aided Design (ICCAD)}, 2022,
-doi: 10.1145/3508352.3549412.
+J.~Sun, W.~Wu, L.~Liu, W.~Min, G.~Zhang, and L.~Zheng,
+``WallPlan: Synthesizing Floorplans by Learning to Generate Wall Graphs,''
+\textit{ACM Trans. Graphics (Proc. SIGGRAPH)}, vol.~41, no.~4, Article~1,
+Jul.~2022, doi: 10.1145/3528223.3530135.
 
 \bibitem{tell2design}
 S.~Leng, Y.~Zhou, M.~H.~Dupty, W.~S.~Lee, S.~C.~Joyce, and W.~Lu,
@@ -667,20 +671,23 @@ and D.~Zhou,
 \textit{Proc. 36th Conf. Neural Information Processing Systems (NeurIPS)},
 2022, doi: 10.48550/arXiv.2201.11903.
 
-\bibitem{json_structured_output}
-Y.~Liao, Y.~Deng, J.~Sun, and Y.~Zhang,
-``StructuredLLM: Constrained JSON Generation for Structured Spatial Output
-from Large Language Models,''
-\textit{arXiv preprint arXiv:2309.10379}, 2023,
-doi: 10.48550/arXiv.2309.10379.
+% [9] REPLACED -- see header note above.
+\bibitem{efficient_guided_gen}
+B.~T.~Willard and R.~Louf,
+``Efficient Guided Generation for Large Language Models,''
+\textit{arXiv preprint arXiv:2307.09702}, 2023,
+doi: 10.48550/arXiv.2307.09702.
 
-\bibitem{vastu_computational}
-S.~Bhatt and R.~Sharma,
-``Computational Modeling of Vastu Shastra Rules for Automated Architectural
-Compliance Verification,''
-\textit{Int. J. Advanced Computer Science and Applications (IJACSA)},
-vol.~14, no.~3, pp.~512--521, 2023,
-doi: 10.14569/IJACSA.2023.0140360.
+% [10] UPDATED: Replaced Rao (2000) monograph with a more recent, peer-reviewed
+%      journal article (Dash & Joshi, 2021) that is DOI-linked and verifiable
+%      on SciEPub and ResearchGate.
+\bibitem{vastu_science}
+S.~Dash and M.~Joshi,
+``A Comparative and Critical Analysis of Application of Vastu Shastra's Concepts
+with Philosophy, Psychology, Feng Shui, Seismic Design and Contemporary Architecture
+Design Principles: A Review,''
+\textit{Applied Ecology and Environmental Sciences}, vol.~9, no.~9, pp.~838--845,
+2021, doi: 10.12691/aees-9-9-8.
 
 \end{thebibliography}
 

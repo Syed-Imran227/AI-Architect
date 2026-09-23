@@ -373,8 +373,8 @@ def vastu_fix(req: VastuFixRequest, current_user: dict = Depends(get_current_use
 
 class NbcFixRequest(BaseModel):
     layout: dict
-    plot_width: float = Field(40.0, ge=40, le=500)
-    plot_height: float = Field(40.0, ge=40, le=500)
+    plot_width: float = Field(40.0, ge=30, le=500)
+    plot_height: float = Field(40.0, ge=30, le=500)
     entry_dir: str = "east"
     bedrooms: int = Field(2, ge=0, le=20)
     bathrooms: int = Field(2, ge=0, le=20)

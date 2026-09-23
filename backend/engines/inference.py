@@ -4,9 +4,10 @@ inference.py
 Phase 1 — Architect-Drafter Hybrid Model
 
 LLM Fallback Chain (tried in order):
-  1. gemini-3.1-pro-preview (Best Reasoning)
-  2. gemini-3.7-flash (Best of Both)
-  3. gemini-3.5-flash-lite (Best Response Time)
+  1. llama-3.3-70b-versatile  (Groq — fastest, JSON mode)
+  2. gemini-2.5-pro            (Google AI Studio — strong reasoning, strict JSON schema)
+  3. deepseek-ai/DeepSeek-V3-0324 (Hugging Face router — large open-weight fallback)
+  4. gemini-2.5-flash          (Google AI Studio — fast safety net, strict JSON schema)
 
 The LLM ONLY produces topology/zoning JSON — never raw x,y,w,h coordinates.
 The Python Drafter (architectural_layout.py) turns topology into exact coordinates.
@@ -25,30 +26,73 @@ from engines.layout_validator import boundary_check_only
 
 from openai import OpenAI
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-HF_API_KEY = os.getenv("HF_API_KEY")
+# ── API key loading ───────────────────────────────────────────────────────────
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY   = os.getenv("GROQ_API_KEY")
+HF_API_KEY     = os.getenv("HF_API_KEY")
 
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY is missing. Please add it to backend/.env")
+if not GOOGLE_API_KEY:
+    raise ValueError(
+        "GOOGLE_API_KEY (or GEMINI_API_KEY) is missing. "
+        "Please add it to backend/.env"
+    )
 
-_gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+# ── Provider clients ──────────────────────────────────────────────────────────
+_google_client = genai.Client(api_key=GOOGLE_API_KEY)
 
-_hf_client = None
+_groq_client: Optional[OpenAI] = None
+if GROQ_API_KEY:
+    _groq_client = OpenAI(
+        api_key=GROQ_API_KEY,
+        base_url="https://api.groq.com/openai/v1",
+    )
+
+_hf_client: Optional[OpenAI] = None
 if HF_API_KEY:
-    _hf_client = OpenAI(api_key=HF_API_KEY, base_url="https://router.huggingface.co/v1")
+    _hf_client = OpenAI(
+        api_key=HF_API_KEY,
+        base_url="https://router.huggingface.co/v1",
+    )
 
-# List of dicts configuring fallback models — Gemini primary, DeepSeek via HF as last resort
-FALLBACK_MODELS = [
-    {"provider": "gemini", "model": "gemini-3.1-pro-preview", "client": _gemini_client},
-    {"provider": "gemini", "model": "gemini-3.7-flash", "client": _gemini_client},
-    {"provider": "gemini", "model": "gemini-3.5-flash-lite", "client": _gemini_client},
-]
+# ── Fallback chain ────────────────────────────────────────────────────────────
+# Tried in order; each entry specifies provider, model name, and the client.
+# 1. Google Gemini 3.1 Pro Preview (Absolute best reasoning, but prone to 429 quota limits).
+# 2. HF DeepSeek-V3 (671B frontier model, massive logic capability).
+# 3. Google Gemini 3.8 Flash (Most intelligent Flash model, currently experiencing 503 high demand).
+# 4. Google Gemini 3.7 Flash (Previous-gen Flash model, currently 100% operational and better than 3.5).
+# 5. Groq Qwen 3.8 27B (Final lightning-fast safety net).
+FALLBACK_MODELS: list[dict] = []
+
+FALLBACK_MODELS.append({
+    "provider": "google",
+    "model": "gemini-3.1-pro-preview",
+    "client": _google_client,
+})
 
 if _hf_client:
     FALLBACK_MODELS.append({
-        "provider": "openai", 
-        "model": "deepseek-ai/DeepSeek-V3-0324", 
-        "client": _hf_client
+        "provider": "hf",
+        "model": "deepseek-ai/DeepSeek-V3-0324",
+        "client": _hf_client,
+    })
+
+FALLBACK_MODELS.append({
+    "provider": "google",
+    "model": "gemini-3.8-flash",
+    "client": _google_client,
+})
+
+FALLBACK_MODELS.append({
+    "provider": "google",
+    "model": "gemini-3.7-flash",
+    "client": _google_client,
+})
+
+if _groq_client:
+    FALLBACK_MODELS.append({
+        "provider": "groq",
+        "model": "qwen/qwen3.8-27b",
+        "client": _groq_client,
     })
 
 
@@ -213,68 +257,144 @@ def _clean_llm_raw(raw: str) -> str:
     return raw
 
 
+# Topology JSON schema passed to Google's responseSchema for strict enforcement
+_TOPOLOGY_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "topology": {
+            "type": "object",
+            "properties": {
+                "left_bay": {
+                    "type": "object",
+                    "properties": {
+                        "rooms": {"type": "array", "items": {"type": "string"}},
+                        "bathrooms_allocated": {"type": "integer"},
+                    },
+                    "required": ["rooms", "bathrooms_allocated"],
+                },
+                "right_bay": {
+                    "type": "object",
+                    "properties": {
+                        "rooms": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["rooms"],
+                },
+                "spine": {
+                    "type": "object",
+                    "properties": {
+                        "rooms": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["rooms"],
+                },
+            },
+            "required": ["left_bay", "right_bay", "spine"],
+        },
+        "design_rationale": {"type": "string"},
+    },
+    "required": ["topology", "design_rationale"],
+}
+
+
 def _call_architect_llm(prompt: str, retries: int = 2) -> Optional[TopologyResponse]:
     """
-    Call Gemini to get a topology response using a fallback chain.
+    Walk the FALLBACK_MODELS chain until a valid TopologyResponse is returned.
+
+    Provider dispatch:
+      - groq   : OpenAI-compatible client, JSON mode via response_format
+      - google : google-genai SDK, response_mime_type + responseSchema
+      - hf     : OpenAI-compatible client pointed at HF router, JSON mode
+
+    On any API-level error (429, 500, timeout) the model is skipped immediately
+    without retrying, to protect free-tier quotas on Google.
     """
-    for attempt in range(retries + 1):
-        model_cfg = FALLBACK_MODELS[min(attempt, len(FALLBACK_MODELS) - 1)]
-        provider = model_cfg["provider"]
+    temperature = 0.4
+
+    for idx, model_cfg in enumerate(FALLBACK_MODELS):
+        provider   = model_cfg["provider"]
         model_name = model_cfg["model"]
         client: Any = model_cfg["client"]
-        
+
+        print(f"[architect] Trying #{idx + 1}: {provider}/{model_name}")
+
+        raw: str = ""
         try:
-            print(f"[architect:{provider}] Attempt {attempt+1}: using model {model_name}")
-            
-            if provider == "gemini":
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=_ARCHITECT_SYSTEM,
-                        response_mime_type="application/json",
-                        temperature=0.4 + attempt * 0.1,
-                    ),
-                )
-                raw = (response.text or "").strip()
-            
-            elif provider == "openai":
+            # ── Groq (OpenAI-compatible, JSON mode) ───────────────────────────
+            if provider == "groq":
                 response = client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": _ARCHITECT_SYSTEM},
                         {"role": "user",   "content": prompt},
                     ],
-                    temperature=0.4 + attempt * 0.1,
+                    temperature=temperature,
                     response_format={"type": "json_object"},
                 )
-                raw = response.choices[0].message.content.strip()
-                
-            raw = _clean_llm_raw(raw)
+                raw = (response.choices[0].message.content or "").strip()
 
+            # ── Google AI Studio (strict JSON schema enforcement) ──────────────
+            elif provider == "google":
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_ARCHITECT_SYSTEM,
+                        response_mime_type="application/json",
+                        response_schema=_TOPOLOGY_RESPONSE_SCHEMA,
+                        temperature=temperature,
+                    ),
+                )
+                raw = (response.text or "").strip()
+
+            # ── Hugging Face router (OpenAI-compatible, JSON mode) ─────────────
+            elif provider == "hf":
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": _ARCHITECT_SYSTEM},
+                        {"role": "user",   "content": prompt},
+                    ],
+                    temperature=temperature,
+                    response_format={"type": "json_object"},
+                )
+                raw = (response.choices[0].message.content or "").strip()
+
+            else:
+                print(f"[architect] Unknown provider '{provider}' — skipping.")
+                continue
+
+        except Exception as api_err:
+            # On any API error (429 rate-limit, 500 server error, network)
+            # log and immediately move to the next model — no retry.
+            safe_err = str(api_err).encode("ascii", "ignore").decode("ascii")
+            print(f"[architect] {provider}/{model_name} API error — {safe_err}")
+            continue
+
+        # ── Parse and validate the raw JSON string ────────────────────────────
+        try:
+            raw = _clean_llm_raw(raw)
             start = raw.find("{")
             end   = raw.rfind("}")
             if start == -1 or end == -1:
-                print(f"[architect:{provider}] Attempt {attempt+1}: No JSON found.")
+                print(f"[architect] {provider}/{model_name}: no JSON object found in output.")
                 continue
 
-            obj = json_repair.loads(raw[start:end+1])
+            obj = json_repair.loads(raw[start:end + 1])
             if not isinstance(obj, dict):
-                raise ValueError("LLM returned valid JSON, but it was not a dictionary object.")
+                raise ValueError("LLM output was valid JSON but not a dictionary.")
+
             topology = TopologyResponse(**obj)
             safe_rationale = topology.design_rationale.encode("ascii", "ignore").decode("ascii")
-            print(f"[architect:{provider}] Topology OK: {safe_rationale}")
+            print(f"[architect] {provider}/{model_name} OK — {safe_rationale}")
             return topology
 
-        except (ValueError, ValidationError) as e:
-            safe_err = str(e).encode("ascii", "ignore").decode("ascii")
-            print(f"[architect:{provider}] Attempt {attempt+1}: Parse error — {safe_err}")
-        except Exception as e:
-            safe_err = str(e).encode("ascii", "ignore").decode("ascii")
-            print(f"[architect:{provider}] Attempt {attempt+1}: API error — {safe_err}")
+        except (ValueError, ValidationError) as parse_err:
+            safe_err = str(parse_err).encode("ascii", "ignore").decode("ascii")
+            print(f"[architect] {provider}/{model_name} parse error — {safe_err}")
+            # Slightly increase creativity for the next model
+            temperature = min(temperature + 0.1, 0.7)
             continue
 
-    print("[architect] Gemini failed. Returning None.")
+    print("[architect] All models in fallback chain exhausted — returning None.")
     return None
 
 

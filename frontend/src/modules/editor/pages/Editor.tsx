@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-import { generatePlans, exportDxf, exportReport, saveProject, getProjectById, regenerateRoom } from '../../../shared/api-client/api';
+import { generatePlans, exportDxf, exportReport, saveProject, updateProject, getProjectById, regenerateRoom } from '../../../shared/api-client/api';
 import toast from 'react-hot-toast';
 import type { Room, VastuResult, NbcResult, EnergyResult, SunlightResult, BomResult, LayoutData, LayoutUpdatePayload, Floor } from '../../../shared/api-client/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
@@ -62,6 +62,11 @@ export default function Editor() {
   // don't need it as a dependency and never capture a stale value.
   const activeFloorIndexRef = useRef(0);
   useEffect(() => { activeFloorIndexRef.current = activeFloorIndex; }, [activeFloorIndex]);
+
+  const pendingAutoSaveRef = useRef<boolean>(false);
+  const requestAutoSave = useCallback(() => {
+    pendingAutoSaveRef.current = true;
+  }, []);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -342,17 +347,62 @@ export default function Editor() {
     }
   };
 
+  useEffect(() => {
+    if (pendingAutoSaveRef.current && activePlan?.id && floors.length > 0) {
+      pendingAutoSaveRef.current = false;
+      const doAutoSave = async () => {
+        try {
+          const bhk = formData.bedrooms;
+          const dir = formData.entryDir.charAt(0).toUpperCase() + formData.entryDir.slice(1);
+          const dupTag = formData.duplex ? ' Duplex' : '';
+          const projectName = `${bhk}BHK${dupTag} ${dir}-facing ${formData.length}\u00d7${formData.width}ft`;
+
+          const payload = {
+            name: projectName,
+            layout_data: { 
+              floors,
+              form: formData,
+              vastuScore: activePlan.vastuScore,
+              vastuResult: activePlan.vastuResult,
+              nbcResult: activePlan.nbcResult,
+              energyResult: activePlan.energyResult,
+              sunlightResult: activePlan.sunlightResult,
+            },
+            image_url: activePlan.imageUrl
+          };
+
+          // A real MongoDB ObjectId is exactly 24 hex characters.
+          // In-memory generated IDs (e.g. "plan_3e29e3dc") are not ObjectIds
+          // and will never be found by the backend PUT — so POST first to
+          // create the record, then patch the plan id so future saves use PUT.
+          const isDbId = /^[0-9a-f]{24}$/i.test(activePlan.id);
+          if (isDbId) {
+            await updateProject(activePlan.id, payload);
+          } else {
+            const created = await saveProject(payload);
+            // Patch the in-memory plan id so subsequent auto-saves use PUT
+            setActivePlan(prev => prev ? { ...prev, id: created.id } : prev);
+          }
+          toast.success('Design automatically saved!', { id: 'auto-save', position: 'bottom-right' });
+        } catch (e) {
+          console.error('Auto-save failed:', e);
+          toast.error('Auto-save failed. Your changes may not be saved.', { id: 'auto-save-err', duration: 3000 });
+        }
+      };
+      doAutoSave();
+    }
+  }, [activePlan, floors, formData]);
+
   const handleSaveToDatabase = async () => {
     if (!activePlan || !floors.length) return;
     setSaveLoading(true);
     try {
-      // Build a readable name: e.g. "3BHK East-facing 40×30ft"
       const bhk = formData.bedrooms;
       const dir = formData.entryDir.charAt(0).toUpperCase() + formData.entryDir.slice(1);
       const dupTag = formData.duplex ? ' Duplex' : '';
       const projectName = `${bhk}BHK${dupTag} ${dir}-facing ${formData.length}×${formData.width}ft`;
 
-      await saveProject({
+      const payload = {
         name: projectName,
         layout_data: { 
           floors,
@@ -364,9 +414,19 @@ export default function Editor() {
           sunlightResult: activePlan.sunlightResult,
         },
         image_url: activePlan.imageUrl
-      });
-      toast.success('Design saved to My Plans!');
-      navigate('/dashboard');
+      };
+
+      const isDbId = /^[0-9a-f]{24}$/i.test(activePlan.id);
+      if (isDbId) {
+        await updateProject(activePlan.id, payload);
+        toast.success('Design updated!');
+      } else {
+        const created = await saveProject(payload);
+        // Patch the active plan in case they stay on the page
+        setActivePlan(prev => prev ? { ...prev, id: created.id } : prev);
+        toast.success('Design saved to My Plans!');
+        navigate('/dashboard');
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`Save failed: ${msg}`);
@@ -580,6 +640,7 @@ export default function Editor() {
                 onLayoutUpdate={handleLayoutUpdate}
                 onVastuUpdate={handleVastuUpdate}
                 onNbcUpdate={handleNbcUpdate}
+                onAutoSaveRequest={requestAutoSave}
               />
 
               {/* Action bar */}

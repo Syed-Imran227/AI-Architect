@@ -3,7 +3,7 @@ from typing import List
 from datetime import datetime, timezone
 from core.auth import get_current_user
 from db.models import ProjectCreate, ProjectResponse
-from db.repositories import get_projects_for_user, get_project_by_id, create_project, delete_project
+from db.repositories import get_projects_for_user, get_project_by_id, create_project, delete_project, update_project
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -20,6 +20,18 @@ async def save_project(project: ProjectCreate, current_user: dict = Depends(get_
     }
     inserted_id = await create_project(project_doc)
     return {**project_doc, "id": inserted_id}
+
+@router.put("/{project_id}", response_model=ProjectResponse)
+async def update_saved_project(project_id: str, project: ProjectCreate, current_user: dict = Depends(get_current_user)):
+    project_doc = {
+        **project.model_dump(),
+        "user_id": current_user["id"],
+        "updated_at": datetime.now(timezone.utc),
+    }
+    updated = await update_project(project_id, project_doc, current_user["id"])
+    if not updated:
+        raise HTTPException(status_code=404, detail="Project not found or not authorized")
+    return {**project_doc, "id": project_id}
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def fetch_project(project_id: str, current_user: dict = Depends(get_current_user)):

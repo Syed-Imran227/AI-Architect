@@ -346,6 +346,10 @@ def _build_ground_floor(
             # Assign door
             if r_name == "Parking":
                 doors = [_door(door_wall, h * 0.4)]
+                # Add large exterior garage door on the front wall
+                ext_door = _door("top", bay_w * 0.7)
+                ext_door["is_garage"] = True
+                doors.append(ext_door)
             elif r_name == "Living Room":
                 doors = [_door("left", h * 0.4), _door("bottom", bay_w * 0.4)]
             else:
@@ -433,9 +437,9 @@ def _build_ground_floor(
     # ── Pack right bay ───────────────────────────────────────────────────────
     rooms.extend(_pack_bay(right_x, right_w, right_rooms, False, right_baths_alloc))
 
-    # ── Right bay companion (Landing at rear) ────────────────────────────────
+    # ── Right bay companion (Open Area at rear) ────────────────────────────────
     rooms.append({
-        "name": "Landing",
+        "name": "Open Area",
         "x": right_x, "y": stair_y, "width": right_w, "height": stair_h,
         "doors": [_door("left", stair_h * 0.3)], "furniture": []
     })
@@ -645,7 +649,7 @@ def _build_upper_floor(
                 })
 
         # Stair companion zone (always stair_h deep at the bottom)
-        companion = "Balcony" if (is_left and balcony > 0) else ("Terrace" if terrace else "Landing")
+        companion = "Balcony" if (is_left and balcony > 0) else ("Terrace" if terrace else "Open Area")
         companion_door = _door("top", bay_w * 0.4) if companion in ("Balcony", "Terrace") else _door(door_wall, stair_h * 0.3)
         bay_rooms.append({
             "name": companion,

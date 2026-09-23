@@ -76,6 +76,18 @@ async def create_project(project_doc: dict) -> str:
     return str(result.inserted_id)
 
 
+async def update_project(project_id: str, project_doc: dict, user_id: str) -> bool:
+    """Update an existing project document. Returns True if updated."""
+    try:
+        oid = ObjectId(project_id)
+    except InvalidId:
+        return False
+    result = await projects_collection.update_one(
+        {"_id": oid, "user_id": user_id},
+        {"$set": project_doc}
+    )
+    return result.modified_count > 0
+
 async def delete_project(project_id: str, user_id: str) -> int:
     """
     Delete a project owned by user_id.

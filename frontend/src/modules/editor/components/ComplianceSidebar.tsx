@@ -27,6 +27,7 @@ interface ComplianceSidebarProps {
   onLayoutUpdate: (data: LayoutUpdatePayload, imageUrl?: string) => void;
   onVastuUpdate?: (newVastuResult: VastuResult, newScore: number) => void;
   onNbcUpdate?: (newNbcResult: NbcResult, newScore: number) => void;
+  onAutoSaveRequest?: () => void;
 }
 
 export default function ComplianceSidebar({
@@ -41,6 +42,7 @@ export default function ComplianceSidebar({
   onLayoutUpdate,
   onVastuUpdate,
   onNbcUpdate,
+  onAutoSaveRequest,
 }: ComplianceSidebarProps) {
   const [vastuOpen, setVastuOpen] = useState(false);
   const [nbcOpen, setNbcOpen] = useState(false);
@@ -97,6 +99,9 @@ export default function ComplianceSidebar({
           `Vastu improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
           { id: 'vastu-fix', duration: 5000 }
         );
+        if (onAutoSaveRequest) {
+          onAutoSaveRequest();
+        }
       } else {
         toast.error('Vastu fix did not return a valid layout.', { id: 'vastu-fix' });
       }
@@ -134,6 +139,9 @@ export default function ComplianceSidebar({
           `NBC improved: ${result.before_score} → ${result.after_score} (${deltaStr})`,
           { id: 'nbc-fix', duration: 5000 }
         );
+        if (onAutoSaveRequest) {
+          onAutoSaveRequest();
+        }
       } else {
         toast.error('NBC fix did not return a valid layout.', { id: 'nbc-fix' });
       }
