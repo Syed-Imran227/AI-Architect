@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Compass, 
@@ -19,6 +19,7 @@ import type {
   FloorCirculation
 } from '../../../shared/api-client/api';
 import { vastuFix, nbcFix, recalculateBOM } from '../../../shared/api-client/api';
+import { calculateAuthoritativeBOM } from '../geometry/bomCalculator';
 import toast from 'react-hot-toast';
 
 interface AnalysisStudioViewProps {
@@ -67,6 +68,42 @@ export const AnalysisStudioView: React.FC<AnalysisStudioViewProps> = ({
   const [isNbcFixing, setIsNbcFixing] = useState(false);
 
   const plotArea = plotContext.plotWidth * plotContext.plotHeight;
+
+  const initialBudget = Number(
+    (layout as any)?.budget_target ||
+    (layout as any)?.target_budget ||
+    bomResult?.budget?.target_budget ||
+    0
+  );
+  const [targetBudgetText, setTargetBudgetText] = useState<string>(initialBudget > 0 ? String(initialBudget) : '');
+
+  useEffect(() => {
+    if (initialBudget > 0 && !targetBudgetText) {
+      setTargetBudgetText(String(initialBudget));
+    }
+  }, [initialBudget]);
+
+  const effectiveBom = useMemo<BomResult>(() => {
+    const numBudget = Number(targetBudgetText) || 0;
+    if (bomResult) {
+      if (numBudget > 0 && (!bomResult.budget || bomResult.budget.target_budget !== numBudget)) {
+        return calculateAuthoritativeBOM(layout as LayoutData, { tier: selectedFinishTier, targetBudget: numBudget });
+      }
+      return bomResult;
+    }
+    return calculateAuthoritativeBOM(layout as LayoutData, { tier: selectedFinishTier, targetBudget: numBudget });
+  }, [bomResult, layout, selectedFinishTier, targetBudgetText]);
+
+  const handleApplyBudget = () => {
+    const numBudget = Number(targetBudgetText) || 0;
+    const updatedBom = calculateAuthoritativeBOM(layout as LayoutData, { tier: selectedFinishTier, targetBudget: numBudget });
+    onLayoutUpdate({
+      new_bom_result: updatedBom,
+      budget_target: numBudget,
+    } as any);
+    toast.success(numBudget > 0 ? `Target budget set to ₹${numBudget.toLocaleString('en-IN')}` : 'Target budget reset');
+    onAutoSaveRequest?.();
+  };
 
   // Vastu Auto-Fix handler
   const handleVastuFix = async () => {
@@ -120,19 +157,20 @@ export const AnalysisStudioView: React.FC<AnalysisStudioViewProps> = ({
   // Finish Tier change handler
   const handleTierChange = async (newTier: string) => {
     setSelectedFinishTier(newTier);
+    const numBudget = Number(targetBudgetText) || 0;
     try {
-      const res = await recalculateBOM(layout as LayoutData, plotArea, newTier);
+      const res = await recalculateBOM(layout as LayoutData, plotArea, newTier, numBudget);
       onLayoutUpdate({ new_bom_result: res.bomResult });
       toast.success(`BOM updated for ${newTier.toUpperCase()} finishes`);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`BOM update error: ${msg}`);
+    } catch {
+      const localBom = calculateAuthoritativeBOM(layout as LayoutData, { tier: newTier, targetBudget: numBudget });
+      onLayoutUpdate({ new_bom_result: localBom });
+      toast.success(`BOM updated for ${newTier.toUpperCase()} finishes`);
     }
   };
 
-  const totalCost = bomResult?.summary?.grand_total 
-    ? `₹${Math.round(bomResult.summary.grand_total).toLocaleString()}` 
-    : `₹${Math.round(plotArea * (selectedFinishTier === 'luxury' ? 2600 : selectedFinishTier === 'economy' ? 1400 : 1850)).toLocaleString()}`;
+  const totalCost = `₹${Math.round(effectiveBom.summary.grand_total).toLocaleString('en-IN')}`;
+
 
   return (
     <div style={{
@@ -250,17 +288,29 @@ export const AnalysisStudioView: React.FC<AnalysisStudioViewProps> = ({
           gap: '6px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>EST. CONSTRUCTION</span>
+            <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>EST. TOTAL COST</span>
             <Coins size={14} color="#252622" />
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: '#252622' }}>
             {totalCost}
           </div>
-          <span style={{ fontSize: '0.7rem', color: '#777970' }}>
-            Based on {selectedFinishTier.toUpperCase()} finishes
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
+            <span style={{ color: '#777970' }}>
+              Target: {effectiveBom.budget?.target_budget ? `₹${effectiveBom.budget.target_budget.toLocaleString('en-IN')}` : 'Not Set'}
+            </span>
+            {effectiveBom.budget && effectiveBom.budget.target_budget > 0 && (
+              <span style={{
+                fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace",
+                color: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+              }}>
+                {effectiveBom.budget.is_over_budget ? `+₹${effectiveBom.budget.overrun_amount.toLocaleString('en-IN')} Over` : `₹${effectiveBom.budget.remaining_budget.toLocaleString('en-IN')} Left`}
+              </span>
+            )}
+          </div>
         </div>
       </div>
+
 
       {/* Main Analysis Sections */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
@@ -445,85 +495,277 @@ export const AnalysisStudioView: React.FC<AnalysisStudioViewProps> = ({
           padding: '1.5rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
+          gap: '1.25rem',
           gridColumn: '1 / -1',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Header & Controls */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <h3 style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: '1.25rem', color: '#252622', margin: 0 }}>
-                Bill of Materials & Construction Estimate
+              <h3 style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: '1.35rem', color: '#252622', margin: 0 }}>
+                Bill of Materials & Financial Schedule
               </h3>
               <span style={{ fontSize: '0.72rem', color: '#777970' }}>
-                Itemized trade schedule based on current CPWD architectural rate indices
+                Deterministic trade schedule and placed furniture procurement breakdown (INR)
               </span>
             </div>
 
-            {/* Finish Tier Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>
-                FINISH SPEC:
-              </span>
-              <div style={{ display: 'flex', gap: '3px', background: '#F3F0E7', padding: '2px', borderRadius: '5px' }}>
-                {['economy', 'standard', 'luxury'].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => handleTierChange(t)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Target Budget Input */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>
+                  TARGET BUDGET:
+                </span>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ position: 'absolute', left: '8px', fontSize: '0.74rem', color: '#777970', fontFamily: "'JetBrains Mono', monospace" }}>₹</span>
+                  <input
+                    type="number"
+                    placeholder="Set Target Budget"
+                    value={targetBudgetText}
+                    onChange={(e) => setTargetBudgetText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleApplyBudget();
+                    }}
                     style={{
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      border: 'none',
-                      background: selectedFinishTier === t ? '#252622' : 'transparent',
-                      color: selectedFinishTier === t ? '#FAF8F2' : '#777970',
-                      fontSize: '0.7rem',
-                      fontWeight: selectedFinishTier === t ? 700 : 500,
+                      padding: '4px 8px 4px 18px',
+                      fontSize: '0.74rem',
                       fontFamily: "'JetBrains Mono', monospace",
+                      width: '130px',
+                      background: '#FAF8F2',
+                      border: '1px solid #E7E1D5',
+                      borderRadius: '4px',
+                      color: '#252622',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    onClick={handleApplyBudget}
+                    style={{
+                      marginLeft: '4px',
+                      padding: '4px 8px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      background: '#252622',
+                      color: '#FAF8F2',
+                      border: 'none',
+                      borderRadius: '4px',
                       cursor: 'pointer',
                     }}
                   >
-                    {t.toUpperCase()}
+                    Apply
                   </button>
-                ))}
+                </div>
+              </div>
+
+              {/* Finish Tier Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>
+                  FINISH SPEC:
+                </span>
+                <div style={{ display: 'flex', gap: '3px', background: '#F3F0E7', padding: '2px', borderRadius: '5px' }}>
+                  {['economy', 'standard', 'luxury'].map(t => (
+                    <button
+                      key={t}
+                      onClick={() => handleTierChange(t)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: selectedFinishTier === t ? '#252622' : 'transparent',
+                        color: selectedFinishTier === t ? '#FAF8F2' : '#777970',
+                        fontSize: '0.7rem',
+                        fontWeight: selectedFinishTier === t ? 700 : 500,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Trade Table */}
-          <div style={{
-            borderRadius: '6px',
-            border: '1px solid #E7E1D5',
-            overflow: 'hidden',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace" }}>
-              <thead>
-                <tr style={{ background: '#F3F0E7', borderBottom: '1px solid #E7E1D5', textAlign: 'left', color: '#474943' }}>
-                  <th style={{ padding: '8px 12px' }}>TRADE / MATERIAL</th>
-                  <th style={{ padding: '8px 12px' }}>SPECIFICATION</th>
-                  <th style={{ padding: '8px 12px' }}>QUANTITY</th>
-                  <th style={{ padding: '8px 12px' }}>UNIT RATE</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right' }}>ESTIMATED TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { trade: 'RCC Structural Frame', spec: 'M25 Concrete + Fe550 TMT Rebar', qty: `${Math.round(plotArea * 0.18)} m³`, rate: '₹7,200/m³', total: `₹${Math.round(plotArea * 480).toLocaleString()}` },
-                  { trade: 'Masonry & Partitions', spec: '9" & 4.5" AAC Lightweight Blocks', qty: `${Math.round(plotArea * 0.85)} sqft`, rate: '₹140/sqft', total: `₹${Math.round(plotArea * 220).toLocaleString()}` },
-                  { trade: 'Flooring & Dado', spec: `${selectedFinishTier === 'luxury' ? 'Italian Marble / Hardwood' : 'Vitrified Double-Charged Tiles'}`, qty: `${Math.round(plotArea * 0.72)} sqft`, rate: selectedFinishTier === 'luxury' ? '₹450/sqft' : '₹120/sqft', total: `₹${Math.round(plotArea * (selectedFinishTier === 'luxury' ? 420 : 180)).toLocaleString()}` },
-                  { trade: 'Doors & Glazing', spec: 'UPVC Triple-Track + Teak Entry Door', qty: '14 Units', rate: 'Lump Sum', total: `₹${Math.round(plotArea * 260).toLocaleString()}` },
-                  { trade: 'Electrical & Plumbing', spec: 'Concealed Conduit + CP Fittings', qty: 'Complete', rate: 'Schedule', total: `₹${Math.round(plotArea * 310).toLocaleString()}` },
-                ].map((row, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #E7E1D5', background: i % 2 === 0 ? '#FFFFFF' : '#FAF8F2' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 700, color: '#252622' }}>{row.trade}</td>
-                    <td style={{ padding: '8px 12px', color: '#777970' }}>{row.spec}</td>
-                    <td style={{ padding: '8px 12px', color: '#474943' }}>{row.qty}</td>
-                    <td style={{ padding: '8px 12px', color: '#474943' }}>{row.rate}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#252622' }}>{row.total}</td>
+          {/* Budget Analytics Ribbon */}
+          {effectiveBom.budget && effectiveBom.budget.target_budget > 0 && (
+            <div style={{
+              padding: '0.85rem 1rem',
+              borderRadius: '6px',
+              border: effectiveBom.budget.is_over_budget ? '1px solid rgba(216, 87, 64, 0.4)' : '1px solid rgba(67, 122, 93, 0.4)',
+              background: effectiveBom.budget.is_over_budget ? 'rgba(216, 87, 64, 0.06)' : 'rgba(67, 122, 93, 0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    color: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+                  }}>
+                    {effectiveBom.budget.is_over_budget ? '⚠️ Target Budget Overrun Alert' : '✓ Project Within Approved Budget Target'}
+                  </span>
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: effectiveBom.budget.is_over_budget ? 'rgba(216, 87, 64, 0.15)' : 'rgba(67, 122, 93, 0.15)',
+                    color: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+                    fontWeight: 700,
+                  }}>
+                    {effectiveBom.budget.budget_consumed_pct}% CONSUMED
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D' }}>
+                  {effectiveBom.budget.is_over_budget
+                    ? `Overrun: +₹${effectiveBom.budget.overrun_amount.toLocaleString('en-IN')}`
+                    : `Remaining: ₹${effectiveBom.budget.remaining_budget.toLocaleString('en-IN')}`}
+                </div>
+              </div>
+              <div style={{ width: '100%', height: '7px', background: '#E7E1D5', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.min(100, effectiveBom.budget.budget_consumed_pct)}%`,
+                  height: '100%',
+                  background: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+                  borderRadius: '4px',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Table 1: Construction Trade Breakdown */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#474943' }}>
+                1. STRUCTURAL & CONSTRUCTION TRADES
+              </span>
+              <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>
+                Rate: ₹{effectiveBom.summary.rate_per_sqft.toLocaleString('en-IN')}/sqft (Total Area: {effectiveBom.summary.total_area_sqft} sqft)
+              </span>
+            </div>
+            <div style={{ borderRadius: '6px', border: '1px solid #E7E1D5', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace" }}>
+                <thead>
+                  <tr style={{ background: '#F3F0E7', borderBottom: '1px solid #E7E1D5', textAlign: 'left', color: '#474943' }}>
+                    <th style={{ padding: '8px 12px' }}>TRADE / MATERIAL</th>
+                    <th style={{ padding: '8px 12px' }}>SPECIFICATION & ASSUMPTIONS</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right' }}>ESTIMATED SUB-TOTAL</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {[
+                    { trade: 'RCC Structural Frame', spec: 'RCC columns, beams, footings & roof slab (₹400/sqft base)', total: effectiveBom.categories?.structural ?? 0 },
+                    { trade: 'Masonry & Wall Plaster', spec: '9" brick masonry + two-sided cement plaster (₹73/sqft wall area)', total: effectiveBom.categories?.masonry_and_plaster ?? 0 },
+                    { trade: 'Flooring & Finishes', spec: selectedFinishTier === 'luxury' ? 'Premium marble & granite flooring (₹120/sqft)' : 'Standard vitrified tile flooring (₹45/sqft)', total: effectiveBom.categories?.flooring ?? 0 },
+                    { trade: 'False POP / Gypsum Ceiling', spec: 'Concealed channel false ceiling throughout habitable rooms (₹35/sqft)', total: effectiveBom.categories?.ceiling ?? 0 },
+                    { trade: 'Electrical Conduits & Fixtures', spec: 'Copper wiring, modular switches, MCBs and conduits (₹80/sqft)', total: effectiveBom.categories?.electrical ?? 0 },
+                    { trade: 'Wet-Room Plumbing & Drainage', spec: 'CPVC water supply, soil/waste lines & sanitary fittings for wet rooms (₹60/sqft)', total: effectiveBom.categories?.plumbing ?? 0 },
+                    { trade: 'Emulsion Painting', spec: '2 coats interior acrylic emulsion paint (₹22/sqft)', total: effectiveBom.categories?.painting ?? 0 },
+                    { trade: 'Openings (Doors & Windows)', spec: 'Standard interior doors (₹8,000/ea) & aluminium sliding windows (₹5,500/ea)', total: effectiveBom.categories?.doors_and_windows ?? 0 },
+                    { trade: 'Construction Labour Allowance', spec: 'CPWD benchmark 30% labour ratio on all construction materials', total: effectiveBom.categories?.labour ?? 0 },
+                  ].map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #E7E1D5', background: i % 2 === 0 ? '#FFFFFF' : '#FAF8F2' }}>
+                      <td style={{ padding: '7px 12px', fontWeight: 600, color: '#252622' }}>{row.trade}</td>
+                      <td style={{ padding: '7px 12px', color: '#777970' }}>{row.spec}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#252622' }}>
+                        ₹{row.total.toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: '#F3F0E7', borderTop: '2px solid #E7E1D5', fontWeight: 700 }}>
+                    <td colSpan={2} style={{ padding: '8px 12px', color: '#252622' }}>CONSTRUCTION SUB-TOTAL</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#252622' }}>
+                      ₹{(effectiveBom.summary.construction_total ?? (effectiveBom.summary.material_total + effectiveBom.summary.labour_total)).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Table 2: Placed Furniture & Fixtures Schedule */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#474943' }}>
+                2. PLACED FURNITURE & FIXTURES SCHEDULE
+              </span>
+              <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#777970' }}>
+                {effectiveBom.furniture_schedule?.reduce((s, f) => s + f.quantity, 0) || 0} Placed Assets
+              </span>
+            </div>
+            <div style={{ borderRadius: '6px', border: '1px solid #E7E1D5', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace" }}>
+                <thead>
+                  <tr style={{ background: '#F3F0E7', borderBottom: '1px solid #E7E1D5', textAlign: 'left', color: '#474943' }}>
+                    <th style={{ padding: '8px 12px' }}>FURNITURE / FIXTURE ITEM</th>
+                    <th style={{ padding: '8px 12px' }}>CATALOG ASSET ID</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center' }}>QUANTITY</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right' }}>UNIT RATE (INR)</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right' }}>ITEM TOTAL (INR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {effectiveBom.furniture_schedule && effectiveBom.furniture_schedule.length > 0 ? (
+                    effectiveBom.furniture_schedule.map((item, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #E7E1D5', background: i % 2 === 0 ? '#FFFFFF' : '#FAF8F2' }}>
+                        <td style={{ padding: '7px 12px', fontWeight: 600, color: '#252622' }}>{item.name}</td>
+                        <td style={{ padding: '7px 12px', color: '#777970' }}>{item.catalog_id}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'center', color: '#252622', fontWeight: 600 }}>{item.quantity}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#474943' }}>
+                          {item.is_price_available && item.unit_price !== null ? `₹${item.unit_price.toLocaleString('en-IN')}` : 'Price unavailable'}
+                        </td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#252622' }}>
+                          {item.is_price_available && item.total_cost !== null ? `₹${item.total_cost.toLocaleString('en-IN')}` : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: '#777970' }}>
+                        No furniture placed yet in the active layout. Place beds, seating, and fixtures from the Furniture Catalog drawer to itemize procurement.
+                      </td>
+                    </tr>
+                  )}
+                  <tr style={{ background: '#F3F0E7', borderTop: '2px solid #E7E1D5', fontWeight: 700 }}>
+                    <td colSpan={4} style={{ padding: '8px 12px', color: '#252622' }}>PLACED FURNITURE SUB-TOTAL</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#252622' }}>
+                      ₹{(effectiveBom.summary.furniture_total || 0).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Grand Total Summary Box */}
+          <div style={{
+            padding: '1rem',
+            background: '#FAF8F2',
+            border: '2px solid #252622',
+            borderRadius: '6px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <div>
+              <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#252622' }}>
+                TOTAL ESTIMATED PROJECT INVESTMENT
+              </span>
+              <span style={{ fontSize: '0.7rem', color: '#777970' }}>
+                Construction: ₹{(effectiveBom.summary.construction_total ?? (effectiveBom.summary.material_total + effectiveBom.summary.labour_total)).toLocaleString('en-IN')} + Furniture: ₹{(effectiveBom.summary.furniture_total || 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#252622' }}>
+              ₹{effectiveBom.summary.grand_total.toLocaleString('en-IN')}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 };
+

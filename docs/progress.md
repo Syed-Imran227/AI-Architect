@@ -16,6 +16,8 @@
 | **Phase 4** | **Real 3D Extrusion Engine (Walls with openings, slabs)** | **COMPLETED & VERIFIED** | Pure functional `generate3DBuilding`; physical openings (doors, windows, sills, lintels); exterior 9" vs interior 4.5" thickness; multi-floor elevations & slabs; stair flight vertical pitch; 10/10 automated tests passed; live browser screenshots verified. |
 | **Phase 5** | **Signature Architectural Visualization** | **COMPLETED, AUDITED & ACCEPTED** | Phase 5 Vertical Slices 1–5 stabilized and end-to-end verified in live browser; multi-floor views (stacked, single L0/L1/L2, exploded); rooftop staircase termination verified; natural lighting (day, sunset, night); camera presets (dollhouse, axo, top-down, front, side, fit); furniture placement/transform/delete/undo/redo; landscaping toggles; all 6 physical export files verified on disk (SVG, 2D PNG, Viewport, 1080p, 4K, Presentation Sheet) with validated dimensions and XML; 72/72 TS tests passed; 5/5 backend tests passed; production build passed with 0 errors. |
 | **Phase 6 (Slice 1)** | **Intelligent Floor Plan Generation Engine & Preview/Accept Workflow** | **COMPLETED & VERIFIED** | Deterministic multi-candidate synthesis (Central Core, Lateral Spine, Garden Buffer); hard constraints (setbacks, positive dimensions, non-overlap vs shared boundaries, multi-floor staircase shaft continuity); explainable ranking criteria; preview immutability; CommandEngine acceptance with atomic undo/redo; 12/12 pytest tests passed; 80/80 TS tests passed; production build passed; browser workflow verified. |
+| **Master Editor Repair & Redesign** | **8-Handle CAD Resizing, Wall Collision Fix & Warm Cream Catalog** | **COMPLETED & VERIFIED** | 1. 8 CAD resize handles (`nw`, `ne`, `se`, `sw`, `n`, `s`, `e`, `w`) with stationary anchor vector math for unrotated & rotated objects; 2. Live dimension HUD badge (`W × H FT · W × H M`) and real-time inspector sync; 3. Atomic position & dimension undo/redo; 4. Wall intersection tolerance upgraded to 2cm, distinguishing shared room partition collinear walls from interior crossings and reporting exact coordinates; 5. Complete redesign of `FurnitureCatalogDrawer` and `FurnitureThumbnail` matching warm architectural paper aesthetic (`#FAF8F5`, `#FAF7F2`, `#252622`, `#E8E2D6`); 6. All 5 test suites passed 100%; production build clean. |
+| **Phase 7 (Innovations & Night 3D Finishing)** | **Night ArchViz Fidelity, 2D Independent Room Resizing, Start Wizard CTA & SVG Textures** | **COMPLETED & VERIFIED** | 1. **3D Night View Finishing**: Eliminated harsh white dashed vertical lines on wall joints via dark slate `#182030` edges, added sleek `#1e293b` wall cutaway caps, lowered interior room point lights in dollhouse mode to 3.0 ft with warm 2700K incandescent tone (`#fed7aa`), and added rich starry twilight sky; 2. **2D Direct Room Resizing**: Implemented independent room expansion/shrinking without neighbor crushing (`resizeRoomDirectly`), CAD mode toggle (`[ 🔗 Sync Partition | ⤢ Independent Room ]`), 8 CAD room resize handles with live floating HUD badge and symmetric boundary clamping; 3. **Dashboard UI Upgrade**: Prominent `✦ OPEN ARCHITECTURAL WIZARD` hero CTA, typology preset chips, and integrated `MultiFloorWizardModal` at start; 4. **FloorPlanDrawer Innovations**: Procedural SVG floor textures (oak planks, ceramic kitchen grid, bath mosaic, bedroom weave) and floating Mini 3D Picture-in-Picture card; 5. **Live Verification**: Automated browser test suites passed with 0 errors across all 14 visual screenshots. |
 | **Phase 7** | Dashboard, Wizard, Motion, Analysis & Copilot | *Queued* | Depends on Phases 1–2. |
 | **Phase 8** | Integration, Polish, Performance & E2E Validation | *Queued* | Depends on all prior phases. |
 
@@ -1343,8 +1345,216 @@ The 3D building visualization engine was transformed from an ordinary low-detail
      - `WALKTHROUGH` mode: Eye-level interior perspective with room transitions via `PREV`/`NEXT`.
      - `DOLLHOUSE` mode: Cutaway views at 4.5ft and 10ft heights with lintels and top caps.
      - Room labels toggled between `SUBTLE`, `CAD`, and `OFF`.
-   - **Browser Recording Artifact**: `file:///C:/Users/yoges/.gemini/antigravity-ide/brain/90bde5f7-35bf-45b2-ace2-2e2f983064ae/archviz_transformation_1791808046133.webp`
+   - **Browser Recording Artifact (Historical External Artifact)**: `archviz_transformation_1791808046133.webp` *(Recorded during Phase 5 verification; stored at `C:/Users/yoges/.gemini/antigravity-ide/brain/90bde5f7-35bf-45b2-ace2-2e2f983064ae/archviz_transformation_1791808046133.webp`)*
 
+---
+
+## Phase 5C.6 — Staging Cutover Runbook & Release Gate
+
+**Status:** COMPLETE (OFFLINE AUDIT & RUNBOOK DOCUMENTED)  
+**Safety Profile:** Fully Offline (Zero Live DB/Supabase Calls, Zero Migrations, Zero Secret Exposure)  
+**Active Providers:** `DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`  
+
+### A. Key Deliverables & Achievements
+1. **Staging Cutover Runbook (`docs/staging_cutover_runbook.md`)**:
+   - Comprehensive operational specification covering preconditions, approvals, pre-migration MongoDB snapshots, restoration drills, and PostgreSQL PITR.
+   - Cryptographic verification checklist for Supabase Auth: issuer, RS256 algorithm pinning, PEM public keys, key ring rotation, and strict rejection of administrative service-role keys.
+   - Detailed multi-tenant authorization smoke tests (`GET/PUT /projects`, `GET /agent/conversations`, `POST /agent/messages`, `POST /agent/generate-asset`, `GET /export/dxf`).
+   - Split-brain prevention protocol explaining why changing an environment variable alone is insufficient for rollback, with write-quiescing and reverse delta reconciliation procedures.
+2. **Offline Dependency Gap Resolution**:
+   - Clarified version ranges (`pytest>=8.0.0,<9.0.0`, `pytest-asyncio>=0.23.0,<1.0.0`) in `backend/requirements-dev.txt` versus exact pins.
+   - Documented invocation procedure for `test_intelligent_generator.py` when development dependencies are installed.
+3. **Full Regression Test Coverage**:
+   - 125/125 backend unit tests passed in 5.14s (`unittest`).
+   - Frontend production build passed cleanly in 1.68s (`tsc -b && vite build`, 0 errors).
+
+---
+
+## Full Project Repair & Spatial Editor Overhaul — Phase 0: Baseline Audit
+
+**Status:** COMPLETE & ALIGNED WITH USER  
+**Audit Document:** [`docs/audit-reports/ai_architect_repair_audit.md`](file:///c:/Users/yoges/OneDrive/Desktop/architect/AI-Architect/docs/audit-reports/ai_architect_repair_audit.md)  
+**Safety Boundaries:** Strictly Preserved (`DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`, zero live secrets)  
+**Root Causes Isolated:**
+1. **Furniture Lifecycle Bug:** `previewPlan` shadowing in `Editor.tsx` locked `currentRooms` and `effectiveCanonicalDoc` to unmutated generated candidates, suppressed auto-save, and wiped edits upon "Accept". Three.js mesh centers were also misaligned from 2D bounds by half-dimensions.
+2. **2D Blueprint Resizing Inconsistency:** Unconstrained wall drag shifted non-adjacent rooms on the same axis without orthogonal interval checks; `RoomEditor.tsx` discarded adjacent room propagation results; `previewPlan` shadowed edits in the UI.
+3. **Internal vs. External Shafts:** Identical 3D curb rendering (`#475569`) with no vertical opening or envelope interface. User confirmed: external shafts must be modeled as enclosed lightwell shafts within footprint with interior-facing windows and continuous open vertical shaft; internal shafts as MEP duct chases.
+4. **3D Viewport Compact & Cramped:** Oversized trigonometric fit distance (80–110ft away) and lack of room/furniture focus controls made houses look tiny.
+5. **Financial Section Disconnect:** Dashboard lacked financial widgets; `bom_engine.py` omitted placed furniture. User confirmed: include both construction and itemized furniture costs with editable budget limits and overrun alerts.
+6. **Dashboard AIHom Polish:** Redesign queued for cinematic atmospheric depth, interactive project cards, and live CAD/financial statistics.
+
+---
+
+## Full Project Repair & Spatial Editor Overhaul — Milestone A: 2D Blueprint & Furniture Lifecycle
+
+**Status:** COMPLETE & VERIFIED  
+**Safety Profile:** Fully Offline (Zero Live DB/Supabase Calls, Zero Migrations, Zero Secret Exposure)  
+**Active Providers:** `DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`  
+
+### Deliverables Completed:
+1. **Furniture State Shadowing Repaired (`Editor.tsx`):**
+   - Eliminated read-only `previewPlan` shadowing: newly generated single-floor and multi-floor plans immediately promote to the active, editable plan (`openPlan`, `setPreviewPlan(null)`).
+   - In `executeGeometryCommand`, if `previewPlan` is non-null when a geometry or furniture command is dispatched, the candidate is auto-promoted into `commandEngineRef.current` and `activePlan`, clearing `previewPlan` so the edit renders instantly in 2D and 3D.
+   - `effectiveFloors` and `effectivePlan` hoisted above callbacks, preventing variable reference hoisting errors and ensuring `handleAddCatalogItem` always resolves available rooms.
+   - Auto-save uninhibited on newly generated and edited designs.
+2. **End-to-End Furniture Placement & 2D/3D Center Alignment (`furniture3DMeshBuilder.tsx`, `FloorPlan3D.tsx`):**
+   - Corrected 3D procedural group center: computed world center at `[wx + fw / 2, wy, wz + fd / 2]`, aligning the 3D model center exactly with its 2D footprint center `(room.x + furn.x + fw / 2, room.y + furn.y + fd / 2)`.
+   - Updated the 3D selection cage in `FloorPlan3D.tsx` to center over `[item.positionFt.x + item.dimensionsFt.width / 2, item.positionFt.y + item.dimensionsFt.height / 2, item.positionFt.z + item.dimensionsFt.depth / 2]`.
+   - Maintained `positionFt` in `GeneratedFurniture3D` without secondary scale factors.
+3. **Room Resizing & Shared-Wall Orthogonal Interval Propagation (`InteractiveBlueprint.tsx`, `RoomEditor.tsx`, `layoutConstraints.ts`):**
+   - Exported `intervalsOverlap(a1, a2, b1, b2, minOverlap)` from `layoutConstraints.ts`.
+   - In `InteractiveBlueprint.tsx` wall drag handler, added orthogonal interval checks before shifting neighbors. If Room A and Room C lie on the same X axis but do not overlap along the Y axis, Room C remains 100% untouched.
+   - In `RoomEditor.tsx` `handleApply`, dispatched `res.rooms` to `onLayoutUpdate({ rooms: res.rooms })`, propagating shared wall adjustments across the floor plan.
+4. **Automated Regression Test Suite:**
+   - Expanded `test_furniture_suite.ts` to 10 tests: verified generated plan immediate editability, 2D appearance, 3D center alignment (`2D center == 3D center`), save/reload persistence, and deletion permanence.
+   - Expanded `test_geometry_suite.ts` to 10 tests: verified shared wall propagation, non-adjacent room invariance, rejection of out-of-plot expansions, rejection of neighbor-shrinking violations, and document immutability upon command rejection.
+
+### Verification Results:
+- `npx -y tsx src/modules/editor/geometry/test_furniture_suite.ts`: **10/10 tests PASSED**
+- `npx -y tsx src/modules/editor/geometry/test_geometry_suite.ts`: **10/10 tests PASSED**
+- `npx -y tsx src/modules/editor/geometry/test_building_3d_suite.ts`: **10/10 tests PASSED**
+- `npx -y tsx src/modules/editor/geometry/test_furniture_mesh_builder.ts`: **5/5 tests PASSED**
+- `npx -y tsx src/modules/editor/geometry/test_stabilization_suite.ts`: **12/12 tests PASSED**
+- `python -W ignore -m unittest ...`: **120/120 backend unit tests PASSED**
+- `npm run build` (`tsc -b && vite build`): **PASSED in 1.29s (0 errors)**
+
+---
+
+## Full Project Repair & Spatial Editor Overhaul — Milestone B: Architectural Shaft Repair & Spacious 3D Viewport
+
+**Status:** COMPLETE & VERIFIED  
+**Safety Profile:** Fully Offline (Zero Live DB/Supabase Calls, Zero Migrations, Zero Secret Exposure)  
+**Active Providers:** `DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`  
+
+### Deliverables Completed:
+1. **Architectural Shaft Repair & Differentiation (`building3DGenerator.ts`, `InteractiveBlueprint.tsx`, `RoomEditor.tsx`, `FloorPlan3D.tsx`):**
+   - **Internal MEP Chase:** Modeled as full-height fire-rated drywall/masonry enclosure (`#475569`), with flush stainless steel service inspection door with latch (`#94a3b8`), 4 vertical utility risers (copper water, PVC soil, galvanized HVAC duct, electrical conduit), and rooftop weather-resistant exhaust louver cowl.
+   - **External Lightwell:** Modeled as continuous vertical architectural lightwell within the building footprint, with ground courtyard stone paving and storm drain grate, intermediate open void across stories with safety glass balustrades (`#e0f2fe`), interior-facing framed windows into adjacent rooms, and open-to-sky roof parapet coping rim (`#475569`).
+   - **Intermediate Slab Opening:** Fixed intermediate floor slab and floor finish generation so stacked levels maintain continuous shaft void status, omitting concrete slab capping and allowing vertical light and MEP flow.
+   - **2D Blueprint Representation:** Styled lightwells with sky-blue wash (`fill="rgba(14, 165, 233, 0.08)"`), cyan dashed border, cross-diagonal void lines `X`, inner skylight ring, and badge; styled MEP chases with slate wash (`fill="rgba(71, 85, 105, 0.16)"`), thick fire-rated boundary, mechanical cross-hatch, and badge.
+   - **Room Classification UI:** Added identity dropdown in `RoomEditor.tsx` to classify rooms as Standard Room, External Lightwell Shaft, or Internal MEP Chase.
+2. **Spacious 3D Viewport & Precision Camera Controls (`architecturalLighting.ts`, `FloorPlan3D.tsx`, `Editor.tsx`):**
+   - Recalibrated `calculateCameraFraming` to use exact 3D bounding sphere trigonometry ($D = (R / \tan(\theta_v)) \times 1.15$), eliminating excessive compound multipliers and plot bounds inflation that placed cameras 80–110ft away.
+   - Implemented real camera and viewport controls in `FloorPlan3D.tsx`:
+     - `FIT` (`btn-camera-fit`): Recalibrated building-bounds framing.
+     - `RESET` (`btn-camera-reset`): Return to default exterior perspective view.
+     - `ZOOM ROOM` (`btn-camera-zoom-room`): Smoothly frame active/selected room bounds.
+     - `FOCUS ITEM` (`btn-camera-focus-item`): Smoothly frame selected furniture item.
+     - `TOP` (`btn-camera-top`): Top-down orthographic plan projection.
+     - `ISO` (`btn-camera-iso`): True axonometric 45° angle.
+     - `COMBINED` (`btn-3d-mode-stacked` / `btn-floor-combined`): Multi-floor stacked building view.
+     - `ISOLATE FLOOR` (`btn-3d-mode-single` / `btn-floor-isolate`): View single isolated floor level.
+     - Wall Cutaway Controls (`4.5 FT`, `10 FT`, `FULL`).
+   - Connected 2D/3D selection synchronization in `Editor.tsx` (`selectedRoomName`, `onSelectRoom`).
+3. **Automated Regression Test Suite (`test_shaft_and_viewport_suite.ts`):**
+   - Created dedicated test suite with 11 comprehensive tests: internal shaft geometry, external shaft geometry, distinct geometry & rendering semantics, vertical continuity across floors, intermediate floor slab opening, top opening behavior (open to sky vs MEP roof cowl), live shaft dimension updates and propagation, multi-floor vertical core alignment, camera fit scaling for small vs large buildings, floor isolation vs combined viewport modes, and furniture/room coordinate stability.
+
+### Verification Results:
+- `npx tsx frontend/src/modules/editor/geometry/test_shaft_and_viewport_suite.ts`: **11/11 tests PASSED**
+- `npx tsx frontend/src/modules/editor/geometry/test_camera_lighting_suite.ts`: **6/6 tests PASSED**
+- `npx tsx frontend/src/modules/editor/geometry/test_building_3d_suite.ts`: **10/10 tests PASSED**
+- `npx tsx frontend/src/modules/editor/geometry/test_furniture_suite.ts`: **10/10 tests PASSED**
+- `npx tsx frontend/src/modules/editor/geometry/test_geometry_suite.ts`: **10/10 tests PASSED**
+- `npx tsx frontend/src/modules/editor/geometry/test_stabilization_suite.ts`: **12/12 tests PASSED**
+- `npm run build` (`tsc -b && vite build`): **PASSED in 1.36s (0 errors)**
+- Offline Backend Test Suites (`python -m unittest`): **98/98 tests PASSED**
+
+---
+
+## Full Project Repair & Spatial Editor Overhaul — Milestone C: Financial and Budget Integration
+
+**Status:** COMPLETE & VERIFIED  
+**Safety Profile:** Fully Offline (Zero Live DB/Supabase Calls, Zero Migrations, Zero Secret Exposure)  
+**Active Providers:** `DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`  
+
+### Deliverables Completed:
+1. **Unified Authoritative Financial & BOM Engine (`backend/engines/bom_engine.py`, `backend/engines/cost_rates.py`, `frontend/.../bomCalculator.ts`):**
+   - Implemented deterministic 2026 Indian CPWD / market rate baseline (in INR).
+   - Strict separation of construction materials/openings from manufactured retail furniture:
+     - 30% labour ratio (`LABOUR_RATIO = 0.30`) strictly applies to construction materials (RCC slab, brickwork, plaster, flooring, ceiling, painting, electrical, plumbing, doors, windows).
+     - Retail furniture items are summed into `furniture_total` and are not inflated by masonry labour.
+   - Comprehensive category breakdowns: `structural`, `masonry_and_plaster`, `flooring`, `ceiling`, `electrical`, `plumbing`, `painting`, `doors_and_windows`, `labour`, and `furniture`. Sum of categories strictly equals `grand_total`.
+   - Quality finish tier multipliers: `economy` (0.8), `standard` (1.0), `premium` (1.5), `luxury` (2.0).
+2. **Placed Furniture Cost Integration (`furnitureRegistry.ts`, `furnitureCatalog.ts`, `bomCalculator.ts`, `bom_engine.py`):**
+   - Mapped all 32 architectural furniture assets to real unit prices in INR.
+   - Robust catalog ID resolution supporting exact, base, and normalized alphanumeric matching.
+   - Instance-based procurement tracking:
+     - Placed items tracked by instance; moving or rotating items is 100% cost invariant.
+     - Duplication increments schedule quantity and total cost.
+     - Deletion decrements quantity and removes cost from BOM.
+     - Unlisted/custom assets are explicitly flagged with `is_available: false` and `unit_price: null` without fabricating arbitrary prices.
+3. **Persisted Target Budget & Overrun Thresholds (`api.ts`, `Editor.tsx`, `Dashboard.tsx`, `ComplianceSidebar.tsx`, `AnalysisStudioView.tsx`):**
+   - Added `budget_target` to `ProjectData`, `LayoutData`, and `SaveProjectPayload` schemas.
+   - Reactive calculations: `remaining_budget`, `overrun_amount`, `budget_consumed_pct`, and `is_over_budget`.
+   - Visual alert ribbons in Editor and Dashboard with real-time feedback upon setting or adjusting budget.
+   - Persisted across auto-save and project reload.
+4. **Editor and Dashboard Consistency (`Editor.tsx`, `Dashboard.tsx`):**
+   - `Editor.tsx`: Computes reactive `authoritativeBom` synchronously from `effectiveFloors` and `targetBudget`; passes to `ArchitecturalInspectorDrawer` (Compliance Tab) and `AnalysisStudioView` (Performance Studio).
+   - `Dashboard.tsx`: Enriched Metrics Counter Ribbon with 5 columns including real "Portfolio Valuation" (`₹...`) and "Budget Alerts" (`X Overruns`), plus per-project BOM cost, budget badges, and direct click-through to the Financial Studio (`/editor?project=${id}&mode=analysis`).
+### Verification Results & Acceptance:
+- Frontend TypeScript suite (`frontend/test/test_financial_bom_suite.ts`): **53/53 tests PASSED**.
+- Backend Python suite (`backend/tests/test_bom_financial_engine.py`): **9/9 tests PASSED**.
+- Canonical geometry test suite (`backend/tests/test_canonical_geometry.py`): **5/5 tests PASSED**.
+- Shaft and viewport regression suite (`frontend/test/test_shaft_and_viewport_suite.ts`): **11/11 tests PASSED**.
+- Frontend build (`npm run build` -> `tsc -b && vite build`): **PASSED in 1.86s (0 errors)**.
+- Backend Pytest Suite (`pytest tests/`): **143/143 tests PASSED in 10.28s**.
+- Live Browser UI Acceptance Verification: **12/12 checks PASSED** (see `docs/audit-reports/milestone_c_acceptance_report.md`).
+- Target Budget MongoDB/JWT Persistence: **VERIFIED**.
+- Milestone D Preparation & Architecture Plan: **COMPLETED** (see `docs/audit-reports/milestone_c_acceptance_report.md`).
+
+---
+
+## Milestone 5: Full Application Integration and Regression Audit
+
+**Status:** COMPLETE & VERIFIED  
+**Safety Profile:** Fully Offline (Zero Live DB/Supabase Calls, Zero Migrations, Zero Secret Exposure, Kept `DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`)  
+**Audit Reports:** `docs/audit-reports/integration-audit/01-baseline.md`, `docs/audit-reports/integration-audit/02-final-report.md`  
+
+### Workflows Audited & Verified:
+1. **Workflow A (Account & Project Lifecycle)**: User authentication via JWT, project ownership scoping, cross-user isolation with HTTP 404 rejection on unauthorized access, and lossless JSON serialization round-trips.
+2. **Workflow B (2D Editing)**: CommandEngine execution, shared-wall resizing propagation without gaps or overlap, non-adjacent room boundary invariance, multi-floor isolation, door/window boundary constraints, furniture containment, and 1-click atomic undo/redo.
+3. **Workflow C (AI Copilot Pipeline)**: Sandboxed candidate generation, preview isolation without mutating canonical state, rejection immutability (100% bit-identical document), confirmation via CommandEngine, reversible undo/redo, and geometric validator rejection of illegal out-of-plot proposals.
+4. **Workflow D (3D Visualization)**: Deterministic 2D-to-3D extrusion, exterior 9" vs interior 4.5" thickness, physical door voids and window sills/lintels, multi-floor slabs, continuous staircase/elevator shafts with roof overrun, camera presets (Exterior, Interior, Isometric, Top-Down), exploded axonometric offsets, cutaway 4.5ft view, and non-mutating visibility projections.
+5. **Workflow E (Financial Accuracy)**: CPWD 2026 cost rates, structural labour strictly 30% of construction materials, retail furniture pricing integrated from catalog without labour inflation, spatial invariance under furniture move/rotate, target budget tracking with overrun alerts, and exact dashboard/editor calculation consistency.
+6. **Workflow F (Robustness & Degenerate Layouts)**: Safe migration of empty layouts (`floors: []`) to baseline floor, finite 3D building generation without `NaN`s, and zero-area BOM calculation safety.
+
+### Verification Results & Acceptance:
+- **Milestone 5 Full Integration Suite (`frontend/test/test_full_integration_suite.ts`)**: **61/61 PASSED**.
+- **Frontend Regression Suites**: **201/201 PASSED (100%)** across 11 test suites.
+- **Backend Pytest Suite (`pytest`)**: **154/154 PASSED (100%)** in 12.45s.
+- **Production Build (`npm run build`)**: **PASSED in 8.51s (0 TypeScript errors, 0 Vite errors)** with verified code-splitting of 3D chunks.
+- **Browser Workflows**: Live interaction verified on `http://127.0.0.1:5173` for Dashboard 3D preview and Editor 3D orbital controls; screenshots and WebP recordings recorded.
+- **Git Working Tree**: Preserved all uncommitted modifications from previous milestones. No commits or remote pushes performed.
+
+---
+
+## Milestone 6: Production Readiness, Security, and Performance Audit
+
+**Status:** COMPLETE & VERIFIED  
+**Safety Profile:** Fully Offline (Zero Live DB/Supabase Calls, Zero Migrations, Zero Secret Exposure, Kept `DATABASE_PROVIDER=mongodb`, `AUTH_PROVIDER=jwt`)  
+**Audit Reports:**
+- `docs/audit-reports/production-readiness/01-baseline.md`
+- `docs/audit-reports/production-readiness/02-security-findings.md`
+- `docs/audit-reports/production-readiness/03-performance-findings.md`
+- `docs/audit-reports/production-readiness/04-final-report.md`
+
+### Confirmed Defects Fixed:
+1. **FIX-01 (SEC-01 - High):** Hardened `/api/export/save-audit-file` endpoint in `backend/routers/export_routes.py` with mandatory JWT authentication (`get_current_user`), strict file extension whitelisting (`.dxf`, `.pdf`, `.svg`, `.json`, `.png`), and 10MB payload size limit.
+2. **FIX-02 (SEC-02 - Medium):** Gated localhost regex matching in `backend/main.py` CORSMiddleware via `IS_PRODUCTION` constant; production mode strictly enforces the explicit `CORS_ORIGINS` whitelist.
+3. **FIX-03 (SEC-03 - Medium):** Added `SecurityHardeningMiddleware` in `backend/main.py` attaching `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy`.
+4. **FIX-04 (SEC-04 - Medium):** Implemented request body size limit middleware in `backend/main.py` rejecting payloads $>15\text{MB}$ with HTTP 413 "Payload Too Large" to eliminate OOM/DoS risks.
+5. **FIX-05 (PERF-01 - Medium):** Added unmount cleanup effect in `frontend/src/modules/editor/components/FloorPlan3D.tsx` calling `architecturalMaterials.dispose()`, eliminating GPU memory retention across 2D/3D switches.
+6. **FIX-06 (PERF-02 - Low):** Added explicit `mongo_client.close()` teardown in `backend/main.py` lifespan context manager.
+7. **FIX-07 (SEC-05 - Low):** Sanitized `.env.example` templates in both `backend/` and `frontend/` to use neutral domain and key placeholders.
+
+### Verification Results & Acceptance:
+- **Production Security Hardening Suite (`backend/tests/test_production_security_hardening.py`)**: **5/5 tests PASSED**.
+- **Backend Pytest Suite (`pytest backend/tests`)**: **159/159 tests PASSED (100%)** across all 11 suites.
+- **Frontend Automated Test Collection (`npx tsx --test frontend/test/*.ts`)**: **284/284 tests PASSED (100%)** across all 20 suites.
+- **Total Automated Tests**: **443/443 PASSED (100%)**.
+- **Frontend Production Build (`npm run build`)**: **PASSED in 4.56s (0 TypeScript errors, 0 Vite errors)**.
+- **Secrets & Token Leak Audit**: 0 secrets committed to Git, 0 secrets in production bundles (`dist/`).
+- **All previous milestone work and uncommitted modifications preserved.**
 
 
 

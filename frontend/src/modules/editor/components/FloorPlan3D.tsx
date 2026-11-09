@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/immutability */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky, Html, ContactShadows } from '@react-three/drei';
+import { OrbitControls, Box, Cylinder, Sphere, Edges, Text, Sky, Stars, Html, ContactShadows } from '@react-three/drei';
 import { EffectComposer, Vignette, Bloom, SMAA } from '@react-three/postprocessing';
 import type { Room, Floor } from '../../../shared/api-client/api';
 import * as THREE from 'three';
@@ -33,6 +33,9 @@ import {
   Play,
   Square,
   RotateCw,
+  RotateCcw,
+  Focus,
+  ZoomIn,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -58,6 +61,7 @@ import {
   type GeneratedWallJunction3D,
   type GeneratedRoom3D,
   type GeneratedStair3D,
+  type GeneratedLift3D,
   DEFAULT_ROOM_HEIGHT_FT,
   DEFAULT_SLAB_THICKNESS_FT,
 } from '../geometry/building3DGenerator';
@@ -82,6 +86,8 @@ export interface FloorPlan3DProps {
   selectedFurnitureId?: string | null;
   onSelectFurniture?: (id: string | null) => void;
   onRegisterThreeBundle?: (bundle: ThreeSceneBundle | null) => void;
+  selectedRoomName?: string | null;
+  onSelectRoom?: (name: string | null) => void;
 }
 
 // ── Three.js Scene Export Bridge ──────────────────────────────────────────────
@@ -543,8 +549,356 @@ function BalustradeEdge({
   );
 }
 
-// ── Duplex Void Component (NO solid floor slab, perimeter glass balustrades) ───
-function DuplexVoid3D({ room }: { room: { x: number; y: number; width: number; height: number; name: string } }) {
+// ── External Lightwell Shaft Component (Continuous vertical courtyard void open to sky) ───
+function ExternalLightwell3D({
+  room,
+  levelIndex = 0,
+  numFloors = 1,
+  wallHeight = 10.0,
+  isCutaway = false,
+  clipProps = {},
+}: {
+  room: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    name: string;
+  };
+  levelIndex?: number;
+  numFloors?: number;
+  wallHeight?: number;
+  isCutaway?: boolean;
+  clipProps?: Record<string, unknown>;
+}) {
+  const cx = room.x + room.width / 2;
+  const cz = room.y + room.height / 2;
+  const isGroundLevel = levelIndex === 0;
+  const isTopLevel = levelIndex === numFloors - 1;
+  const balustradeH = 3.0;
+
+  return (
+    <group>
+      {/* 1. Ground Level Courtyard Base: Stone paving + Stormwater Drainage Grate */}
+      {isGroundLevel && (
+        <group position={[0, -0.01, 0]}>
+          {/* Natural stone flagstone base */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0, cz]} receiveShadow>
+            <planeGeometry args={[room.width, room.height]} />
+            <meshStandardMaterial color="#d6d3d1" roughness={0.85} metalness={0.05} {...clipProps} />
+          </mesh>
+
+          {/* Low perimeter drainage / plinth curb */}
+          <Box args={[room.width, 0.28, 0.22]} position={[cx, 0.14, room.y + 0.11]}>
+            <meshStandardMaterial color="#64748b" roughness={0.7} {...clipProps} />
+          </Box>
+          <Box args={[room.width, 0.28, 0.22]} position={[cx, 0.14, room.y + room.height - 0.11]}>
+            <meshStandardMaterial color="#64748b" roughness={0.7} {...clipProps} />
+          </Box>
+          <Box args={[0.22, 0.28, room.height]} position={[room.x + 0.11, 0.14, cz]}>
+            <meshStandardMaterial color="#64748b" roughness={0.7} {...clipProps} />
+          </Box>
+          <Box args={[0.22, 0.28, room.height]} position={[room.x + room.width - 0.11, 0.14, cz]}>
+            <meshStandardMaterial color="#64748b" roughness={0.7} {...clipProps} />
+          </Box>
+
+          {/* Central architectural stormwater drain grate */}
+          <Box args={[Math.min(2.0, room.width * 0.4), 0.04, Math.min(2.0, room.height * 0.4)]} position={[cx, 0.03, cz]}>
+            <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.8} {...clipProps} />
+          </Box>
+        </group>
+      )}
+
+      {/* 2. Intermediate Floors: Open Vertical Void with Safety Glass Balustrades */}
+      {!isGroundLevel && (
+        <group>
+          {/* Glass Safety Balustrade along opening perimeter */}
+          <BalustradeEdge x1={room.x} z1={room.y} x2={room.x + room.width} z2={room.y} height={balustradeH} />
+          <BalustradeEdge x1={room.x} z1={room.y + room.height} x2={room.x + room.width} z2={room.y + room.height} height={balustradeH} />
+          <BalustradeEdge x1={room.x} z1={room.y} x2={room.x} z2={room.y + room.height} height={balustradeH} />
+          <BalustradeEdge x1={room.x + room.width} z1={room.y} x2={room.x + room.width} z2={room.y + room.height} height={balustradeH} />
+
+          {/* Tempered Glass Infill Panels looking down through the shaft */}
+          <Box args={[room.width - 0.4, 2.4, 0.08]} position={[cx, 1.3, room.y + 0.1]}>
+            <meshPhysicalMaterial color="#e0f2fe" transparent opacity={0.45} roughness={0.1} transmission={0.75} ior={1.5} {...clipProps} />
+          </Box>
+          <Box args={[room.width - 0.4, 2.4, 0.08]} position={[cx, 1.3, room.y + room.height - 0.1]}>
+            <meshPhysicalMaterial color="#e0f2fe" transparent opacity={0.45} roughness={0.1} transmission={0.75} ior={1.5} {...clipProps} />
+          </Box>
+          <Box args={[0.08, 2.4, room.height - 0.4]} position={[room.x + 0.1, 1.3, cz]}>
+            <meshPhysicalMaterial color="#e0f2fe" transparent opacity={0.45} roughness={0.1} transmission={0.75} ior={1.5} {...clipProps} />
+          </Box>
+          <Box args={[0.08, 2.4, room.height - 0.4]} position={[room.x + room.width - 0.1, 1.3, cz]}>
+            <meshPhysicalMaterial color="#e0f2fe" transparent opacity={0.45} roughness={0.1} transmission={0.75} ior={1.5} {...clipProps} />
+          </Box>
+        </group>
+      )}
+
+      {/* 3. Interior-Facing Windows on Surrounding Lightwell Walls (Providing natural daylight into adjacent rooms) */}
+      {wallHeight > 5.0 && (
+        <group>
+          {/* North wall interior window */}
+          <group position={[cx, 3.8, room.y + 0.05]}>
+            <Box args={[Math.max(2.0, room.width * 0.6), 3.2, 0.12]}>
+              <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.3} {...clipProps} />
+            </Box>
+            <Box args={[Math.max(1.7, room.width * 0.54), 2.9, 0.04]} position={[0, 0, 0]}>
+              <meshPhysicalMaterial color="#bae6fd" transparent opacity={0.55} roughness={0.15} transmission={0.8} {...clipProps} />
+            </Box>
+          </group>
+
+          {/* South wall interior window */}
+          <group position={[cx, 3.8, room.y + room.height - 0.05]}>
+            <Box args={[Math.max(2.0, room.width * 0.6), 3.2, 0.12]}>
+              <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.3} {...clipProps} />
+            </Box>
+            <Box args={[Math.max(1.7, room.width * 0.54), 2.9, 0.04]} position={[0, 0, 0]}>
+              <meshPhysicalMaterial color="#bae6fd" transparent opacity={0.55} roughness={0.15} transmission={0.8} {...clipProps} />
+            </Box>
+          </group>
+
+          {/* West wall interior window */}
+          <group position={[room.x + 0.05, 3.8, cz]}>
+            <Box args={[0.12, 3.2, Math.max(2.0, room.height * 0.6)]}>
+              <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.3} {...clipProps} />
+            </Box>
+            <Box args={[0.04, 2.9, Math.max(1.7, room.height * 0.54)]} position={[0, 0, 0]}>
+              <meshPhysicalMaterial color="#bae6fd" transparent opacity={0.55} roughness={0.15} transmission={0.8} {...clipProps} />
+            </Box>
+          </group>
+
+          {/* East wall interior window */}
+          <group position={[room.x + room.width - 0.05, 3.8, cz]}>
+            <Box args={[0.12, 3.2, Math.max(2.0, room.height * 0.6)]}>
+              <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.3} {...clipProps} />
+            </Box>
+            <Box args={[0.04, 2.9, Math.max(1.7, room.height * 0.54)]} position={[0, 0, 0]}>
+              <meshPhysicalMaterial color="#bae6fd" transparent opacity={0.55} roughness={0.15} transmission={0.8} {...clipProps} />
+            </Box>
+          </group>
+        </group>
+      )}
+
+      {/* 4. Roof Opening: Open to Sky with Architectural Parapet Coping Rim */}
+      {isTopLevel && !isCutaway && (
+        <group position={[0, wallHeight, 0]}>
+          <Box args={[room.width + 0.5, 0.4, 0.35]} position={[cx, 0.2, room.y - 0.05]}>
+            <meshStandardMaterial color="#475569" roughness={0.4} {...clipProps} />
+          </Box>
+          <Box args={[room.width + 0.5, 0.4, 0.35]} position={[cx, 0.2, room.y + room.height + 0.05]}>
+            <meshStandardMaterial color="#475569" roughness={0.4} {...clipProps} />
+          </Box>
+          <Box args={[0.35, 0.4, room.height + 0.5]} position={[room.x - 0.05, 0.2, cz]}>
+            <meshStandardMaterial color="#475569" roughness={0.4} {...clipProps} />
+          </Box>
+          <Box args={[0.35, 0.4, room.height + 0.5]} position={[room.x + room.width + 0.05, 0.2, cz]}>
+            <meshStandardMaterial color="#475569" roughness={0.4} {...clipProps} />
+          </Box>
+        </group>
+      )}
+
+      {/* Architectural Identification Signage */}
+      <Text
+        font="/assets/fonts/Roboto.woff"
+        position={[cx, 0.45, cz]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={Math.min(0.85, Math.max(0.42, room.width * 0.12))}
+        color="#0284c7"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {`${room.name.toUpperCase()} (OPEN TO SKY)`}
+      </Text>
+    </group>
+  );
+}
+
+// ── Internal MEP Service Chase Component (Enclosed fire-rated chase with inspection door & vertical risers) ───
+function InternalMEPChase3D({
+  room,
+  levelIndex = 0,
+  numFloors = 1,
+  wallHeight = 10.0,
+  isCutaway = false,
+  clipProps = {},
+}: {
+  room: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    name: string;
+  };
+  levelIndex?: number;
+  numFloors?: number;
+  wallHeight?: number;
+  isCutaway?: boolean;
+  clipProps?: Record<string, unknown>;
+}) {
+  const cx = room.x + room.width / 2;
+  const cz = room.y + room.height / 2;
+  const isTopLevel = levelIndex === numFloors - 1;
+  const effectiveH = isCutaway ? Math.min(wallHeight, 4.5) : wallHeight;
+  const wallT = 0.32; // Fire-rated chase enclosure wall thickness
+
+  return (
+    <group>
+      {/* 1. Fire-Rated Chase Enclosure Walls */}
+      {/* North Wall */}
+      <Box args={[room.width, effectiveH, wallT]} position={[cx, effectiveH / 2, room.y + wallT / 2]}>
+        <meshStandardMaterial color="#475569" roughness={0.82} {...clipProps} />
+        <Edges color="#334155" />
+      </Box>
+      {/* South Wall */}
+      <Box args={[room.width, effectiveH, wallT]} position={[cx, effectiveH / 2, room.y + room.height - wallT / 2]}>
+        <meshStandardMaterial color="#475569" roughness={0.82} {...clipProps} />
+        <Edges color="#334155" />
+      </Box>
+      {/* West Wall */}
+      <Box args={[wallT, effectiveH, Math.max(0.1, room.height - wallT * 2)]} position={[room.x + wallT / 2, effectiveH / 2, cz]}>
+        <meshStandardMaterial color="#475569" roughness={0.82} {...clipProps} />
+        <Edges color="#334155" />
+      </Box>
+      {/* East Wall */}
+      <Box args={[wallT, effectiveH, Math.max(0.1, room.height - wallT * 2)]} position={[room.x + room.width - wallT / 2, effectiveH / 2, cz]}>
+        <meshStandardMaterial color="#475569" roughness={0.82} {...clipProps} />
+        <Edges color="#334155" />
+      </Box>
+
+      {/* 2. Stainless Steel Flush MEP Inspection Access Panel Door on South Face */}
+      <group position={[cx, Math.min(3.5, effectiveH / 2), room.y + room.height + 0.02]}>
+        {/* Door Frame */}
+        <Box args={[Math.min(2.2, room.width - 0.6), Math.min(4.2, effectiveH - 0.6), 0.08]}>
+          <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.6} {...clipProps} />
+        </Box>
+        {/* Door Leaf */}
+        <Box args={[Math.min(2.0, room.width - 0.8), Math.min(4.0, effectiveH - 0.8), 0.1]} position={[0, 0, 0.01]}>
+          <meshStandardMaterial color="#94a3b8" roughness={0.3} metalness={0.7} {...clipProps} />
+        </Box>
+        {/* Quarter-Turn Latch Handle */}
+        <Box args={[0.14, 0.4, 0.14]} position={[Math.min(0.7, room.width * 0.28), 0, 0.08]}>
+          <meshStandardMaterial color="#0f172a" roughness={0.2} metalness={0.9} {...clipProps} />
+        </Box>
+      </group>
+
+      {/* 3. Internal Vertical Utility Risers (Visible in cutaway/xray) */}
+      <group position={[cx, effectiveH / 2, cz]}>
+        {/* Copper Plumbing Water Riser */}
+        <Cylinder args={[0.12, 0.12, effectiveH, 12]} position={[-room.width * 0.22, 0, -room.height * 0.2]}>
+          <meshStandardMaterial color="#c2410c" roughness={0.35} metalness={0.8} {...clipProps} />
+        </Cylinder>
+        {/* PVC Drainage Stack */}
+        <Cylinder args={[0.22, 0.22, effectiveH, 14]} position={[room.width * 0.22, 0, -room.height * 0.18]}>
+          <meshStandardMaterial color="#f8fafc" roughness={0.4} metalness={0.1} {...clipProps} />
+        </Cylinder>
+        {/* Galvanized HVAC Ventilation Duct */}
+        <Box args={[Math.min(1.4, room.width * 0.45), effectiveH, Math.min(1.4, room.height * 0.45)]} position={[0, 0, room.height * 0.16]}>
+          <meshStandardMaterial color="#94a3b8" roughness={0.45} metalness={0.6} {...clipProps} />
+          <Edges color="#64748b" />
+        </Box>
+        {/* Electrical Conduit Lines */}
+        <Cylinder args={[0.06, 0.06, effectiveH, 8]} position={[-room.width * 0.26, 0, room.height * 0.24]}>
+          <meshStandardMaterial color="#eab308" roughness={0.4} metalness={0.2} {...clipProps} />
+        </Cylinder>
+      </group>
+
+      {/* 4. Rooftop Mechanical Ventilation Cowl / Exhaust Louvers at Top Story */}
+      {isTopLevel && !isCutaway && (
+        <group position={[cx, effectiveH + 0.75, cz]}>
+          {/* Vent cowl hood */}
+          <Box args={[room.width * 0.75, 1.4, room.height * 0.75]}>
+            <meshStandardMaterial color="#334155" roughness={0.5} metalness={0.4} {...clipProps} />
+          </Box>
+          {/* Weather hood cap */}
+          <Box args={[room.width * 0.85, 0.22, room.height * 0.85]} position={[0, 0.75, 0]}>
+            <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.6} {...clipProps} />
+          </Box>
+        </group>
+      )}
+
+      {/* Identification Plate */}
+      <Text
+        font="/assets/fonts/Roboto.woff"
+        position={[cx, effectiveH + 0.1, cz]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={Math.min(0.7, Math.max(0.35, room.width * 0.1))}
+        color="#cbd5e1"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {`${room.name.toUpperCase()} (MEP CHASE)`}
+      </Text>
+    </group>
+  );
+}
+
+// ── Duplex Void & Shaft Component (NO solid floor slab, open vertical chase/atrium) ───
+function DuplexVoid3D({
+  room,
+  levelIndex = 0,
+  numFloors = 1,
+  wallHeight = 10.0,
+  isCutaway = false,
+  clipProps = {},
+}: {
+  room: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    name: string;
+    isShaft?: boolean;
+    isInteriorShaft?: boolean;
+    isExteriorShaft?: boolean;
+  };
+  levelIndex?: number;
+  numFloors?: number;
+  wallHeight?: number;
+  isCutaway?: boolean;
+  clipProps?: Record<string, unknown>;
+}) {
+  const rn = room.name.toLowerCase();
+  const isShaft = Boolean(
+    room.isShaft ||
+    rn.includes('shaft') ||
+    rn.includes('duct') ||
+    rn.includes('chase') ||
+    rn.includes('mep') ||
+    rn.includes('ventilation') ||
+    rn.includes('lightwell')
+  );
+  const isExteriorShaft = Boolean(
+    room.isExteriorShaft ||
+    (isShaft && (rn.includes('ext') || rn.includes('lightwell') || rn.includes('courtyard')))
+  );
+  const isInteriorShaft = Boolean(room.isInteriorShaft || (isShaft && !isExteriorShaft));
+
+  if (isExteriorShaft) {
+    return (
+      <ExternalLightwell3D
+        room={room}
+        levelIndex={levelIndex}
+        numFloors={numFloors}
+        wallHeight={wallHeight}
+        isCutaway={isCutaway}
+        clipProps={clipProps}
+      />
+    );
+  }
+
+  if (isInteriorShaft) {
+    return (
+      <InternalMEPChase3D
+        room={room}
+        levelIndex={levelIndex}
+        numFloors={numFloors}
+        wallHeight={wallHeight}
+        isCutaway={isCutaway}
+        clipProps={clipProps}
+      />
+    );
+  }
+
   const cx = room.x + room.width / 2;
   const cz = room.y + room.height / 2;
   const BALUSTRADE_H = 3.0;
@@ -565,8 +919,133 @@ function DuplexVoid3D({ room }: { room: { x: number; y: number; width: number; h
         anchorX="center"
         anchorY="middle"
       >
-        OPEN TO BELOW (DUPLEX VOID)
+        {room.name.toUpperCase()} (OPEN TO BELOW)
       </Text>
+    </group>
+  );
+}
+
+// ── Architectural Lift / Elevator Core Component ─────────────────────────────
+function Lift3D({
+  lift,
+  levelIndex,
+  isCutaway = false,
+  clipProps = {},
+}: {
+  lift: GeneratedLift3D;
+  levelIndex?: number;
+  isCutaway?: boolean;
+  clipProps?: Record<string, unknown>;
+}) {
+  const { boundsFt, cabinPositionFt, cabinDimensionsFt, hasOverrun, landingDoorFt } = lift;
+  const cabinY = isCutaway ? Math.min(4.0, cabinDimensionsFt.height / 2) : cabinDimensionsFt.height / 2;
+
+  return (
+    <group position={[cabinPositionFt.x, 0, cabinPositionFt.z]}>
+      {/* 4 Vertical Steel Guide Rails along shaft corners */}
+      {[-boundsFt.width / 2 + 0.15, boundsFt.width / 2 - 0.15].map((rx, xi) =>
+        [-boundsFt.depth / 2 + 0.15, boundsFt.depth / 2 - 0.15].map((rz, zi) => (
+          <Box
+            key={`rail_${xi}_${zi}`}
+            args={[0.15, isCutaway ? 4.5 : 10.0, 0.15]}
+            position={[rx, (isCutaway ? 4.5 : 10.0) / 2, rz]}
+          >
+            <meshStandardMaterial color="#94a3b8" metalness={0.8} roughness={0.25} {...clipProps} />
+          </Box>
+        ))
+      )}
+
+      {/* Counterweight Column */}
+      <Box
+        args={[boundsFt.width * 0.45, isCutaway ? 3.5 : 5.0, 0.2]}
+        position={[0, (isCutaway ? 3.5 : 5.0) / 2, -boundsFt.depth / 2 + 0.25]}
+      >
+        <meshStandardMaterial color="#334155" metalness={0.7} roughness={0.3} {...clipProps} />
+      </Box>
+
+      {/* Elevator Cabin Mass with Brushed Steel & Glazing */}
+      <group position={[0, cabinY, 0]}>
+        {/* Cabin Floor Platform */}
+        <Box
+          args={[cabinDimensionsFt.width, 0.3, cabinDimensionsFt.depth]}
+          position={[0, -cabinDimensionsFt.height / 2 + 0.15, 0]}
+        >
+          <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} {...clipProps} />
+        </Box>
+
+        {/* Cabin Rear & Side Brushed Stainless Steel Walls */}
+        <Box
+          args={[cabinDimensionsFt.width, cabinDimensionsFt.height - 0.4, 0.08]}
+          position={[0, 0, -cabinDimensionsFt.depth / 2 + 0.04]}
+        >
+          <meshStandardMaterial color="#cbd5e1" metalness={0.75} roughness={0.2} {...clipProps} />
+        </Box>
+        <Box
+          args={[0.08, cabinDimensionsFt.height - 0.4, cabinDimensionsFt.depth]}
+          position={[-cabinDimensionsFt.width / 2 + 0.04, 0, 0]}
+        >
+          <meshStandardMaterial color="#cbd5e1" metalness={0.75} roughness={0.2} {...clipProps} />
+        </Box>
+        <Box
+          args={[0.08, cabinDimensionsFt.height - 0.4, cabinDimensionsFt.depth]}
+          position={[cabinDimensionsFt.width / 2 - 0.04, 0, 0]}
+        >
+          <meshStandardMaterial color="#cbd5e1" metalness={0.75} roughness={0.2} {...clipProps} />
+        </Box>
+
+        {/* Cabin Ceiling with Recessed LED Light */}
+        <Box
+          args={[cabinDimensionsFt.width, 0.15, cabinDimensionsFt.depth]}
+          position={[0, cabinDimensionsFt.height / 2 - 0.08, 0]}
+        >
+          <meshStandardMaterial color="#f8fafc" roughness={0.4} {...clipProps} />
+        </Box>
+        <pointLight position={[0, cabinDimensionsFt.height / 2 - 0.3, 0]} intensity={6} distance={6} color="#ffffff" decay={2} />
+
+        {/* Interior Handrail */}
+        <Box
+          args={[cabinDimensionsFt.width * 0.75, 0.06, 0.06]}
+          position={[0, -0.6, -cabinDimensionsFt.depth / 2 + 0.16]}
+        >
+          <meshStandardMaterial color="#f59e0b" metalness={0.9} roughness={0.15} {...clipProps} />
+        </Box>
+      </group>
+
+      {/* Landing Entrance Sliding Doors & Indicator Panel */}
+      <group position={[0, landingDoorFt.height / 2, boundsFt.depth / 2]}>
+        {/* Sliding Door Leaves (Stainless steel with center vertical split line) */}
+        <Box args={[landingDoorFt.width * 0.48, landingDoorFt.height, 0.08]} position={[-landingDoorFt.width * 0.25, 0, 0]}>
+          <meshStandardMaterial color="#94a3b8" metalness={0.8} roughness={0.2} {...clipProps} />
+        </Box>
+        <Box args={[landingDoorFt.width * 0.48, landingDoorFt.height, 0.08]} position={[landingDoorFt.width * 0.25, 0, 0]}>
+          <meshStandardMaterial color="#94a3b8" metalness={0.8} roughness={0.2} {...clipProps} />
+        </Box>
+        {/* Door Architrave / Frame */}
+        <Box args={[landingDoorFt.width + 0.2, 0.12, 0.12]} position={[0, landingDoorFt.height / 2 + 0.06, 0]}>
+          <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} {...clipProps} />
+        </Box>
+
+        {/* Digital Call Display / Lantern Indicator */}
+        <group position={[landingDoorFt.width / 2 + 0.4, 0.5, 0.02]} name={levelIndex !== undefined ? `lift-call-L${levelIndex}` : undefined}>
+          <Box args={[0.35, 0.7, 0.05]}>
+            <meshStandardMaterial color="#0f172a" roughness={0.2} {...clipProps} />
+          </Box>
+          <Box args={[0.22, 0.18, 0.06]} position={[0, 0.16, 0.01]}>
+            <meshStandardMaterial color={levelIndex !== undefined && levelIndex > 0 ? '#38bdf8' : '#34d399'} roughness={0.1} />
+          </Box>
+        </group>
+      </group>
+
+      {/* Top Overrun Mechanical Housing if top level */}
+      {hasOverrun && (
+        <Box
+          args={[boundsFt.width + 0.4, 3.0, boundsFt.depth + 0.4]}
+          position={[0, 11.5, 0]}
+        >
+          <meshStandardMaterial color="#334155" roughness={0.7} {...clipProps} />
+          <Edges color="#0f172a" />
+        </Box>
+      )}
     </group>
   );
 }
@@ -686,15 +1165,20 @@ function WallJunction3D({
   isXRay = false,
   xrayOpacity = 0.25,
   sectionPlane = null,
+  timeOfDay = 'noon',
 }: {
   junction: GeneratedWallJunction3D;
   isCutaway?: boolean;
   isXRay?: boolean;
   xrayOpacity?: number;
   sectionPlane?: THREE.Plane | null;
+  timeOfDay?: TimeOfDay;
 }) {
   const plasterBump = architecturalMaterials.getProceduralTexture('architectural_plaster', 'bump');
   const clipProps = sectionPlane ? { clippingPlanes: [sectionPlane], clipShadows: true } : {};
+  const isNight = timeOfDay === 'night';
+  const junctionEdgeColor = isXRay ? '#0284c7' : isNight ? '#182030' : timeOfDay === 'sunset' ? '#475569' : '#cbd5e1';
+  const topCapColor = sectionPlane ? '#18181b' : isNight ? '#1e293b' : '#ffffff';
 
   return (
     <group position={[junction.positionFt.x, 0, junction.positionFt.z]}>
@@ -725,7 +1209,7 @@ function WallJunction3D({
             {...clipProps}
           />
         )}
-        <Edges color={isXRay ? '#0284c7' : '#cbd5e1'} />
+        <Edges color={junctionEdgeColor} />
       </Box>
 
       {/* Clean Wall Junction Top Cap */}
@@ -735,7 +1219,7 @@ function WallJunction3D({
           position={[0, junction.heightFt + 0.03, 0]}
         >
           <meshStandardMaterial
-            color={sectionPlane ? '#18181b' : '#ffffff'}
+            color={topCapColor}
             roughness={0.25}
             metalness={0.02}
             {...clipProps}
@@ -753,16 +1237,23 @@ function CanonicalWall3D({
   isXRay = false,
   xrayOpacity = 0.25,
   sectionPlane = null,
+  showOpenings = true,
+  timeOfDay = 'noon',
 }: {
   wall: GeneratedWall3D;
   isCutaway?: boolean;
   isXRay?: boolean;
   xrayOpacity?: number;
   sectionPlane?: THREE.Plane | null;
+  showOpenings?: boolean;
+  timeOfDay?: TimeOfDay;
 }) {
   const isParapet = wall.kind === 'parapet';
   const plasterBump = architecturalMaterials.getProceduralTexture('architectural_plaster', 'bump');
   const clipProps = sectionPlane ? { clippingPlanes: [sectionPlane], clipShadows: true } : {};
+  const isNight = timeOfDay === 'night';
+  const wallEdgeColor = isXRay ? '#0284c7' : isNight ? '#182030' : timeOfDay === 'sunset' ? '#475569' : '#cbd5e1';
+  const topCapColor = sectionPlane ? '#18181b' : isNight ? '#1e293b' : '#ffffff';
 
   return (
     <group position={[wall.centerFt.x, 0, wall.centerFt.z]} rotation={[0, -wall.angleRad, 0]}>
@@ -797,7 +1288,7 @@ function CanonicalWall3D({
                   {...clipProps}
                 />
               )}
-              <Edges color={isXRay ? '#0284c7' : '#cbd5e1'} />
+              <Edges color={wallEdgeColor} />
             </Box>
 
             {/* Crisp Wall Top Cap (Reference 1 & 2 presentation style for plan cuts) */}
@@ -807,7 +1298,7 @@ function CanonicalWall3D({
                 position={[localCenterX, wall.heightFt + 0.03, 0]}
               >
                 <meshStandardMaterial
-                  color={sectionPlane ? '#18181b' : '#ffffff'}
+                  color={topCapColor}
                   roughness={0.25}
                   metalness={0.02}
                   {...clipProps}
@@ -824,12 +1315,12 @@ function CanonicalWall3D({
           args={[wall.lengthFt + 0.1, 0.15, wall.thicknessFt + 0.15]}
           position={[0, wall.heightFt + 0.08, 0]}
         >
-          <meshStandardMaterial color="#ffffff" roughness={0.35} {...clipProps} />
+          <meshStandardMaterial color={isNight ? '#334155' : '#ffffff'} roughness={0.35} {...clipProps} />
         </Box>
       )}
 
       {/* Real Volumetric Openings (Doors & Windows) */}
-      {!isParapet && wall.openings.map((op, i) => {
+      {!isParapet && showOpenings && wall.openings.map((op, i) => {
         const localCenterX = -wall.lengthFt / 2 + op.offsetFt;
 
         if (op.type === 'door') {
@@ -1105,15 +1596,22 @@ function CameraManager({
   framing,
   resetTrigger,
   isTurntableActive = false,
+  isWalkthrough = false,
+  walkthroughBounds,
+  activeFloorElevation = 0,
 }: {
   framing: CameraFramingResult;
   resetTrigger: number;
   isTurntableActive?: boolean;
+  isWalkthrough?: boolean;
+  walkthroughBounds?: { minX: number; maxX: number; minZ: number; maxZ: number };
+  activeFloorElevation?: number;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const isTransitioningRef = useRef<boolean>(true);
   const introFlownRef = useRef<boolean>(false);
+  const keysRef = useRef({ forward: false, backward: false, left: false, right: false });
   const targetPosRef = useRef<THREE.Vector3>(
     new THREE.Vector3(framing.targetPosition.x, framing.targetPosition.y, framing.targetPosition.z)
   );
@@ -1162,9 +1660,68 @@ function CameraManager({
     };
   }, []);
 
+  // Keyboard navigation for first-person walkthrough
+  useEffect(() => {
+    if (!isWalkthrough) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') keysRef.current.forward = true;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') keysRef.current.backward = true;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') keysRef.current.left = true;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') keysRef.current.right = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') keysRef.current.forward = false;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') keysRef.current.backward = false;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') keysRef.current.left = false;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') keysRef.current.right = false;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isWalkthrough]);
+
   useFrame((_, delta) => {
     const controls = controlsRef.current;
     if (!controls) return;
+
+    if (isWalkthrough) {
+      const { forward, backward, left, right } = keysRef.current;
+      if (forward || backward || left || right) {
+        const fwd = new THREE.Vector3();
+        camera.getWorldDirection(fwd);
+        fwd.y = 0;
+        fwd.normalize();
+
+        const side = new THREE.Vector3(-fwd.z, 0, fwd.x);
+        const moveSpeed = 10.0 * delta;
+        const moveVec = new THREE.Vector3();
+
+        if (forward) moveVec.addScaledVector(fwd, moveSpeed);
+        if (backward) moveVec.addScaledVector(fwd, -moveSpeed);
+        if (left) moveVec.addScaledVector(side, -moveSpeed);
+        if (right) moveVec.addScaledVector(side, moveSpeed);
+
+        const newPos = camera.position.clone().add(moveVec);
+        if (walkthroughBounds) {
+          newPos.x = Math.max(walkthroughBounds.minX + 0.6, Math.min(walkthroughBounds.maxX - 0.6, newPos.x));
+          newPos.z = Math.max(walkthroughBounds.minZ + 0.6, Math.min(walkthroughBounds.maxZ - 0.6, newPos.z));
+        }
+
+        const eyeY = activeFloorElevation + 5.5;
+        newPos.y = eyeY;
+
+        const deltaPos = newPos.clone().sub(camera.position);
+        camera.position.copy(newPos);
+        controls.target.add(deltaPos);
+        controls.target.y = eyeY;
+        controls.update();
+      }
+      return;
+    }
 
     if (isTransitioningRef.current) {
       const dampFactor = 5.5;
@@ -1193,12 +1750,15 @@ function CameraManager({
     <OrbitControls
       ref={controlsRef}
       target={[framing.targetLookAt.x, framing.targetLookAt.y, framing.targetLookAt.z]}
-      maxPolarAngle={Math.PI / 2 - 0.02}
-      minDistance={framing.minDistance}
-      maxDistance={framing.maxDistance}
+      maxPolarAngle={isWalkthrough ? Math.PI / 2 + 0.15 : Math.PI / 2 - 0.02}
+      minPolarAngle={isWalkthrough ? Math.PI / 2 - 0.6 : 0.05}
+      minDistance={isWalkthrough ? 0.2 : framing.minDistance}
+      maxDistance={isWalkthrough ? 8.0 : framing.maxDistance}
       enableDamping
       dampingFactor={0.08}
-      autoRotate={isTurntableActive}
+      enableZoom={!isWalkthrough}
+      enablePan={!isWalkthrough}
+      autoRotate={isTurntableActive && !isWalkthrough}
       autoRotateSpeed={2.4}
     />
   );
@@ -1219,14 +1779,24 @@ function SkyAndSun({
 
   return (
     <>
-      {/* Sky component (visible in day and sunset modes) */}
-      {timeOfDay !== 'night' && (
+      {/* Sky component (visible in day and sunset modes) or atmospheric star field in night mode */}
+      {timeOfDay !== 'night' ? (
         <Sky
           sunPosition={sky.sunPosition}
           turbidity={sky.turbidity}
           rayleigh={sky.rayleigh}
           mieCoefficient={sky.mieCoefficient}
           mieDirectionalG={sky.mieDirectionalG}
+        />
+      ) : (
+        <Stars
+          radius={150}
+          depth={60}
+          count={1800}
+          factor={4}
+          saturation={0}
+          fade
+          speed={0.6}
         />
       )}
 
@@ -1268,23 +1838,86 @@ function SkyAndSun({
   );
 }
 
-// ── Error Boundary ────────────────────────────────────────────────────────────
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
+// ── WebGL Capability Probe ───────────────────────────────────────────────────
+export function isWebGLAvailable(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    return false;
   }
-  static getDerivedStateFromError() { return { hasError: true }; }
+}
+
+// ── Recoverable WebGL Error Boundary ──────────────────────────────────────────
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallbackSummary?: string },
+  { hasError: boolean; errorMsg: string }
+> {
+  constructor(props: { children: React.ReactNode; fallbackSummary?: string }) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMsg: error.message || 'WebGL context error' };
+  }
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("3D Studio WebGL Crash Caught:", error, errorInfo);
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ width: '100%', height: '500px', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171', borderRadius: '8px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <h3>WebGL Crash Detected</h3>
-            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>The 3D view failed to load. Your GPU might be out of VRAM or missing WebGL support.</p>
+        <div style={{
+          width: '100%',
+          height: '560px',
+          background: '#0d1117',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#f87171',
+          borderRadius: '8px',
+          padding: '24px',
+          gap: '16px',
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          <div style={{ textAlign: 'center', maxWidth: '440px' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', color: '#f87171' }}>
+              3D Viewport Renderer Interrupted
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+              The 3D WebGL context was lost or could not initialize. Your layout data and canonical floor plan are completely safe.
+            </p>
+            {this.props.fallbackSummary && (
+              <div style={{
+                fontSize: '0.75rem',
+                color: '#38bdf8',
+                background: '#1e293b',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+              }}>
+                {this.props.fallbackSummary}
+              </div>
+            )}
+            <button
+              onClick={() => this.setState({ hasError: false, errorMsg: '' })}
+              style={{
+                background: '#0284c7',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '8px 16px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              RELOAD 3D VIEWPORT
+            </button>
           </div>
         </div>
       );
@@ -1386,6 +2019,87 @@ function SiteLandscaping3D({
           />
         </Box>
       ))}
+
+      {/* 3B. Vehicular Driveway Approach */}
+      {landscaping.driveway && (
+        <Box
+          key={landscaping.driveway.id}
+          receiveShadow
+          args={[landscaping.driveway.dimensionsFt.width, 0.07, landscaping.driveway.dimensionsFt.length]}
+          position={[landscaping.driveway.centerFt.x, landscaping.driveway.elevationFt, landscaping.driveway.centerFt.z]}
+        >
+          <primitive
+            object={architecturalMaterials.getMaterial(
+              landscaping.driveway.materialKey,
+              { width: landscaping.driveway.dimensionsFt.width, height: landscaping.driveway.dimensionsFt.length }
+            )}
+            attach="material"
+          />
+        </Box>
+      )}
+
+      {/* 3C. Pedestrian Stepping-Stone Garden Path */}
+      {landscaping.steppingStones?.map((stone) => (
+        <Box
+          key={stone.id}
+          receiveShadow
+          args={[stone.dimensionsFt.width, 0.08, stone.dimensionsFt.length]}
+          position={[stone.positionFt.x, stone.positionFt.y, stone.positionFt.z]}
+          rotation={[0, (stone.rotationDeg * Math.PI) / 180, 0]}
+        >
+          <meshStandardMaterial color="#cbd5e1" roughness={0.8} />
+        </Box>
+      ))}
+
+      {/* 3D. Outdoor Bollard Pathway Lights */}
+      {landscaping.outdoorLights?.map((bl) => (
+        <group key={bl.id} position={[bl.positionFt.x, 0, bl.positionFt.z]}>
+          <Cylinder args={[0.16, 0.18, bl.heightFt, 8]} position={[0, bl.heightFt / 2, 0]} castShadow>
+            <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.8} />
+          </Cylinder>
+          <Cylinder args={[0.17, 0.17, 0.25, 8]} position={[0, bl.heightFt - 0.1, 0]}>
+            <meshStandardMaterial color={bl.lightColor} emissive={bl.lightColor} emissiveIntensity={timeOfDay === 'night' ? 2.5 : 0.8} />
+          </Cylinder>
+          {(timeOfDay === 'night' || timeOfDay === 'sunset') && (
+            <pointLight position={[0, bl.heightFt, 0]} color={bl.lightColor} intensity={timeOfDay === 'night' ? 3.0 : 1.5} distance={10} decay={2} />
+          )}
+        </group>
+      ))}
+
+      {/* 3E. Garden Furniture: Teak Benches & Planters */}
+      {landscaping.gardenFurniture?.map((furn) => {
+        if (furn.type === 'bench') {
+          return (
+            <group key={furn.id} position={[furn.positionFt.x, 0, furn.positionFt.z]} rotation={[0, (furn.rotationDeg * Math.PI) / 180, 0]}>
+              <Box args={[0.2, 1.4, furn.dimensionsFt.depth]} position={[-furn.dimensionsFt.width / 2 + 0.3, 0.7, 0]} castShadow>
+                <meshStandardMaterial color="#1e293b" metalness={0.7} />
+              </Box>
+              <Box args={[0.2, 1.4, furn.dimensionsFt.depth]} position={[furn.dimensionsFt.width / 2 - 0.3, 0.7, 0]} castShadow>
+                <meshStandardMaterial color="#1e293b" metalness={0.7} />
+              </Box>
+              <Box args={[furn.dimensionsFt.width, 0.15, furn.dimensionsFt.depth]} position={[0, 1.4, 0]} castShadow>
+                <meshStandardMaterial color={furn.materialColor} roughness={0.6} />
+              </Box>
+              <Box args={[furn.dimensionsFt.width, 1.0, 0.15]} position={[0, 2.0, -furn.dimensionsFt.depth / 2 + 0.1]} castShadow>
+                <meshStandardMaterial color={furn.materialColor} roughness={0.6} />
+              </Box>
+            </group>
+          );
+        }
+        return (
+          <group key={furn.id} position={[furn.positionFt.x, 0, furn.positionFt.z]} rotation={[0, (furn.rotationDeg * Math.PI) / 180, 0]}>
+            <Box args={[furn.dimensionsFt.width, furn.dimensionsFt.height, furn.dimensionsFt.depth]} position={[0, furn.dimensionsFt.height / 2, 0]} castShadow receiveShadow>
+              <meshStandardMaterial color={furn.materialColor} roughness={0.7} />
+            </Box>
+            <Sphere args={[furn.dimensionsFt.width * 0.52, 8, 8]} position={[0, furn.dimensionsFt.height + 0.4, 0]} castShadow>
+              <meshStandardMaterial color="#15803d" roughness={0.9} />
+            </Sphere>
+            <Sphere args={[0.2, 6, 6]} position={[0.2, furn.dimensionsFt.height + 0.7, 0.1]}>
+              <meshStandardMaterial color="#f43f5e" emissive="#f43f5e" emissiveIntensity={0.3} />
+            </Sphere>
+          </group>
+        );
+      })}
 
       {/* 4. Rear Leisure Patio Terrace */}
       {landscaping.patio && (
@@ -1606,6 +2320,45 @@ function SiteLandscaping3D({
             </group>
           );
         }
+        if (veg.type === 'evergreen_tree') {
+          const trunkH = 8.0 * veg.scale.height;
+          return (
+            <group
+              key={veg.id}
+              position={[veg.positionFt.x, veg.positionFt.y, veg.positionFt.z]}
+              rotation={[0, (veg.rotationDeg * Math.PI) / 180, 0]}
+            >
+              <Cylinder args={[0.25 * veg.scale.width, 0.35 * veg.scale.width, trunkH * 0.4, 8]} position={[0, (trunkH * 0.4) / 2, 0]} castShadow>
+                <meshStandardMaterial color="#451a03" roughness={0.8} />
+              </Cylinder>
+              <Cylinder args={[0, 2.2 * veg.scale.width, trunkH * 0.7, 8]} position={[0, trunkH * 0.55, 0]} castShadow>
+                <meshStandardMaterial color="#14532d" roughness={0.8} />
+              </Cylinder>
+              <Cylinder args={[0, 1.6 * veg.scale.width, trunkH * 0.5, 8]} position={[0, trunkH * 0.85, 0]} castShadow>
+                <meshStandardMaterial color="#166534" roughness={0.8} />
+              </Cylinder>
+            </group>
+          );
+        }
+        if (veg.type === 'flowering_shrub' || veg.type === 'ornamental_bush') {
+          const bushR = 1.2 * veg.scale.width;
+          return (
+            <group
+              key={veg.id}
+              position={[veg.positionFt.x, veg.positionFt.y, veg.positionFt.z]}
+              rotation={[0, (veg.rotationDeg * Math.PI) / 180, 0]}
+            >
+              <Sphere args={[bushR, 8, 8]} position={[0, bushR * 0.85, 0]} castShadow>
+                <meshStandardMaterial color={veg.color || '#166534'} roughness={0.85} />
+              </Sphere>
+              {veg.type === 'flowering_shrub' && (
+                <Sphere args={[0.3, 6, 6]} position={[bushR * 0.4, bushR * 1.3, bushR * 0.2]}>
+                  <meshStandardMaterial color={veg.flowerColor || '#ec4899'} roughness={0.5} />
+                </Sphere>
+              )}
+            </group>
+          );
+        }
         // Shade Canopy Tree
         return (
           <group
@@ -1626,6 +2379,55 @@ function SiteLandscaping3D({
   );
 }
 
+// ── 3D Floor Elevation Datum Marker Badge ─────────────────────────────────────
+function FloorElevationMarker3D({
+  levelIndex,
+  levelName,
+  elevationFt,
+  minX,
+  minZ,
+}: {
+  levelIndex: number;
+  levelName: string;
+  elevationFt: number;
+  minX: number;
+  minZ: number;
+}) {
+  return (
+    <group position={[minX - 3.2, 0.4, minZ]}>
+      <Box args={[2.8, 0.04, 0.04]} position={[1.4, 0, 0]}>
+        <meshBasicMaterial color="#38bdf8" />
+      </Box>
+      <Html distanceFactor={34} center style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: 'rgba(15, 23, 42, 0.92)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(56, 189, 248, 0.5)',
+            borderRadius: '4px',
+            padding: '2px 8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 700, color: '#38bdf8', fontFamily: "'JetBrains Mono', monospace" }}>
+            L0{levelIndex + 1}
+          </span>
+          <span style={{ fontSize: '10px', color: '#f8fafc', fontWeight: 600 }}>
+            {levelName}
+          </span>
+          <span style={{ fontSize: '9px', color: '#cbd5e1', fontFamily: "'JetBrains Mono', monospace" }}>
+            +{elevationFt.toFixed(1)}'
+          </span>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 // ── Inner Building 3D Scene (rendered inside Canvas to safely use R3F hooks) ──
 interface BuildingSceneProps {
   levels: Generated3DBuilding['levels'];
@@ -1636,6 +2438,8 @@ interface BuildingSceneProps {
   isCutaway: boolean;
   selectedFurnitureId: string | null;
   onSelectFurniture?: (id: string | null) => void;
+  selectedRoomName?: string;
+  onSelectRoom?: (name: string | null) => void;
   timeOfDay: TimeOfDay;
   qualityTier: 'high' | 'med' | 'low';
   entryDir: string;
@@ -1648,6 +2452,14 @@ interface BuildingSceneProps {
   explodedGap?: number;
   isolateGhostMode?: boolean;
   isTurntableActive?: boolean;
+  showWalls?: boolean;
+  showFurniture?: boolean;
+  showOpenings?: boolean;
+  showStructure?: boolean;
+  showRoof?: boolean;
+  showElevations?: boolean;
+  materialFinishOverride?: string | null;
+  walkthroughRoom?: GeneratedRoom3D | null;
 }
 
 function BuildingScene({
@@ -1659,6 +2471,8 @@ function BuildingScene({
   isCutaway,
   selectedFurnitureId,
   onSelectFurniture,
+  selectedRoomName,
+  onSelectRoom,
   timeOfDay,
   qualityTier,
   entryDir,
@@ -1671,7 +2485,17 @@ function BuildingScene({
   explodedGap = 14.0,
   isolateGhostMode = true,
   isTurntableActive = false,
+  showWalls = true,
+  showFurniture = true,
+  showOpenings = true,
+  showStructure = true,
+  showRoof = true,
+  showElevations = true,
+  materialFinishOverride = null,
+  walkthroughRoom = null,
 }: BuildingSceneProps) {
+  const numFloors = levels.length;
+
   // Lighting configuration derived from current framing and environment
   const lightingConfig = useMemo(() => {
     return getArchitecturalLightingConfig(
@@ -1694,6 +2518,18 @@ function BuildingScene({
         framing={framing}
         resetTrigger={resetTrigger}
         isTurntableActive={isTurntableActive}
+        isWalkthrough={vizMode === 'walkthrough'}
+        walkthroughBounds={
+          walkthroughRoom
+            ? {
+                minX: walkthroughRoom.bboxFt.x,
+                maxX: walkthroughRoom.bboxFt.x + walkthroughRoom.bboxFt.width,
+                minZ: walkthroughRoom.bboxFt.y,
+                maxZ: walkthroughRoom.bboxFt.y + walkthroughRoom.bboxFt.height,
+              }
+            : { minX: bounds.minX, maxX: bounds.maxX, minZ: bounds.minZ, maxZ: bounds.maxZ }
+        }
+        activeFloorElevation={levels[localActiveFloor]?.elevationFt || 0}
       />
 
       {/* Sun & Sky Multi-Light Rig */}
@@ -1764,23 +2600,25 @@ function BuildingScene({
             maxZ={bounds.maxZ}
           >
             <group>
-              {/* Warm Interior Architectural Accent Lights */}
+              {/* Warm Interior Architectural Accent Lights with mode-appropriate elevations */}
               {lvl.rooms.map((room) => {
                 if (room.isVoid || room.isSpecialtyTerrace || room.isStairwell) return null;
+                const lightY = isCutaway ? 3.0 : 7.2;
+                const isNight = timeOfDay === 'night';
                 return (
                   <pointLight
                     key={`room_light_${room.id}`}
-                    position={[room.centerFt.x, 7.2, room.centerFt.z]}
-                    intensity={timeOfDay === 'night' ? 20 : timeOfDay === 'sunset' ? 14 : 7}
-                    distance={Math.max(room.bboxFt.width, room.bboxFt.height) * 1.6}
-                    color="#fff3d6"
-                    decay={2}
+                    position={[room.centerFt.x, lightY, room.centerFt.z]}
+                    intensity={isNight ? 26 : timeOfDay === 'sunset' ? 16 : 8}
+                    distance={Math.max(room.bboxFt.width, room.bboxFt.height) * 1.8}
+                    color={isNight ? '#fed7aa' : '#fff3d6'}
+                    decay={1.8}
                   />
                 );
               })}
 
               {/* Plinth Foundation at Base (Grounds Building on Grade) */}
-              {fIdx === 0 && (
+              {showStructure && fIdx === 0 && (
                 <group position={[bounds.centerX, -0.32, bounds.centerZ]}>
                   <Box
                     args={[bounds.width + 1.2, 0.6, bounds.depth + 1.2]}
@@ -1811,7 +2649,15 @@ function BuildingScene({
                         width: room.bboxFt.width,
                         height: room.bboxFt.height,
                         name: room.name,
+                        isShaft: room.isShaft,
+                        isInteriorShaft: room.isInteriorShaft,
+                        isExteriorShaft: room.isExteriorShaft,
                       }}
+                      levelIndex={fIdx}
+                      numFloors={numFloors}
+                      wallHeight={lvl.heightFt}
+                      isCutaway={isCutaway}
+                      clipProps={clipProps}
                     />
                   );
                 }
@@ -1824,8 +2670,9 @@ function BuildingScene({
                   if (rn.includes('sundeck')) return <Sundeck3D key={room.id} room={room} />;
                 }
 
+                const roomMatKey = (materialFinishOverride as any) || room.material.materialKey || 'hardwood_oak';
                 const roomPBRMaterial = architecturalMaterials.getMaterial(
-                  room.material.materialKey || 'hardwood_oak',
+                  roomMatKey,
                   { width: room.bboxFt.width, height: room.bboxFt.height }
                 );
 
@@ -1843,30 +2690,43 @@ function BuildingScene({
                       position={[room.centerFt.x, -0.02, landingCenterZ]}
                       rotation={[-Math.PI / 2, 0, 0]}
                       material={roomPBRMaterial}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectRoom?.(room.name);
+                      }}
                     >
                       <planeGeometry args={[room.bboxFt.width, landingDepth]} />
                     </mesh>
+
+                    {/* Room Selection Visual Indicator */}
+                    {selectedRoomName === room.name && (
+                      <group position={[room.centerFt.x, 0.04, landingCenterZ]}>
+                        <Box args={[room.bboxFt.width + 0.1, 0.08, landingDepth + 0.1]}>
+                          <meshBasicMaterial color="#0284c7" wireframe wireframeLinewidth={2} transparent opacity={0.85} />
+                        </Box>
+                      </group>
+                    )}
 
                     {/* Architectural Room Skirting / Baseboards along walls */}
                     {!room.isVoid && (
                       <group position={[0, 0.16, 0]}>
                         <Box args={[room.bboxFt.width - 0.2, 0.32, 0.04]} position={[room.centerFt.x, 0, room.bboxFt.y + 0.02]}>
-                          <meshStandardMaterial color="#cbd5e1" roughness={0.4} {...clipProps} />
+                          <meshStandardMaterial color={timeOfDay === 'night' ? '#1e293b' : '#cbd5e1'} roughness={0.4} {...clipProps} />
                         </Box>
                         <Box args={[room.bboxFt.width - 0.2, 0.32, 0.04]} position={[room.centerFt.x, 0, room.bboxFt.y + landingDepth - 0.02]}>
-                          <meshStandardMaterial color="#cbd5e1" roughness={0.4} {...clipProps} />
+                          <meshStandardMaterial color={timeOfDay === 'night' ? '#1e293b' : '#cbd5e1'} roughness={0.4} {...clipProps} />
                         </Box>
                         <Box args={[0.04, 0.32, landingDepth - 0.2]} position={[room.bboxFt.x + 0.02, 0, landingCenterZ]}>
-                          <meshStandardMaterial color="#cbd5e1" roughness={0.4} {...clipProps} />
+                          <meshStandardMaterial color={timeOfDay === 'night' ? '#1e293b' : '#cbd5e1'} roughness={0.4} {...clipProps} />
                         </Box>
                         <Box args={[0.04, 0.32, landingDepth - 0.2]} position={[room.bboxFt.x + room.bboxFt.width - 0.02, 0, landingCenterZ]}>
-                          <meshStandardMaterial color="#cbd5e1" roughness={0.4} {...clipProps} />
+                          <meshStandardMaterial color={timeOfDay === 'night' ? '#1e293b' : '#cbd5e1'} roughness={0.4} {...clipProps} />
                         </Box>
                       </group>
                     )}
 
                     {/* Structural Concrete Slab with Visible Dark Edge & Smooth Ceiling Underside */}
-                    {fIdx > 0 && (
+                    {showStructure && fIdx > 0 && showRoof && (
                       <group>
                         <Box
                           castShadow
@@ -1958,7 +2818,7 @@ function BuildingScene({
               })}
 
               {/* B. Wall Junction & Corner Miter Columns (Seamless Corners) */}
-              {lvl.wallJunctions?.map((junction) => (
+              {showWalls && lvl.wallJunctions?.map((junction) => (
                 <WallJunction3D
                   key={junction.id}
                   junction={junction}
@@ -1966,11 +2826,12 @@ function BuildingScene({
                   isXRay={vizMode === 'xray'}
                   xrayOpacity={xrayOpacity}
                   sectionPlane={sectionPlane}
+                  timeOfDay={timeOfDay}
                 />
               ))}
 
               {/* C. Canonical Walls with Physical Openings */}
-              {lvl.walls.map((wall) => (
+              {showWalls && lvl.walls.map((wall) => (
                 <CanonicalWall3D
                   key={wall.id}
                   wall={wall}
@@ -1978,16 +2839,40 @@ function BuildingScene({
                   isXRay={vizMode === 'xray'}
                   xrayOpacity={xrayOpacity}
                   sectionPlane={sectionPlane}
+                  showOpenings={showOpenings}
+                  timeOfDay={timeOfDay}
                 />
               ))}
 
-              {/* C. Inter-Floor Staircases */}
+              {/* D. Inter-Floor Staircases */}
               {lvl.stairs.map((stair) => (
                 <Stairs3D key={stair.id} stair={stair} clippingPlane={sectionPlane} />
               ))}
 
-              {/* D. Placed Furniture Items */}
-              {lvl.furniture.map((item) => {
+              {/* E. Vertical Core Lifts & Elevators */}
+              {lvl.lifts?.map((lift) => (
+                <Lift3D
+                  key={lift.id}
+                  lift={lift}
+                  levelIndex={fIdx}
+                  isCutaway={isCutaway}
+                  clipProps={clipProps}
+                />
+              ))}
+
+              {/* F. 3D Elevation Datum Marker Badge */}
+              {showElevations && (
+                <FloorElevationMarker3D
+                  levelIndex={fIdx}
+                  levelName={lvl.name}
+                  elevationFt={lvl.elevationFt}
+                  minX={bounds.minX}
+                  minZ={bounds.minZ}
+                />
+              )}
+
+              {/* G. Placed Furniture Items */}
+              {showFurniture && lvl.furniture.map((item) => {
                 const isSelected = selectedFurnitureId === item.id;
                 return (
                   <group
@@ -2002,7 +2887,11 @@ function BuildingScene({
                     {/* Selection Highlight Cage */}
                     {isSelected && (
                       <group
-                        position={[item.positionFt.x, item.positionFt.y + item.dimensionsFt.height / 2, item.positionFt.z]}
+                        position={[
+                          item.positionFt.x + item.dimensionsFt.width / 2,
+                          item.positionFt.y + item.dimensionsFt.height / 2,
+                          item.positionFt.z + item.dimensionsFt.depth / 2
+                        ]}
                         rotation={[0, THREE.MathUtils.degToRad(-item.rotationDeg), 0]}
                       >
                         <Box args={[item.dimensionsFt.width + 0.2, item.dimensionsFt.height + 0.2, item.dimensionsFt.depth + 0.2]}>
@@ -2069,15 +2958,43 @@ export default function FloorPlan3D({
   selectedFurnitureId = null,
   onSelectFurniture,
   onRegisterThreeBundle,
+  selectedRoomName: externalSelectedRoomName = null,
+  onSelectRoom,
 }: FloorPlan3DProps) {
   // Stacking & View State
   const [viewMode, setViewMode] = useState<'all' | 'single' | 'exploded' | 'active'>('all');
   const [wallMode, setWallMode] = useState<'4.5ft' | '10ft' | 'full'>('4.5ft');
-  const [cameraPreset, setCameraPreset] = useState<'perspective' | 'isometric' | 'topdown' | 'front' | 'side' | 'exterior'>('perspective');
+  const [cameraPreset, setCameraPreset] = useState<'perspective' | 'isometric' | 'topdown' | 'front' | 'side' | 'exterior' | 'interior'>('perspective');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('noon');
   const [qualityTier, setQualityTier] = useState<'high' | 'med' | 'low'>('high');
   const [localActiveFloor, setLocalActiveFloor] = useState<number>(activeFloorIndex);
   const [resetTrigger, setResetTrigger] = useState<number>(0);
+
+  // Fine-Grained Element Visibility Controls
+  const [showWalls, setShowWalls] = useState<boolean>(true);
+  const [showFurniture, setShowFurniture] = useState<boolean>(true);
+  const [showOpenings, setShowOpenings] = useState<boolean>(true);
+  const [showStructure, setShowStructure] = useState<boolean>(true);
+  const [showRoof, setShowRoof] = useState<boolean>(true);
+  const [showElevations, setShowElevations] = useState<boolean>(true);
+  const [materialFinishOverride, setMaterialFinishOverride] = useState<string | null>(null);
+
+  // Selected Room & Focus Targets
+  const [selectedRoomName, setSelectedRoomName] = useState<string | null>(externalSelectedRoomName || null);
+  const [focusedTarget, setFocusedTarget] = useState<'building' | 'room' | 'furniture'>('building');
+
+  useEffect(() => {
+    if (externalSelectedRoomName !== undefined) {
+      setSelectedRoomName(externalSelectedRoomName);
+    }
+  }, [externalSelectedRoomName]);
+
+  // Clean up WebGL PBR materials and procedural canvas textures when leaving the 3D viewport
+  useEffect(() => {
+    return () => {
+      architecturalMaterials.dispose();
+    };
+  }, []);
 
   // Cinematic ArchViz 5-Mode System
   const [vizMode, setVizMode] = useState<'solid' | 'xray' | 'section' | 'walkthrough' | 'dollhouse'>('dollhouse');
@@ -2119,9 +3036,14 @@ export default function FloorPlan3D({
 
   // Landscaping & Site Engine State
   const [landscapingEnabled, setLandscapingEnabled] = useState<boolean>(true);
+  const [landscapeStyle, setLandscapeStyle] = useState<'modern_minimal' | 'tropical' | 'natural_prairie'>('modern_minimal');
+  const [greeneryDensity, setGreeneryDensity] = useState<'low' | 'medium' | 'lush'>('medium');
   const [showPool, setShowPool] = useState<boolean>(true);
   const [showBoundaryWalls, setShowBoundaryWalls] = useState<boolean>(true);
   const [showTrees, setShowTrees] = useState<boolean>(true);
+  const [showFrontGarden, setShowFrontGarden] = useState<boolean>(true);
+  const [showDriveway, setShowDriveway] = useState<boolean>(true);
+  const [showOutdoorLights, setShowOutdoorLights] = useState<boolean>(true);
 
   // Sync external activeFloorIndex
   useEffect(() => {
@@ -2198,16 +3120,23 @@ export default function FloorPlan3D({
   const landscaping: GeneratedSiteLandscaping3D = useMemo(() => {
     return generateSiteLandscaping(activeCanonicalDoc, bounds, {
       enabled: landscapingEnabled,
+      landscapeStyle,
+      greeneryDensity,
       showPool,
       showBoundaryWalls,
       showTrees,
+      showFrontGarden,
+      showDriveway,
+      showSteppingStones: true,
+      showOutdoorLights,
+      showGardenFurniture: true,
       showLawn: true,
       showPathways: true,
       showPatio: true,
       showDeck: true,
       showPoolLoungers: true,
     });
-  }, [activeCanonicalDoc, bounds, landscapingEnabled, showPool, showBoundaryWalls, showTrees]);
+  }, [activeCanonicalDoc, bounds, landscapingEnabled, landscapeStyle, greeneryDensity, showPool, showBoundaryWalls, showTrees, showFrontGarden, showDriveway, showOutdoorLights]);
 
   // Selected furniture item metadata for floating HUD
   const activeFurnitureItem = useMemo(() => {
@@ -2231,8 +3160,33 @@ export default function FloorPlan3D({
     }
   };
 
-  const handleFitView = () => {
+  const handleFitBuilding = () => {
+    setFocusedTarget('building');
     setResetTrigger(prev => prev + 1);
+  };
+
+  const handleResetCamera = () => {
+    setFocusedTarget('building');
+    setCameraPreset('perspective');
+    setViewMode('all');
+    setResetTrigger(prev => prev + 1);
+  };
+
+  const handleZoomToRoom = (targetName?: string) => {
+    const target = targetName || selectedRoomName || (activeFloorRooms[0]?.name ?? null);
+    if (target) {
+      setSelectedRoomName(target);
+      onSelectRoom?.(target);
+      setFocusedTarget('room');
+      setResetTrigger(prev => prev + 1);
+    }
+  };
+
+  const handleFocusFurniture = () => {
+    if (selectedFurnitureId) {
+      setFocusedTarget('furniture');
+      setResetTrigger(prev => prev + 1);
+    }
   };
 
   // Presentation Tour Steps
@@ -2351,6 +3305,33 @@ export default function FloorPlan3D({
     }
 
     const activeLevelElev = levels[localActiveFloor]?.elevationFt;
+
+    let focusRoomBounds: { x: number; y: number; width: number; height: number } | undefined = undefined;
+    if (focusedTarget === 'room' && selectedRoomName) {
+      const activeLvl = levels[localActiveFloor] || levels[0];
+      const matchRoom = activeLvl?.rooms.find(r => r.name === selectedRoomName);
+      if (matchRoom) {
+        focusRoomBounds = {
+          x: matchRoom.bboxFt.x,
+          y: matchRoom.bboxFt.y,
+          width: matchRoom.bboxFt.width,
+          height: matchRoom.bboxFt.height,
+        };
+      }
+    }
+
+    let focusItem: { positionFt: { x: number; y: number; z: number }; dimensionsFt: { width: number; depth: number; height: number } } | undefined = undefined;
+    if (focusedTarget === 'furniture' && selectedFurnitureId) {
+      const allFurniture = levels.flatMap(l => l.furniture);
+      const matchItem = allFurniture.find(f => f.id === selectedFurnitureId);
+      if (matchItem) {
+        focusItem = {
+          positionFt: matchItem.positionFt,
+          dimensionsFt: matchItem.dimensionsFt,
+        };
+      }
+    }
+
     return calculateCameraFraming({
       bounds,
       plotBounds: landscaping.enabled ? landscaping.plotBoundsFt : undefined,
@@ -2360,6 +3341,8 @@ export default function FloorPlan3D({
       activeFloorElevation: activeLevelElev,
       numFloors: levels.length,
       preset: cameraPreset,
+      focusRoomBounds,
+      focusItem,
     });
   }, [
     bounds,
@@ -2371,6 +3354,9 @@ export default function FloorPlan3D({
     cameraPreset,
     vizMode,
     currentWalkthroughRoom,
+    focusedTarget,
+    selectedRoomName,
+    selectedFurnitureId,
   ]);
 
   return (
@@ -2559,6 +3545,7 @@ export default function FloorPlan3D({
           }}>
           <button
             id="btn-3d-mode-stacked"
+            data-testid="btn-floor-combined"
             onClick={() => setViewMode('all')}
             style={{
               display: 'flex',
@@ -2575,14 +3562,15 @@ export default function FloorPlan3D({
               fontFamily: "'JetBrains Mono', monospace",
               transition: 'all 0.15s ease',
             }}
-            title="Render all building floors stacked"
+            title="Render all building floors combined and stacked"
           >
             <Building2 size={12} />
-            <span>STACKED</span>
+            <span>COMBINED</span>
           </button>
 
           <button
             id="btn-3d-mode-single"
+            data-testid="btn-floor-isolate"
             onClick={() => setViewMode('single')}
             style={{
               display: 'flex',
@@ -2599,10 +3587,10 @@ export default function FloorPlan3D({
               fontFamily: "'JetBrains Mono', monospace",
               transition: 'all 0.15s ease',
             }}
-            title="Isolate and view only the selected single level"
+            title="Floor Isolation — Isolate and view only the active single level"
           >
             <Layers size={12} />
-            <span>SINGLE FLOOR</span>
+            <span>ISOLATE FLOOR</span>
           </button>
 
           {numFloors > 1 && (
@@ -2745,6 +3733,141 @@ export default function FloorPlan3D({
             gap: '2px',
           }}>
             <button
+              id="btn-camera-fit"
+              onClick={handleFitBuilding}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                fontSize: '0.72rem',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: focusedTarget === 'building' ? '#252622' : 'transparent',
+                color: focusedTarget === 'building' ? '#FAF8F2' : '#777970',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+              }}
+              title="Fit Building — Auto-frame entire building bounds at calibrated scale"
+            >
+              <Compass size={12} />
+              <span>FIT</span>
+            </button>
+            <button
+              id="btn-camera-reset"
+              onClick={handleResetCamera}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                fontSize: '0.72rem',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: 'transparent',
+                color: '#777970',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+              }}
+              title="Reset Camera — Return to default exterior perspective view"
+            >
+              <RotateCcw size={12} />
+              <span>RESET</span>
+            </button>
+            <button
+              id="btn-camera-zoom-room"
+              onClick={() => handleZoomToRoom()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                fontSize: '0.72rem',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: focusedTarget === 'room' ? '#0284c7' : 'transparent',
+                color: focusedTarget === 'room' ? '#FAF8F2' : '#777970',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+              }}
+              title={selectedRoomName ? `Zoom to Room: ${selectedRoomName}` : "Zoom to Selected Room"}
+            >
+              <ZoomIn size={12} />
+              <span>{selectedRoomName ? `ZOOM: ${selectedRoomName.slice(0, 10)}` : 'ZOOM ROOM'}</span>
+            </button>
+            <button
+              id="btn-camera-focus-item"
+              onClick={handleFocusFurniture}
+              disabled={!selectedFurnitureId}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                fontSize: '0.72rem',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: selectedFurnitureId ? 'pointer' : 'not-allowed',
+                background: focusedTarget === 'furniture' ? '#0ea5e9' : 'transparent',
+                color: focusedTarget === 'furniture' ? '#ffffff' : (selectedFurnitureId ? '#777970' : '#474943'),
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+                opacity: selectedFurnitureId ? 1 : 0.5,
+              }}
+              title={selectedFurnitureId ? "Focus on Selected Furniture" : "Select furniture in 2D/3D to focus"}
+            >
+              <Focus size={12} />
+              <span>FOCUS ITEM</span>
+            </button>
+            <button
+              id="btn-camera-top"
+              onClick={() => setCameraPreset('topdown')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                fontSize: '0.72rem',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: cameraPreset === 'topdown' ? '#252622' : 'transparent',
+                color: cameraPreset === 'topdown' ? '#FAF8F2' : '#777970',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+              }}
+              title="Top View — Orthographic plan projection"
+            >
+              <Layers size={12} />
+              <span>TOP</span>
+            </button>
+            <button
+              id="btn-camera-iso"
+              onClick={() => setCameraPreset('isometric')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                fontSize: '0.72rem',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: cameraPreset === 'isometric' ? '#252622' : 'transparent',
+                color: cameraPreset === 'isometric' ? '#FAF8F2' : '#777970',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+              }}
+              title="Isometric View — Axonometric 45° angle"
+            >
+              <BoxIcon size={12} />
+              <span>ISO</span>
+            </button>
+            <button
+              id="btn-camera-perspective"
               onClick={() => setCameraPreset('perspective')}
               style={{
                 display: 'flex',
@@ -2766,48 +3889,7 @@ export default function FloorPlan3D({
               <span>DOLLHOUSE</span>
             </button>
             <button
-              onClick={() => setCameraPreset('isometric')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '5px 8px',
-                fontSize: '0.72rem',
-                borderRadius: '4px',
-                border: 'none',
-                cursor: 'pointer',
-                background: cameraPreset === 'isometric' ? '#252622' : 'transparent',
-                color: cameraPreset === 'isometric' ? '#FAF8F2' : '#777970',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontWeight: 600,
-              }}
-              title="Axonometric 45-degree Camera"
-            >
-              <BoxIcon size={12} />
-              <span>AXO</span>
-            </button>
-            <button
-              onClick={() => setCameraPreset('topdown')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '5px 8px',
-                fontSize: '0.72rem',
-                borderRadius: '4px',
-                border: 'none',
-                cursor: 'pointer',
-                background: cameraPreset === 'topdown' ? '#252622' : 'transparent',
-                color: cameraPreset === 'topdown' ? '#FAF8F2' : '#777970',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontWeight: 600,
-              }}
-              title="Top-Down Plan View"
-            >
-              <Layers size={12} />
-              <span>TOP-DOWN</span>
-            </button>
-            <button
+              id="btn-camera-front"
               onClick={() => setCameraPreset('front')}
               style={{
                 display: 'flex',
@@ -2829,6 +3911,7 @@ export default function FloorPlan3D({
               <span>FRONT</span>
             </button>
             <button
+              id="btn-camera-side"
               onClick={() => setCameraPreset('side')}
               style={{
                 display: 'flex',
@@ -2850,7 +3933,8 @@ export default function FloorPlan3D({
               <span>SIDE</span>
             </button>
             <button
-              onClick={handleFitView}
+              id="btn-camera-interior"
+              onClick={() => setCameraPreset('interior')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2860,15 +3944,15 @@ export default function FloorPlan3D({
                 borderRadius: '4px',
                 border: 'none',
                 cursor: 'pointer',
-                background: 'transparent',
-                color: '#777970',
+                background: cameraPreset === 'interior' ? '#252622' : 'transparent',
+                color: cameraPreset === 'interior' ? '#FAF8F2' : '#777970',
                 fontFamily: "'JetBrains Mono', monospace",
                 fontWeight: 600,
               }}
-              title="Fit Model to Viewport"
+              title="Interior Eye-Level View (5.5 ft)"
             >
-              <Compass size={12} />
-              <span>FIT</span>
+              <Home size={12} />
+              <span>INTERIOR</span>
             </button>
             <button
               id="btn-camera-turntable"
@@ -2991,6 +4075,203 @@ export default function FloorPlan3D({
             </button>
           </div>
 
+          {/* Element Visibility Toggles */}
+          <div
+            id="element-visibility-dock"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(24, 24, 27, 0.94)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid #3f3f46',
+              borderRadius: '6px',
+              padding: '2px',
+              gap: '2px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+            }}
+          >
+            <span style={{ fontSize: '0.62rem', color: '#71717a', padding: '0 4px', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+              VISIBILITY:
+            </span>
+            <button
+              id="btn-toggle-walls"
+              onClick={() => setShowWalls(w => !w)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '4px 6px',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: showWalls ? '#0ea5e9' : 'transparent',
+                color: showWalls ? '#ffffff' : '#71717a',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title="Toggle Walls Visibility"
+            >
+              <Layers size={10} />
+              <span>WALLS</span>
+            </button>
+            <button
+              id="btn-toggle-furniture"
+              onClick={() => setShowFurniture(f => !f)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '4px 6px',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: showFurniture ? '#0ea5e9' : 'transparent',
+                color: showFurniture ? '#ffffff' : '#71717a',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title="Toggle Furniture Visibility"
+            >
+              <BoxIcon size={10} />
+              <span>FURN</span>
+            </button>
+            <button
+              id="btn-toggle-openings"
+              onClick={() => setShowOpenings(o => !o)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '4px 6px',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: showOpenings ? '#0ea5e9' : 'transparent',
+                color: showOpenings ? '#ffffff' : '#71717a',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title="Toggle Doors & Windows Glazing"
+            >
+              <Eye size={10} />
+              <span>OPENINGS</span>
+            </button>
+            <button
+              id="btn-toggle-structure"
+              onClick={() => setShowStructure(s => !s)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '4px 6px',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: showStructure ? '#0ea5e9' : 'transparent',
+                color: showStructure ? '#ffffff' : '#71717a',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title="Toggle Structural Floor Slabs"
+            >
+              <Building2 size={10} />
+              <span>SLABS</span>
+            </button>
+            <button
+              id="btn-toggle-roof"
+              onClick={() => setShowRoof(r => !r)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '4px 6px',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: showRoof ? '#0ea5e9' : 'transparent',
+                color: showRoof ? '#ffffff' : '#71717a',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title="Toggle Roof Cutaway / Ceilings"
+            >
+              <Home size={10} />
+              <span>ROOF</span>
+            </button>
+            <button
+              id="btn-toggle-elevations"
+              onClick={() => setShowElevations(e => !e)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '4px 6px',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: showElevations ? '#0ea5e9' : 'transparent',
+                color: showElevations ? '#ffffff' : '#71717a',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title="Toggle 3D Floor Elevation HUD Datum Markers"
+            >
+              <Tag size={10} />
+              <span>ELEV</span>
+            </button>
+          </div>
+
+          {/* Material Finishes Override Selector */}
+          <div
+            id="material-finishes-dock"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(24, 24, 27, 0.94)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid #3f3f46',
+              borderRadius: '6px',
+              padding: '2px',
+              gap: '2px',
+            }}
+          >
+            <span style={{ fontSize: '0.62rem', color: '#71717a', padding: '0 4px', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+              FINISH:
+            </span>
+            {[
+              { key: null, label: 'AUTO' },
+              { key: 'hardwood_oak', label: 'OAK' },
+              { key: 'calacatta_marble', label: 'MARBLE' },
+              { key: 'porcelain_tile', label: 'TILE' },
+              { key: 'honed_concrete', label: 'CONCRETE' },
+            ].map(f => (
+              <button
+                key={f.label}
+                id={`btn-finish-${f.label.toLowerCase()}`}
+                onClick={() => setMaterialFinishOverride(f.key)}
+                style={{
+                  padding: '3px 6px',
+                  fontSize: '0.64rem',
+                  fontWeight: 600,
+                  borderRadius: '3px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: materialFinishOverride === f.key ? '#38bdf8' : 'transparent',
+                  color: materialFinishOverride === f.key ? '#09090b' : '#a1a1aa',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
           {/* Landscaping Master & Feature Toggles */}
           <button
             onClick={() => setLandscapingEnabled(prev => !prev)}
@@ -3025,6 +4306,121 @@ export default function FloorPlan3D({
               padding: '2px',
               gap: '2px',
             }}>
+              {/* Landscape Style Preset Selector */}
+              <button
+                onClick={() => {
+                  setLandscapeStyle(curr =>
+                    curr === 'modern_minimal' ? 'tropical' : curr === 'tropical' ? 'natural_prairie' : 'modern_minimal'
+                  );
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '5px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: 'rgba(37, 38, 34, 0.06)',
+                  color: '#252622',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+                title="Cycle Landscape Aesthetic: Modern Minimal -> Tropical -> Natural Prairie"
+              >
+                <span>{landscapeStyle === 'modern_minimal' ? 'MODERN' : landscapeStyle === 'tropical' ? 'TROPICAL' : 'NATURAL'}</span>
+              </button>
+
+              {/* Greenery Density Toggle */}
+              <button
+                onClick={() => {
+                  setGreeneryDensity(curr =>
+                    curr === 'low' ? 'medium' : curr === 'medium' ? 'lush' : 'low'
+                  );
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '5px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: 'rgba(37, 38, 34, 0.06)',
+                  color: '#252622',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+                title="Cycle Greenery Density: Low -> Medium -> Lush"
+              >
+                <span>{greeneryDensity.toUpperCase()}</span>
+              </button>
+
+              <button
+                onClick={() => setShowFrontGarden(fg => !fg)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '5px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: showFrontGarden ? '#15803d' : 'transparent',
+                  color: showFrontGarden ? '#ffffff' : '#777970',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+                title="Toggle Front Garden Landscaping"
+              >
+                <span>GARDEN</span>
+              </button>
+
+              <button
+                onClick={() => setShowDriveway(d => !d)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '5px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: showDriveway ? '#475569' : 'transparent',
+                  color: showDriveway ? '#ffffff' : '#777970',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+                title="Toggle Vehicular Driveway Approach"
+              >
+                <span>DRIVEWAY</span>
+              </button>
+
+              <button
+                onClick={() => setShowOutdoorLights(l => !l)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '5px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: showOutdoorLights ? '#d97706' : 'transparent',
+                  color: showOutdoorLights ? '#ffffff' : '#777970',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+                title="Toggle Outdoor Bollard Landscape Lights"
+              >
+                <span>LIGHTS</span>
+              </button>
+
               <button
                 onClick={() => setShowPool(p => !p)}
                 style={{
@@ -3046,6 +4442,7 @@ export default function FloorPlan3D({
                 <Waves size={11} />
                 <span>POOL</span>
               </button>
+
               <button
                 onClick={() => setShowBoundaryWalls(w => !w)}
                 style={{
@@ -3066,6 +4463,7 @@ export default function FloorPlan3D({
               >
                 <span>WALLS</span>
               </button>
+
               <button
                 onClick={() => setShowTrees(t => !t)}
                 style={{
@@ -3760,6 +5158,8 @@ export default function FloorPlan3D({
               isCutaway={isCutaway}
               selectedFurnitureId={selectedFurnitureId}
               onSelectFurniture={onSelectFurniture}
+              selectedRoomName={selectedRoomName ?? undefined}
+              onSelectRoom={onSelectRoom}
               timeOfDay={timeOfDay}
               qualityTier={qualityTier}
               entryDir={entryDir}
@@ -3772,6 +5172,14 @@ export default function FloorPlan3D({
               explodedGap={explodedGap}
               isolateGhostMode={isolateGhostMode}
               isTurntableActive={isTurntableActive}
+              showWalls={showWalls}
+              showFurniture={showFurniture}
+              showOpenings={showOpenings}
+              showStructure={showStructure}
+              showRoof={showRoof}
+              showElevations={showElevations}
+              materialFinishOverride={materialFinishOverride}
+              walkthroughRoom={currentWalkthroughRoom}
             />
           </React.Suspense>
         </Canvas>

@@ -83,9 +83,13 @@ export interface GeneratedRoom3D {
   name: string;
   roomType: string;
   isVoid: boolean;
+  isShaft?: boolean;
+  isInteriorShaft?: boolean;
+  isExteriorShaft?: boolean;
   isBalcony: boolean;
   isSpecialtyTerrace: boolean;
   isStairwell: boolean;
+  isLift?: boolean;
   polygonFt: Point2D[];
   bboxFt: { x: number; y: number; width: number; height: number };
   areaSqFt: number;
@@ -121,6 +125,18 @@ export interface GeneratedStair3D {
   flightType: 'straight' | 'u_shape' | 'l_shape';
 }
 
+export interface GeneratedLift3D {
+  id: string;
+  name: string;
+  boundsFt: { x: number; z: number; width: number; depth: number };
+  cabinPositionFt: { x: number; y: number; z: number };
+  cabinDimensionsFt: { width: number; depth: number; height: number };
+  travelHeightFt: number;
+  totalFloorsServed: number;
+  hasOverrun: boolean;
+  landingDoorFt: { width: number; height: number };
+}
+
 export interface Generated3DLevel {
   levelId: string;
   levelIndex: number;
@@ -135,6 +151,7 @@ export interface Generated3DLevel {
   rooms: GeneratedRoom3D[];
   furniture: GeneratedFurniture3D[];
   stairs: GeneratedStair3D[];
+  lifts?: GeneratedLift3D[];
 }
 
 export interface Generated3DBuilding {
@@ -183,7 +200,12 @@ export function getRoomMaterialConfig(name: string): {
   const n = name.toLowerCase();
   const matKey = resolveRoomFloorMaterialKey(name);
 
-  if (n.includes('void')) return { floorColor: '#000000', wallColor: '#ffffff', floorRoughness: 0.1, wallRoughness: 0.1, materialKey: matKey };
+  if (n.includes('void') || n.includes('shaft') || n.includes('duct') || n.includes('chase')) {
+    return { floorColor: '#1e293b', wallColor: '#64748b', floorRoughness: 0.9, wallRoughness: 0.9, materialKey: matKey };
+  }
+  if (n.includes('lift') || n.includes('elevator')) {
+    return { floorColor: '#334155', wallColor: '#94a3b8', floorRoughness: 0.35, wallRoughness: 0.35, materialKey: 'honed_concrete' };
+  }
   if (n.includes('garden')) return { floorColor: '#2f6824', wallColor: '#f8fafc', floorRoughness: 0.94, wallRoughness: 0.85, materialKey: 'garden_turf' };
   if (n.includes('gazebo')) return { floorColor: '#9e6234', wallColor: '#f8fafc', floorRoughness: 0.55, wallRoughness: 0.85, materialKey: 'teak_decking' };
   if (n.includes('sundeck') || n.includes('pool')) return { floorColor: '#9e6234', wallColor: '#f8fafc', floorRoughness: 0.55, wallRoughness: 0.85, materialKey: 'teak_decking' };
@@ -450,7 +472,91 @@ export function generate3DLevel(
     areaSqFt = Math.abs(areaSqFt) / 2;
 
     const rNameLower = (r.name || '').toLowerCase();
-    const isVoid = rNameLower.includes('void') || r.roomType === 'duplex_void';
+    const rTypeLower = (r.roomType || '').toLowerCase();
+    const isShaftByName =
+      rNameLower.includes('shaft') ||
+      rNameLower.includes('duct') ||
+      rNameLower.includes('mep') ||
+      rNameLower.includes('lightwell') ||
+      rNameLower.includes('ventilation') ||
+      rNameLower.includes('chase') ||
+      rTypeLower.includes('shaft') ||
+      rTypeLower.includes('lightwell') ||
+      rTypeLower.includes('duct') ||
+      rTypeLower.includes('chase') ||
+      rTypeLower.includes('mep');
+
+    // Check if any other level in the building has a vertically continuous shaft at this footprint
+    let isShaftByVerticalContinuity = false;
+    let verticalContinuityExterior = false;
+    const safeAllLevels = allLevels || [];
+    for (let lIdx = 0; lIdx < safeAllLevels.length; lIdx++) {
+      if (lIdx === levelIndex) continue;
+      const otherLvl = safeAllLevels[lIdx];
+      for (const otherR of otherLvl.rooms || []) {
+        const oName = (otherR.name || '').toLowerCase();
+        const oType = (otherR.roomType || '').toLowerCase();
+        const isOtherShaft =
+          oName.includes('shaft') || oName.includes('duct') || oName.includes('mep') ||
+          oName.includes('lightwell') || oName.includes('ventilation') || oName.includes('chase') ||
+          oType.includes('shaft') || oType.includes('lightwell') || oType.includes('duct') || oType.includes('chase');
+        if (isOtherShaft) {
+          const otherNodes = (otherR.boundaryNodeIds || []).map(id => otherLvl.nodes?.find(n => n.id === id)).filter(Boolean);
+          if (otherNodes.length >= 3) {
+            const oxs = otherNodes.map(n => n!.x * METRES_TO_FEET);
+            const oys = otherNodes.map(n => n!.y * METRES_TO_FEET);
+            const ominX = Math.min(...oxs), omaxX = Math.max(...oxs);
+            const ominY = Math.min(...oys), omaxY = Math.max(...oys);
+            const overlapX = Math.max(0, Math.min(maxX, omaxX) - Math.max(minX, ominX));
+            const overlapY = Math.max(0, Math.min(maxY, omaxY) - Math.max(minY, ominY));
+            const overlapArea = overlapX * overlapY;
+            if (overlapArea >= 0.7 * Math.min(wFt * hFt, Math.max(1, (omaxX - ominX) * (omaxY - ominY)))) {
+              isShaftByVerticalContinuity = true;
+              if (oName.includes('ext') || oName.includes('lightwell') || oType.includes('ext') || oType.includes('lightwell')) {
+                verticalContinuityExterior = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const isShaft = isShaftByName || isShaftByVerticalContinuity;
+
+    // Determine if this shaft touches an exterior envelope wall
+    const incidentWalls = (level.walls || []).filter(w => {
+      const i1 = r.boundaryNodeIds.indexOf(w.startNodeId);
+      const i2 = r.boundaryNodeIds.indexOf(w.endNodeId);
+      return i1 !== -1 && i2 !== -1;
+    });
+    const touchesExterior = incidentWalls.some(w => w.kind === 'exterior');
+    const isExplicitExt =
+      rNameLower.includes('ext') ||
+      rNameLower.includes('lightwell') ||
+      rNameLower.includes('courtyard') ||
+      rTypeLower.includes('ext') ||
+      rTypeLower.includes('lightwell') ||
+      verticalContinuityExterior;
+    const isExplicitInt =
+      rNameLower.includes('int') ||
+      rNameLower.includes('mep') ||
+      rNameLower.includes('duct') ||
+      rNameLower.includes('plumb') ||
+      rNameLower.includes('chase') ||
+      rTypeLower.includes('int') ||
+      rTypeLower.includes('mep') ||
+      rTypeLower.includes('duct');
+
+    const isExteriorShaft = isShaft && (isExplicitExt || (touchesExterior && !isExplicitInt));
+    const isInteriorShaft = isShaft && !isExteriorShaft;
+
+    const isLift =
+      rNameLower.includes('lift') ||
+      rNameLower.includes('elevator') ||
+      rTypeLower.includes('lift') ||
+      rTypeLower.includes('elevator');
+
+    const isVoid = rNameLower.includes('void') || r.roomType === 'duplex_void' || isShaft || isLift;
     const isBalcony = rNameLower.includes('balcony') || (rNameLower.includes('terrace') && !rNameLower.includes('landing'));
     const isStairwell = rNameLower.includes('stair') || (r.roomType || '').includes('stair');
     const isSpecialtyTerrace =
@@ -464,9 +570,13 @@ export function generate3DLevel(
       name: r.name || 'Room',
       roomType: r.roomType || 'room',
       isVoid,
+      isShaft,
+      isInteriorShaft,
+      isExteriorShaft,
       isBalcony,
       isSpecialtyTerrace,
       isStairwell,
+      isLift,
       polygonFt,
       bboxFt: { x: minX, y: minY, width: wFt, height: hFt },
       areaSqFt: Math.round(areaSqFt),
@@ -579,6 +689,48 @@ export function generate3DLevel(
     }
   }
 
+  // ── 5. GENERATE LIFTS (Vertical Elevator Shaft Core & Cabins) ────────────────
+  const generatedLifts: GeneratedLift3D[] = [];
+  for (const r of generatedRooms) {
+    if (r.isLift) {
+      const cabinWidth = Math.max(3.0, r.bboxFt.width * 0.85);
+      const cabinDepth = Math.max(3.0, r.bboxFt.height * 0.85);
+      const cabinHeight = Math.min(8.0, defaultWallHeightFt - 1.0);
+      const totalFloors = allLevels ? allLevels.length : 1;
+      const totalTravelHeight = allLevels && allLevels.length > 1
+        ? (allLevels[allLevels.length - 1].elevation ?? (allLevels.length - 1) * 3.3) * METRES_TO_FEET
+        : defaultWallHeightFt;
+
+      generatedLifts.push({
+        id: `lift_${r.id}`,
+        name: r.name,
+        boundsFt: {
+          x: r.bboxFt.x,
+          z: r.bboxFt.y,
+          width: r.bboxFt.width,
+          depth: r.bboxFt.height,
+        },
+        cabinPositionFt: {
+          x: r.centerFt.x,
+          y: elevationFt,
+          z: r.centerFt.z,
+        },
+        cabinDimensionsFt: {
+          width: cabinWidth,
+          depth: cabinDepth,
+          height: cabinHeight,
+        },
+        travelHeightFt: totalTravelHeight,
+        totalFloorsServed: totalFloors,
+        hasOverrun: isTopLevel,
+        landingDoorFt: {
+          width: Math.min(3.5, cabinWidth * 0.75),
+          height: 7.0,
+        },
+      });
+    }
+  }
+
   return {
     levelId: level.id || `lvl_${levelIndex}`,
     levelIndex,
@@ -593,6 +745,7 @@ export function generate3DLevel(
     rooms: generatedRooms,
     furniture: generatedFurniture,
     stairs: generatedStairs,
+    lifts: generatedLifts,
   };
 }
 

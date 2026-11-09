@@ -1,3 +1,5 @@
+import { FURNITURE_PRICES_INR } from '../geometry/furnitureRegistry';
+
 export interface CatalogItemDimensions {
   width: number;  // feet (x dimension in 2D)
   depth: number;  // feet (y dimension in 2D)
@@ -21,7 +23,9 @@ export interface FurnitureCatalogItem {
   elevation?: number; // feet above floor (useful for sconces, chandeliers, wall cabinets)
   lightProperties?: CatalogLightProperties;
   description?: string;
+  unitCostINR?: number;
 }
+
 
 export const FURNITURE_CATEGORIES = [
   'All',
@@ -35,7 +39,8 @@ export const FURNITURE_CATEGORIES = [
 
 export type FurnitureCategory = typeof FURNITURE_CATEGORIES[number];
 
-export const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
+const RAW_FURNITURE_CATALOG: FurnitureCatalogItem[] = [
+
   // ── Living Room ─────────────────────────────────────────────────────────────
   {
     id: 'sofa_3_seater',
@@ -371,3 +376,9 @@ export const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     }
   }
 ];
+
+export const FURNITURE_CATALOG: FurnitureCatalogItem[] = RAW_FURNITURE_CATALOG.map(item => ({
+  ...item,
+  unitCostINR: FURNITURE_PRICES_INR[item.id],
+}));
+

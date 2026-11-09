@@ -30,6 +30,7 @@ users_collection: Any = None
 projects_collection: Any = None
 conversations_collection: Any = None
 messages_collection: Any = None
+identity_mappings_collection: Any = None
 
 if DATABASE_PROVIDER == "mongodb":
     MONGO_URI = os.getenv("MONGO_URI")
@@ -40,12 +41,16 @@ if DATABASE_PROVIDER == "mongodb":
         )
     try:
         from motor.motor_asyncio import AsyncIOMotorClient  # type: ignore
-        client = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where())
+        client_kwargs: dict[str, Any] = {}
+        if "mongodb+srv://" in MONGO_URI or "tls=true" in MONGO_URI.lower() or "ssl=true" in MONGO_URI.lower():
+            client_kwargs["tlsCAFile"] = certifi.where()
+        client = AsyncIOMotorClient(MONGO_URI, **client_kwargs)
         db = client.ai_architect
         users_collection = db.get_collection("users")
         projects_collection = db.get_collection("projects")
         conversations_collection = db.get_collection("design_conversations")
         messages_collection = db.get_collection("conversation_messages")
+        identity_mappings_collection = db.get_collection("user_identity_mappings")
     except ImportError as e:
         raise ImportError(
             "CRITICAL: motor is required when DATABASE_PROVIDER=mongodb. "

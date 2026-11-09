@@ -25,8 +25,6 @@ import type {
   Point2D,
 } from './types';
 
-const EPSILON = 0.001; // 1 millimetre numerical tolerance
-
 // ── Math Helpers ─────────────────────────────────────────────────────────────
 
 function getNode(level: Level, nodeId: string): WallNode | undefined {
@@ -48,21 +46,41 @@ function ccw(A: Point2D, B: Point2D, C: Point2D): boolean {
 
 /**
  * Returns true if line segment AB intersects line segment CD in 2D space.
- * Excludes shared endpoints (touching at a common node is permitted).
+ * Excludes shared endpoints and valid T-junction terminations (permitted in architectural graphs).
  */
 export function doSegmentsIntersect(
   A: Point2D,
   B: Point2D,
   C: Point2D,
-  D: Point2D
+  D: Point2D,
+  tolerance = 0.02
 ): boolean {
-  // Check if endpoints are identical
+  // Check if endpoints are identical or coincident within coordinate tolerance
   const dAC = Math.hypot(A.x - C.x, A.y - C.y);
   const dAD = Math.hypot(A.x - D.x, A.y - D.y);
   const dBC = Math.hypot(B.x - C.x, B.y - C.y);
   const dBD = Math.hypot(B.x - D.x, B.y - D.y);
-  if (dAC < EPSILON || dAD < EPSILON || dBC < EPSILON || dBD < EPSILON) {
-    return false; // permitted shared vertex
+  if (dAC < tolerance || dAD < tolerance || dBC < tolerance || dBD < tolerance) {
+    return false; // permitted shared vertex / corner
+  }
+
+  // Check if an endpoint touches or terminates on the other segment (T-junction)
+  function pointToSegDist(p: Point2D, s1: Point2D, s2: Point2D): number {
+    const dx = s2.x - s1.x;
+    const dy = s2.y - s1.y;
+    const lSq = dx * dx + dy * dy;
+    if (lSq < 1e-9) return Math.hypot(p.x - s1.x, p.y - s1.y);
+    const t = Math.max(0, Math.min(1, ((p.x - s1.x) * dx + (p.y - s1.y) * dy) / lSq));
+    return Math.hypot(p.x - (s1.x + t * dx), p.y - (s1.y + t * dy));
+  }
+
+  if (
+    pointToSegDist(C, A, B) < tolerance ||
+    pointToSegDist(D, A, B) < tolerance ||
+    pointToSegDist(A, C, D) < tolerance ||
+    pointToSegDist(B, C, D) < tolerance
+  ) {
+    return false; // permitted T-junction
   }
 
   return (
@@ -74,7 +92,7 @@ export function doSegmentsIntersect(
 /**
  * Returns true if a 2D point is inside a polygon using ray-casting.
  */
-export function isPointInPolygon(point: Point2D, polygon: Point2D[]): boolean {
+export function isPointInPolygon(point: Point2D, polygon: Point2D[], tolerance = 0.25): boolean {
   // Check if point lies on any boundary edge segment within tolerance
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const p1 = polygon[j];
@@ -87,7 +105,7 @@ export function isPointInPolygon(point: Point2D, polygon: Point2D[]): boolean {
       const projX = p1.x + t * dx;
       const projY = p1.y + t * dy;
       const dist = Math.hypot(point.x - projX, point.y - projY);
-      if (dist < 0.05) { // 5cm tolerance for boundary
+      if (dist < tolerance) {
         return true;
       }
     }
@@ -125,6 +143,8 @@ export function polygonArea(points: Point2D[]): number {
 export function validateWallNonCrossing(level: Level): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const walls = level.walls;
+  const WALL_ENDPOINT_TOL = 0.02; // 2cm endpoint coincidence
+  const WALL_TJ_TOL = 0.025;      // 2.5cm T-junction clearance
 
   for (let i = 0; i < walls.length; i++) {
     const w1 = walls[i];
@@ -132,20 +152,89 @@ export function validateWallNonCrossing(level: Level): ValidationIssue[] {
     const b1 = getNode(level, w1.endNodeId);
     if (!a1 || !b1) continue;
 
+    const dx1 = b1.x - a1.x;
+    const dy1 = b1.y - a1.y;
+    const len1Sq = dx1 * dx1 + dy1 * dy1;
+    const len1 = Math.sqrt(len1Sq);
+    if (len1 < 1e-4) continue;
+
     for (let j = i + 1; j < walls.length; j++) {
       const w2 = walls[j];
       const a2 = getNode(level, w2.startNodeId);
       const b2 = getNode(level, w2.endNodeId);
       if (!a2 || !b2) continue;
 
-      if (doSegmentsIntersect(a1, b1, a2, b2)) {
-        issues.push({
-          code: 'WALL_INTERSECTION',
-          severity: 'error',
-          message: `Wall ${w1.id} intersects Wall ${w2.id} without a shared node.`,
-          entityId: w1.id,
-          levelId: level.id,
-        });
+      const dx2 = b2.x - a2.x;
+      const dy2 = b2.y - a2.y;
+      const len2Sq = dx2 * dx2 + dy2 * dy2;
+      const len2 = Math.sqrt(len2Sq);
+      if (len2 < 1e-4) continue;
+
+      // 1. Shared Node / Endpoint Coincidence
+      const sharesNodeId =
+        w1.startNodeId === w2.startNodeId ||
+        w1.startNodeId === w2.endNodeId ||
+        w1.endNodeId === w2.startNodeId ||
+        w1.endNodeId === w2.endNodeId;
+
+      const dA1A2 = Math.hypot(a1.x - a2.x, a1.y - a2.y);
+      const dA1B2 = Math.hypot(a1.x - b2.x, a1.y - b2.y);
+      const dB1A2 = Math.hypot(b1.x - a2.x, b1.y - a2.y);
+      const dB1B2 = Math.hypot(b1.x - b2.x, b1.y - b2.y);
+      const sharesEndpointGeom = Math.min(dA1A2, dA1B2, dB1A2, dB1B2) < WALL_ENDPOINT_TOL;
+
+      if (sharesNodeId || sharesEndpointGeom) {
+        continue; // Permitted shared vertex
+      }
+
+      // 2. Collinear / Parallel walls do not cross at an interior point
+      const cross = dx1 * dy2 - dy1 * dx2;
+      if (Math.abs(cross) / (len1 * len2) < 0.02) {
+        continue; // Parallel or collinear along shared axis
+      }
+
+      // 3. T-junction Check (one endpoint touches or terminates on the other wall)
+      function ptSegDist(p: Point2D, s1: Point2D, s2: Point2D, lSq: number): { dist: number; t: number } {
+        const t = ((p.x - s1.x) * (s2.x - s1.x) + (p.y - s1.y) * (s2.y - s1.y)) / lSq;
+        const clampedT = Math.max(0, Math.min(1, t));
+        const px = s1.x + clampedT * (s2.x - s1.x);
+        const py = s1.y + clampedT * (s2.y - s1.y);
+        return { dist: Math.hypot(p.x - px, p.y - py), t };
+      }
+
+      const tjA2 = ptSegDist(a2, a1, b1, len1Sq);
+      const tjB2 = ptSegDist(b2, a1, b1, len1Sq);
+      const tjA1 = ptSegDist(a1, a2, b2, len2Sq);
+      const tjB1 = ptSegDist(b1, a2, b2, len2Sq);
+
+      if (
+        (tjA2.dist < WALL_TJ_TOL && tjA2.t >= -0.01 && tjA2.t <= 1.01) ||
+        (tjB2.dist < WALL_TJ_TOL && tjB2.t >= -0.01 && tjB2.t <= 1.01) ||
+        (tjA1.dist < WALL_TJ_TOL && tjA1.t >= -0.01 && tjA1.t <= 1.01) ||
+        (tjB1.dist < WALL_TJ_TOL && tjB1.t >= -0.01 && tjB1.t <= 1.01)
+      ) {
+        continue; // Permitted T-junction
+      }
+
+      // 4. True Interior Crossing Check
+      if (Math.abs(cross) > 1e-5) {
+        const qMinusP = { x: a2.x - a1.x, y: a2.y - a1.y };
+        const t = (qMinusP.x * dy2 - qMinusP.y * dx2) / cross;
+        const u = (qMinusP.x * dy1 - qMinusP.y * dx1) / cross;
+        const margin1 = WALL_ENDPOINT_TOL / len1;
+        const margin2 = WALL_ENDPOINT_TOL / len2;
+
+        if (t > margin1 && t < 1 - margin1 && u > margin2 && u < 1 - margin2) {
+          const ptX = Math.round((a1.x + t * dx1) * 1000) / 1000;
+          const ptY = Math.round((a1.y + t * dy1) * 1000) / 1000;
+          issues.push({
+            code: 'WALL_INTERSECTION',
+            severity: 'error',
+            message: `Wall ${w1.id} intersects Wall ${w2.id} at (${ptX.toFixed(2)}, ${ptY.toFixed(2)}m) without a shared node.`,
+            entityId: w1.id,
+            levelId: level.id,
+          });
+        }
       }
     }
   }
@@ -419,9 +508,11 @@ export function validatePlotContainment(doc: CanonicalBuildingDocument): Validat
   const plot = doc.site.plotPolygon;
   if (!plot || plot.length < 3) return issues;
 
+  const BOUNDARY_TOLERANCE = 0.25; // 250mm (~10in) architectural tolerance for wall thickness and float precision
+
   for (const level of doc.levels) {
     for (const node of level.nodes) {
-      if (!isPointInPolygon(node, plot)) {
+      if (!isPointInPolygon(node, plot, BOUNDARY_TOLERANCE)) {
         issues.push({
           code: 'PLOT_BOUNDARY_VIOLATION',
           severity: 'error',
@@ -584,13 +675,55 @@ export function validateFurnitureCommand(
         });
       }
 
-      // 3. Containment within site plot boundaries (allowing small tolerance for perimeter margins)
-      const plotWM = doc.site.width;
-      const plotLM = doc.site.length;
-      if (
-        item.x < -0.5 || item.x > plotWM + 0.5 ||
-        item.y < -0.5 || item.y > plotLM + 0.5
-      ) {
+      // 3. Containment within authoritative site plot boundaries (0.15m tolerance for perimeter wall thickness & precision)
+      const plotWM = doc.site.width || 0;
+      const plotLM = doc.site.length || 0;
+      const TOLERANCE = 0.30; // 300mm (~12in) architectural tolerance for exterior wall envelope thickness & float precision
+
+      // Validate item center and rotated corner footprint
+      const halfW = (item.width || 1) / 2;
+      const halfD = (item.depth || 1) / 2;
+      const rad = (((item.rotation || 0) % 360) * Math.PI) / 180;
+      const cos = Math.abs(Math.cos(rad));
+      const sin = Math.abs(Math.sin(rad));
+      const boundHalfX = halfW * cos + halfD * sin;
+      const boundHalfY = halfW * sin + halfD * cos;
+
+      const itemMinX = item.x - boundHalfX;
+      const itemMaxX = item.x + boundHalfX;
+      const itemMinY = item.y - boundHalfY;
+      const itemMaxY = item.y + boundHalfY;
+
+      let isOutOfBounds = false;
+      if (plotWM > 0 && plotLM > 0) {
+        if (
+          itemMinX < -TOLERANCE || itemMaxX > plotWM + TOLERANCE ||
+          itemMinY < -TOLERANCE || itemMaxY > plotLM + TOLERANCE
+        ) {
+          isOutOfBounds = true;
+        }
+      }
+
+      // If a polygonal plot is defined, also verify all 4 rotated footprint corners
+      if (!isOutOfBounds && doc.site.plotPolygon && doc.site.plotPolygon.length >= 3) {
+        const radExact = (((item.rotation || 0) % 360) * Math.PI) / 180;
+        const cCos = Math.cos(radExact);
+        const cSin = Math.sin(radExact);
+        const corners: Point2D[] = [
+          { x: item.x - halfW * cCos + halfD * cSin, y: item.y - halfW * cSin - halfD * cCos },
+          { x: item.x + halfW * cCos + halfD * cSin, y: item.y + halfW * cSin - halfD * cCos },
+          { x: item.x + halfW * cCos - halfD * cSin, y: item.y + halfW * cSin + halfD * cCos },
+          { x: item.x - halfW * cCos - halfD * cSin, y: item.y - halfW * cSin + halfD * cCos },
+        ];
+        for (const pt of corners) {
+          if (!isPointInPolygon(pt, doc.site.plotPolygon, TOLERANCE)) {
+            isOutOfBounds = true;
+            break;
+          }
+        }
+      }
+
+      if (isOutOfBounds) {
         issues.push({
           code: 'FURNITURE_OUT_OF_BOUNDS',
           severity: 'error',

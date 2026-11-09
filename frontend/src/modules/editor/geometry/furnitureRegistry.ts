@@ -51,6 +51,7 @@ export interface FurnitureAssetDefinition {
   isLight?: boolean;
   lightProperties?: CatalogLightSpec;
   description: string;
+  unitCostINR?: number;
   // 3D representation specification
   representation3D: 'procedural' | 'gltf' | 'fallback_box';
   gltfModelPath?: string | null;
@@ -677,16 +678,92 @@ export const FURNITURE_REGISTRY: Record<string, FurnitureAssetDefinition> = {
 };
 
 /**
+ * Authoritative Indian Market Unit Cost Table (INR, 2026 Baseline).
+ * Directly matches backend FURNITURE_RATES in cost_rates.py.
+ */
+export const FURNITURE_PRICES_INR: Record<string, number> = {
+  // Living Room
+  sofa_3_seater: 38000,
+  sectional_l_shape: 65000,
+  armchair: 16000,
+  coffee_table: 12000,
+  tv_console: 22000,
+  bookshelf: 18000,
+
+  // Bedroom
+  bed_king: 48000,
+  bed_queen: 36000,
+  wardrobe_3_door: 42000,
+  wardrobe_2_door: 28000,
+  desk_study: 15000,
+  dressing_table: 19000,
+
+  // Kitchen & Dining
+  dining_table_6: 45000,
+  dining_table_4: 28000,
+  kitchen_island: 35000,
+  cooking_range: 26000,
+  refrigerator: 52000,
+  sink_counter: 24000,
+
+  // Bathroom
+  vanity_sink: 14000,
+  toilet_wc: 12000,
+  shower_enclosure: 25000,
+  bathtub: 38000,
+
+  // Outdoor / Terrace
+  patio_lounge: 32000,
+  sunbed_lounger: 14000,
+  bistro_table: 9000,
+  planter_box: 4500,
+  bbq_grill: 22000,
+
+  // Lighting Fixtures
+  chandelier_warm: 18000,
+  downlight_recessed: 1200,
+  wall_sconce: 2800,
+  floor_lamp: 6500,
+  terrace_lantern: 4200,
+};
+
+/**
+ * Resolve unit cost for an asset ID. Returns undefined if unpriced or missing.
+ */
+export function getFurniturePriceINR(id?: string): number | undefined {
+  if (!id) return undefined;
+  const cleanId = id.trim().toLowerCase();
+  if (FURNITURE_PRICES_INR[cleanId] !== undefined) {
+    return FURNITURE_PRICES_INR[cleanId];
+  }
+  // Check without instance suffix (e.g. sofa_3_seater_1)
+  const base = cleanId.replace(/(_\d+|_copy.*|-instance.*)$/, '');
+  if (FURNITURE_PRICES_INR[base] !== undefined) {
+    return FURNITURE_PRICES_INR[base];
+  }
+  return undefined;
+}
+
+/**
  * Registry Lookup Helpers
  */
 export function getFurnitureAsset(id: string): FurnitureAssetDefinition | undefined {
-  return FURNITURE_REGISTRY[id];
+  const asset = FURNITURE_REGISTRY[id];
+  if (!asset) return undefined;
+  return {
+    ...asset,
+    unitCostINR: FURNITURE_PRICES_INR[asset.id],
+  };
 }
 
 export function getAllFurnitureAssets(): FurnitureAssetDefinition[] {
-  return Object.values(FURNITURE_REGISTRY);
+  return Object.values(FURNITURE_REGISTRY).map(a => ({
+    ...a,
+    unitCostINR: FURNITURE_PRICES_INR[a.id],
+  }));
 }
 
 export function getAssetsByCategory(category: FurnitureCategory): FurnitureAssetDefinition[] {
   return getAllFurnitureAssets().filter(a => a.category === category);
 }
+

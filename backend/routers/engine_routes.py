@@ -5,8 +5,10 @@ from typing import List, Any, Optional
 import uuid
 import base64
 import traceback
+from datetime import datetime, timezone
 
 from core.auth import get_current_user
+from db.repositories import _in_memory_projects
 from engines.inference import FloorPlanGenerator, fix_vastu_topology, fix_room_topology, fix_nbc_topology
 from engines.architectural_layout import build_multi_floor_layout
 from engines.intelligent_generator import IntelligentGenerationEngine, ConstraintEvaluator
@@ -87,6 +89,31 @@ def generate_plans(req: GenerateRequest, current_user: dict = Depends(get_curren
         )
         if not candidates:
             raise HTTPException(status_code=500, detail="Generation engine produced no viable candidates.")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for cand in candidates:
+            cand_layout = cand.get("layout", {})
+            _in_memory_projects[cand["id"]] = {
+                "id": cand["id"],
+                "_id": cand["id"],
+                "name": cand.get("title", f"{req.bedrooms}BHK {req.floors}-Floor Residence"),
+                "user_id": current_user.get("id", "anonymous"),
+                "image_url": cand.get("imageUrl", ""),
+                "layout_data": {
+                    **cand,
+                    "floors": cand_layout.get("floors", []),
+                    "layout": cand_layout,
+                    "form": {
+                        "width": req.width,
+                        "length": req.length,
+                        "floors": req.floors,
+                        "entryDir": req.entryDir,
+                    },
+                },
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+
         return {
             "status": "success",
             "candidates": candidates,
@@ -113,6 +140,30 @@ def generate_multi_floor_plans(req: MultiFloorGenerationRequest, current_user: d
             raise HTTPException(status_code=500, detail="Multi-floor engine produced no viable candidates.")
 
         primary = candidates[0]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for cand in candidates:
+            cand_layout = cand.get("layout", {})
+            _in_memory_projects[cand["id"]] = {
+                "id": cand["id"],
+                "_id": cand["id"],
+                "name": cand.get("title", f"{req.floors_count}-Floor Architectural Residence"),
+                "user_id": current_user.get("id", "anonymous"),
+                "image_url": cand.get("imageUrl", ""),
+                "layout_data": {
+                    **cand,
+                    "floors": cand_layout.get("floors", []),
+                    "layout": cand_layout,
+                    "form": {
+                        "width": req.plot_width,
+                        "length": req.plot_length,
+                        "floors": req.floors_count,
+                        "entryDir": req.entry_direction,
+                    },
+                },
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+
         return {
             "status": "success",
             "project_id": primary["id"],
@@ -134,15 +185,17 @@ class BomRecalculateRequest(BaseModel):
     layout: dict
     sqft: float = 0.0
     tier: str = "standard"
+    target_budget: Optional[float] = 0.0
 
 @router.post("/bom/recalculate")
 def recalculate_bom(req: BomRecalculateRequest, current_user: dict = Depends(get_current_user)):
     try:
-        new_bom = compute_bom(req.layout, req.sqft, req.tier)
+        new_bom = compute_bom(req.layout, req.sqft, req.tier, target_budget=float(req.target_budget or 0.0))
         return {"status": "success", "bomResult": new_bom}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to recalculate BOM: {str(e)}")
+
 
 
 class DxfExportRequest(BaseModel):

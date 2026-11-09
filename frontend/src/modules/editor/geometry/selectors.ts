@@ -18,7 +18,7 @@ import type {
 } from './types';
 import { mToFt } from './types';
 import { polygonArea } from './validators';
-import type { Floor, Room as LegacyRoom, FurnitureItem, WindowSpec } from '../../../shared/api-client/api';
+import type { Floor, Room as LegacyRoom, FurnitureItem, WindowSpec, LightProperties } from '../../../shared/api-client/api';
 
 /**
  * Returns the ordered 2D vertices of a room polygon.
@@ -140,6 +140,74 @@ export function canonicalToLegacyFloors(doc: CanonicalBuildingDocument): Floor[]
   return doc.levels.map(level => {
     const nodeMap = new Map(level.nodes.map(n => [n.id, n]));
 
+    // Precalculate bounding boxes for all rooms on this level
+    const roomBboxes = level.rooms.map(room => ({
+      room,
+      bboxM: deriveRoomBoundingBox(room, level),
+    }));
+
+    // Pre-assign every level item to the most appropriate room so no furniture is lost
+    const TOL = 0.25; // 25cm tolerance margin for boundary items
+    const roomItemMap = new Map<string, typeof level.items>();
+    for (const r of level.rooms) {
+      roomItemMap.set(r.id, []);
+    }
+
+    for (const item of level.items || []) {
+      const itemW = item.width || 0.5;
+      const itemD = item.depth || 0.5;
+      const cx = item.x + itemW / 2;
+      const cy = item.y + itemD / 2;
+
+      // 1. Direct roomId match (name or ID) — only if item is actually within/near that room
+      const explicitRoomId = item.properties?.roomId as string | undefined;
+      let matchedRoom = roomBboxes.find(
+        rb => (rb.room.id === explicitRoomId || rb.room.name === explicitRoomId) &&
+          cx >= rb.bboxM.x - TOL &&
+          cx <= rb.bboxM.x + rb.bboxM.width + TOL &&
+          cy >= rb.bboxM.y - TOL &&
+          cy <= rb.bboxM.y + rb.bboxM.height + TOL
+      );
+
+      // 2. Spatial containment or overlap with tolerance margin
+      if (!matchedRoom) {
+        matchedRoom = roomBboxes.find(rb => {
+          const { x, y, width, height } = rb.bboxM;
+          return (
+            cx >= x - TOL &&
+            cx <= x + width + TOL &&
+            cy >= y - TOL &&
+            cy <= y + height + TOL
+          );
+        });
+      }
+
+      // 3. Fallback: assign to closest room on this level
+      if (!matchedRoom && roomBboxes.length > 0) {
+        const itemW = item.width || 0.5;
+        const itemD = item.depth || 0.5;
+        const cx = item.x + itemW / 2;
+        const cy = item.y + itemD / 2;
+
+        let bestDist = Infinity;
+        let closest = roomBboxes[0];
+        for (const rb of roomBboxes) {
+          const rcx = rb.bboxM.x + rb.bboxM.width / 2;
+          const rcy = rb.bboxM.y + rb.bboxM.height / 2;
+          const d = Math.hypot(cx - rcx, cy - rcy);
+          if (d < bestDist) {
+            bestDist = d;
+            closest = rb;
+          }
+        }
+        matchedRoom = closest;
+      }
+
+      if (matchedRoom) {
+        roomItemMap.get(matchedRoom.room.id)?.push(item);
+      }
+    }
+
     const legacyRooms: LegacyRoom[] = level.rooms.map(room => {
       const bboxM = deriveRoomBoundingBox(room, level);
       const bboxFt = {
@@ -197,16 +265,8 @@ export function canonicalToLegacyFloors(doc: CanonicalBuildingDocument): Floor[]
         }
       }
 
-      // Map furniture items inside room bbox
-      const roomItems = level.items.filter(item => {
-        return (
-          item.x >= bboxM.x &&
-          item.x <= bboxM.x + bboxM.width &&
-          item.y >= bboxM.y &&
-          item.y <= bboxM.y + bboxM.height
-        );
-      });
-
+      // Map assigned furniture items
+      const roomItems = roomItemMap.get(room.id) || [];
       const legacyFurn: FurnitureItem[] = roomItems.map(item => ({
         id: item.id,
         catalogId: item.assetId,
@@ -219,7 +279,31 @@ export function canonicalToLegacyFloors(doc: CanonicalBuildingDocument): Floor[]
         elevation: mToFt(item.elevation),
         color: item.color,
         isLight: item.isLight,
+        lightProperties: item.properties?.lightProperties as LightProperties | undefined,
       }));
+
+      const rNameLower = (room.name || '').toLowerCase();
+      const rTypeLower = (room.roomType || '').toLowerCase();
+      const isShaft =
+        rNameLower.includes('shaft') ||
+        rNameLower.includes('duct') ||
+        rNameLower.includes('mep') ||
+        rNameLower.includes('lightwell') ||
+        rNameLower.includes('ventilation') ||
+        rNameLower.includes('chase') ||
+        rTypeLower.includes('shaft') ||
+        rTypeLower.includes('lightwell') ||
+        rTypeLower.includes('duct');
+
+      const isExplicitExt =
+        rNameLower.includes('ext') ||
+        rNameLower.includes('lightwell') ||
+        rNameLower.includes('courtyard') ||
+        rTypeLower.includes('ext') ||
+        rTypeLower.includes('lightwell');
+      const isExteriorShaft = isShaft && isExplicitExt;
+      const isInteriorShaft = isShaft && !isExteriorShaft;
+      const isVoid = rNameLower.includes('void') || room.roomType === 'duplex_void' || isShaft;
 
       return {
         name: room.name,
@@ -230,6 +314,11 @@ export function canonicalToLegacyFloors(doc: CanonicalBuildingDocument): Floor[]
         doors: legacyDoors,
         windows: legacyWindows,
         furniture: legacyFurn,
+        roomType: room.roomType,
+        isShaft,
+        isInteriorShaft,
+        isExteriorShaft,
+        isVoid,
       };
     });
 

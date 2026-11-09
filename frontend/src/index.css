@@ -31,10 +31,31 @@
   --accent-sage:       #A1AE97; /* architectural sage / landscape, Vastu harmony */
   --accent-brass:      #B89A64; /* restrained brass / solar azimuth & elevation */
 
-  /* Studio Workspace Surfaces (for dedicated drafting & 3D viewports) */
+  /* Studio Workspace Surfaces & Stage Zone */
   --studio-graphite:   #272A29;
   --studio-deep:       #1B1D1C;
   --studio-border:     #3A3E3C;
+  
+  --stage-bg:          #0B0C0D;
+  --stage-surface:     #15171A;
+  --stage-hairline:    #2A2D31;
+  --stage-hairline-accent: rgba(255, 255, 255, 0.12);
+  --stage-text-primary: #F4F1EA;
+  --stage-text-secondary: #A1A399;
+  --stage-text-muted:  #6E7169;
+
+  /* Architectural Accents */
+  --accent-oxide:      #C8501E;
+  --accent-oxide-hover: #AF4316;
+  --accent-drafting:   #2F5BEA;
+
+  /* Motion & Duration Tokens */
+  --dur-fast:          120ms;
+  --dur-base:          240ms;
+  --dur-slow:          480ms;
+  --dur-hero:          720ms;
+  --ease-standard:     cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit:         cubic-bezier(0.4, 0, 1, 1);
 
   /* Semantic UI Tokens */
   --bg-primary:        var(--paper-warm);
@@ -45,29 +66,29 @@
 
   --border-color:      var(--paper-border);
   --border-subtle:     var(--paper-border-soft);
-  --border-focus:      var(--accent-cobalt);
+  --border-focus:      var(--accent-oxide);
 
   --text-primary:      var(--ink-primary);
   --text-secondary:    var(--ink-secondary);
   --text-muted:        var(--ink-annotation);
 
-  --accent-color:      var(--accent-vermilion);
+  --accent-color:      var(--accent-oxide);
   --accent-cyan:       var(--accent-cobalt);
   --accent-violet:     var(--accent-vermilion);
-  --cta-color:         var(--accent-vermilion);
-  --cta-hover:         #B84530;
+  --cta-color:         var(--accent-oxide);
+  --cta-hover:         var(--accent-oxide-hover);
 
   --input-bg:          var(--paper-crisp);
   --input-border:      rgba(37, 38, 34, 0.16);
 
   /* Status Tokens */
-  --success:           #437A5D; /* organic architectural sage green */
-  --warning:           #C27803; /* architectural amber */
-  --error:             #D85740; /* vermilion red */
-  --success-text:      #437A5D;
-  --error-text:        #D85740;
-  --success-bg:        rgba(67, 122, 93, 0.08);
-  --success-border:    rgba(67, 122, 93, 0.25);
+  --success:           #2E7D32; /* architectural sage green */
+  --warning:           #D97706; /* architectural amber */
+  --error:             #DC2626; /* vermilion red */
+  --success-text:      #2E7D32;
+  --error-text:        #DC2626;
+  --success-bg:        rgba(46, 125, 50, 0.08);
+  --success-border:    rgba(46, 125, 50, 0.25);
 
   /* Tactile Paper Elevation */
   --shadow-sm:         0 1px 3px rgba(37, 38, 34, 0.06);
@@ -263,6 +284,47 @@ input:focus, select:focus, textarea:focus {
   animation: sketchDraw 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
+/* Interactive Focus-Visible & Accessibility States */
+:focus-visible {
+  outline: 2px solid var(--accent-oxide);
+  outline-offset: 2px;
+}
+
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 20px;
+  background: var(--accent-oxide);
+  color: #FFFFFF;
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 4px;
+  z-index: 10000;
+  text-decoration: none;
+  transition: top 0.2s ease;
+}
+.skip-to-content:focus {
+  top: 16px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Studio Skeletons */
+.studio-skeleton {
+  background: linear-gradient(90deg, rgba(37, 38, 34, 0.05) 25%, rgba(37, 38, 34, 0.12) 50%, rgba(37, 38, 34, 0.05) 75%);
+  background-size: 200% 100%;
+  animation: studioShimmer 1.8s infinite ease-in-out;
+  border-radius: 2px;
+}
+@keyframes studioShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    ACCESSIBILITY: PREFERS REDUCED MOTION
 ═══════════════════════════════════════════════════════════════════════ */
@@ -275,8 +337,10 @@ input:focus, select:focus, textarea:focus {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .animate-sketch-draw {
+  .animate-sketch-draw,
+  .studio-skeleton {
     stroke-dashoffset: 0 !important;
     animation: none !important;
   }
 }
+

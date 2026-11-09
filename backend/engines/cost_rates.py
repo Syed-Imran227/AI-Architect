@@ -46,7 +46,8 @@ LABOUR_RATIO          = 0.30   # 30% of all material costs
 TIER_MULTIPLIERS = {
     "economy": 0.8,
     "standard": 1.0,
-    "premium": 1.5
+    "premium": 1.5,
+    "luxury": 2.0,
 }
 
 # ── Ceiling height assumed throughout ─────────────────────────────────────────
@@ -61,3 +62,64 @@ WET_ROOM_KEYWORDS: tuple[str, ...] = (
 PREMIUM_FLOOR_KEYWORDS: tuple[str, ...] = (
     "master bedroom", "living", "dining",
 )
+
+# ── Furniture & Fixture Rates (INR per unit, 2026 market baseline) ────────────
+# Explicitly maps all 32 assets in the AI Architect furniture catalog.
+# Unlisted/custom items default to None (marked as unavailable rather than fabricating arbitrary prices).
+FURNITURE_RATES: dict[str, float] = {
+    # Living Room
+    "sofa_3_seater": 38_000.0,
+    "sectional_l_shape": 65_000.0,
+    "armchair": 16_000.0,
+    "coffee_table": 12_000.0,
+    "tv_console": 22_000.0,
+    "bookshelf": 18_000.0,
+
+    # Bedroom
+    "bed_king": 48_000.0,
+    "bed_queen": 36_000.0,
+    "wardrobe_3_door": 42_000.0,
+    "wardrobe_2_door": 28_000.0,
+    "desk_study": 15_000.0,
+    "dressing_table": 19_000.0,
+
+    # Kitchen & Dining
+    "dining_table_6": 45_000.0,
+    "dining_table_4": 28_000.0,
+    "kitchen_island": 35_000.0,
+    "cooking_range": 26_000.0,
+    "refrigerator": 52_000.0,
+    "sink_counter": 24_000.0,
+
+    # Bathroom
+    "vanity_sink": 14_000.0,
+    "toilet_wc": 12_000.0,
+    "shower_enclosure": 25_000.0,
+    "bathtub": 38_000.0,
+
+    # Outdoor / Terrace
+    "patio_lounge": 32_000.0,
+    "sunbed_lounger": 14_000.0,
+    "bistro_table": 9_000.0,
+    "planter_box": 4_500.0,
+    "bbq_grill": 22_000.0,
+
+    # Lighting Fixtures
+    "chandelier_warm": 18_000.0,
+    "downlight_recessed": 1_200.0,
+    "wall_sconce": 2_800.0,
+    "floor_lamp": 6_500.0,
+    "terrace_lantern": 4_200.0,
+}
+
+
+def get_furniture_rate(catalog_id: str | None) -> float | None:
+    """
+    Retrieve verified baseline unit cost in INR for a furniture catalog asset.
+    Returns None if catalog_id is missing or not present in the rate schedule.
+    """
+    if not catalog_id or not isinstance(catalog_id, str):
+        return None
+    cleaned_id = catalog_id.strip().lower()
+    return FURNITURE_RATES.get(cleaned_id)
+

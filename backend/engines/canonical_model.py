@@ -239,27 +239,39 @@ def migrate_legacy_to_canonical(legacy_dict: Dict[str, Any]) -> CanonicalBuildin
             for d_idx, d in enumerate(r.get("doors", [])):
                 side = str(d.get("wall", "bottom")).lower()
                 target_w = w_top if side == "top" else w_right if side == "right" else w_left if side == "left" else w_bottom
-                n1 = node_map.get(target_w.start_node_id) if 'node_map' in locals() else None
                 wall_len_m = math.hypot(tr.x - tl.x, tr.y - tl.y) if side in ("top", "bottom") else math.hypot(br.x - tr.x, br.y - tr.y)
-                
-                if wall_len_m < 0.6:
+
+                chosen_w = target_w
+                chosen_len_m = wall_len_m
+
+                if chosen_len_m < 0.80:
+                    candidates = [(w_bottom, rw_m), (w_right, rh_m), (w_left, rh_m), (w_top, rw_m)]
+                    for cw, clen in candidates:
+                        if clen >= 0.90:
+                            chosen_w = cw
+                            chosen_len_m = clen
+                            break
+
+                if chosen_len_m < 0.80:
                     continue
 
                 CORNER_MARGIN = 0.15
+                max_allowed_w = chosen_len_m - 2 * CORNER_MARGIN
                 op_width = ft_to_m(float(d.get("width", 3)))
-                if op_width > wall_len_m - 2 * CORNER_MARGIN:
-                    op_width = max(0.60, wall_len_m - 2 * CORNER_MARGIN)
+                op_width = max(0.50, min(op_width, max_allowed_w))
+                if op_width > max_allowed_w:
+                    op_width = max_allowed_w
 
                 pos_m = ft_to_m(float(d.get("position", 3)))
                 min_off = CORNER_MARGIN + op_width / 2
-                max_off = wall_len_m - CORNER_MARGIN - op_width / 2
-                op_offset = wall_len_m / 2 if min_off >= max_off else max(min_off, min(max_off, pos_m))
+                max_off = chosen_len_m - CORNER_MARGIN - op_width / 2
+                op_offset = chosen_len_m / 2 if min_off >= max_off else max(min_off, min(max_off, pos_m))
 
                 s = op_offset - op_width / 2
                 e = op_offset + op_width / 2
 
                 is_dup = any(
-                    existing.wall_id == target_w.id and
+                    existing.wall_id == chosen_w.id and
                     (min(e, existing.offset + existing.width / 2) - max(s, existing.offset - existing.width / 2)) > 0.1
                     for existing in openings
                 )
@@ -321,6 +333,29 @@ def migrate_legacy_to_canonical(legacy_dict: Dict[str, Any]) -> CanonicalBuildin
                     color=f.get("color"),
                     is_light=bool(f.get("isLight")),
                 ))
+
+        # Topological Wall Classification:
+        # Determine exterior building envelope vs interior dividing partitions based on room incidence
+        for w in walls:
+            incident_count = 0
+            borders_open = False
+            for rm in rooms:
+                nids = rm.boundary_node_ids
+                if w.start_node_id in nids and w.end_node_id in nids:
+                    i1 = nids.index(w.start_node_id)
+                    i2 = nids.index(w.end_node_id)
+                    diff = abs(i1 - i2)
+                    if diff == 1 or diff == len(nids) - 1:
+                        incident_count += 1
+                        rn = rm.name.lower()
+                        if any(k in rn for k in ("balcony", "terrace", "patio", "sundeck", "garden")):
+                            borders_open = True
+            if incident_count <= 1 or borders_open:
+                w.kind = "exterior"
+                w.thickness = 0.23
+            else:
+                w.kind = "interior"
+                w.thickness = 0.115
 
         levels.append(Level(
             id=lvl_id,

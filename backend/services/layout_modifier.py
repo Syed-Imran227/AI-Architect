@@ -62,21 +62,36 @@ def find_room_index(rooms: List[Dict[str, Any]], target_name: Optional[str]) -> 
 
 def apply_architectural_operation(
     layout_data: Dict[str, Any],
-    action: str,
+    action: Any = None,
     target_floor_level: int = 0,
     target_room_name: Optional[str] = None,
     parameters: Optional[Dict[str, Any]] = None,
     plot_width: float = 30.0,
     plot_height: float = 40.0,
-) -> Tuple[bool, Dict[str, Any], str, List[str]]:
+) -> Tuple[bool, Dict[str, Any], str, List[str], Dict[str, Any]]:
     """
     Deterministically applies an ArchitecturalOperation to layout_data.
+    Supports either positional args or passing an ArchitecturalOperation instance directly.
     Returns:
-        (success: bool, updated_layout: dict, message: str, warnings: list[str])
+        (success: bool, updated_layout: dict, message: str, warnings: list[str], change_summary: dict)
     """
+    if hasattr(action, "action"):
+        op = action
+        action = op.action
+        target_floor_level = getattr(op, "target_floor_level", target_floor_level)
+        target_room_name = getattr(op, "target_room_name", target_room_name)
+        parameters = getattr(op, "parameters", parameters)
+
     params = parameters or {}
     new_layout = copy.deepcopy(layout_data)
     warnings: List[str] = []
+
+    # Extract plot dimensions from layout_data if available
+    if isinstance(layout_data, dict):
+        plot_info = layout_data.get("plot") or layout_data.get("form") or {}
+        if isinstance(plot_info, dict):
+            plot_width = float(plot_info.get("width", plot_info.get("plot_width", plot_width)))
+            plot_height = float(plot_info.get("height", plot_info.get("plot_height", plot_height)))
 
     # Normalize multi-floor vs single-floor structure
     floors = new_layout.get("floors")
@@ -107,13 +122,13 @@ def apply_architectural_operation(
 
     target_rooms: List[Dict[str, Any]] = target_floor.get("rooms", [])
     if not target_rooms:
-        return False, layout_data, f"Floor {target_floor_level} has no rooms to modify.", ["No rooms found on target floor."]
+        return False, layout_data, f"Floor {target_floor_level} has no rooms to modify.", ["No rooms found on target floor."], {}
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 1: GENERAL ADVICE (No geometric changes needed)
     # ─────────────────────────────────────────────────────────────────────────────
     if action == "general_advice":
-        return True, layout_data, "Architectural advice provided without geometric modifications.", []
+        return True, layout_data, "Architectural advice provided without geometric modifications.", [], {"action": "general_advice", "is_destructive": False}
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 2: RESIZE ROOM
@@ -132,7 +147,7 @@ def apply_architectural_operation(
                     break
 
         if r_idx < 0:
-            return False, layout_data, f"Could not find room '{target_room_name}' to resize.", [f"Room '{target_room_name}' not found."]
+            return False, layout_data, f"Could not find room '{target_room_name}' to resize.", [f"Room '{target_room_name}' not found."], {}
 
         room = copy.deepcopy(target_rooms[r_idx])
         curr_w = float(room.get("width", 10))
@@ -140,6 +155,13 @@ def apply_architectural_operation(
 
         delta_w = float(params.get("delta_width", 0))
         delta_h = float(params.get("delta_height", 0))
+
+        if "delta_ft" in params:
+            dim = str(params.get("dimension", "width")).lower()
+            if dim in ("height", "length", "y", "vertical"):
+                delta_h = float(params["delta_ft"])
+            else:
+                delta_w = float(params["delta_ft"])
 
         # Direct dimension overrides if specified
         if "new_width" in params:
@@ -197,7 +219,27 @@ def apply_architectural_operation(
             return False, layout_data, (
                 f"Cannot resize '{room.get('name')}': expanding by {amount if amount > 0 else delta_w:.1f} ft "
                 f"collides with neighboring rooms or exceeds plot boundaries."
-            ), ["Collision or boundary constraint prevented expansion."]
+            ), ["Collision or boundary constraint prevented expansion."], {}
+
+        # Clamp openings and furniture within new room dimensions
+        doors = target_rooms[r_idx].get("doors", [])
+        for d in doors:
+            w_wall = chosen_candidate["width"] if d.get("wall") in ("top", "bottom") else chosen_candidate["height"]
+            d_w = float(d.get("width", 3.0))
+            if float(d.get("position", 0)) + d_w > w_wall:
+                d["position"] = max(0.0, round(w_wall - d_w - 0.5, 2))
+        windows = target_rooms[r_idx].get("windows", [])
+        for w_item in windows:
+            w_wall = chosen_candidate["width"] if w_item.get("wall") in ("top", "bottom") else chosen_candidate["height"]
+            win_w = float(w_item.get("width", 4.0))
+            if float(w_item.get("position", 0)) + win_w > w_wall:
+                w_item["position"] = max(0.0, round(w_wall - win_w - 0.5, 2))
+        furns = target_rooms[r_idx].get("furniture", [])
+        for f in furns:
+            fw = float(f.get("width", 3.0))
+            fh = float(f.get("height", 3.0))
+            f["x"] = max(0.5, min(chosen_candidate["width"] - fw - 0.5, float(f.get("x", 0))))
+            f["y"] = max(0.5, min(chosen_candidate["height"] - fh - 0.5, float(f.get("y", 0))))
 
         # Apply update
         target_rooms[r_idx]["width"] = round(chosen_candidate["width"], 2)
@@ -205,7 +247,26 @@ def apply_architectural_operation(
         target_rooms[r_idx]["x"] = round(chosen_candidate["x"], 2)
         target_rooms[r_idx]["y"] = round(chosen_candidate["y"], 2)
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Resized '{room.get('name')}' to {chosen_candidate['width']:.1f}×{chosen_candidate['height']:.1f} ft successfully.", []
+
+        resize_summary = {
+            "action": "resize_room",
+            "room": room.get("name"),
+            "target_room": room.get("name"),
+            "before": {
+                "width": curr_w,
+                "height": curr_h,
+                "area_sqft": round(curr_w * curr_h, 1),
+            },
+            "after": {
+                "width": round(chosen_candidate["width"], 2),
+                "height": round(chosen_candidate["height"], 2),
+                "area_sqft": round(chosen_candidate["width"] * chosen_candidate["height"], 1),
+            },
+            "delta": f"ΔW: {chosen_candidate['width'] - curr_w:+.1f}ft, ΔH: {chosen_candidate['height'] - curr_h:+.1f}ft",
+            "details": f"Resized {room.get('name')} from {curr_w:.1f}×{curr_h:.1f} ft to {chosen_candidate['width']:.1f}×{chosen_candidate['height']:.1f} ft",
+            "is_destructive": False,
+        }
+        return True, new_layout, f"Resized '{room.get('name')}' to {chosen_candidate['width']:.1f}×{chosen_candidate['height']:.1f} ft successfully.", [], resize_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 3: MOVE ROOM
@@ -213,7 +274,7 @@ def apply_architectural_operation(
     elif action == "move_room":
         r_idx = find_room_index(target_rooms, target_room_name)
         if r_idx < 0:
-            return False, layout_data, f"Could not find room '{target_room_name}' to move.", [f"Room '{target_room_name}' not found."]
+            return False, layout_data, f"Could not find room '{target_room_name}' to move.", [f"Room '{target_room_name}' not found."], {}
 
         room = copy.deepcopy(target_rooms[r_idx])
         dx = float(params.get("dx", 0))
@@ -229,28 +290,39 @@ def apply_architectural_operation(
         test_room = dict(room, x=round(room["x"] + dx, 2), y=round(room["y"] + dy, 2))
 
         if not check_in_bounds(test_room, plot_width, plot_height):
-            return False, layout_data, f"Cannot move '{room.get('name')}': falls outside plot bounds.", ["Plot boundary violation."]
+            return False, layout_data, f"Cannot move '{room.get('name')}': falls outside plot bounds.", ["Plot boundary violation."], {}
 
         for other_idx, other in enumerate(target_rooms):
             if other_idx == r_idx: continue
             if check_overlap(test_room, other):
-                return False, layout_data, f"Cannot move '{room.get('name')}': collides with '{other.get('name')}'.", [f"Collision with {other.get('name')}."]
+                return False, layout_data, f"Cannot move '{room.get('name')}': collides with '{other.get('name')}'.", [f"Collision with {other.get('name')}."], {}
 
         target_rooms[r_idx]["x"] = test_room["x"]
         target_rooms[r_idx]["y"] = test_room["y"]
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Moved '{room.get('name')}' to ({test_room['x']}, {test_room['y']}).", []
+
+        move_summary = {
+            "action": "move_room",
+            "room": room.get("name"),
+            "target_room": room.get("name"),
+            "before": {"x": room["x"], "y": room["y"]},
+            "after": {"x": test_room["x"], "y": test_room["y"]},
+            "delta": f"dx: {dx:+.1f}ft, dy: {dy:+.1f}ft",
+            "details": f"Shifted {room.get('name')} by dx: {dx:+.1f}ft, dy: {dy:+.1f}ft",
+            "is_destructive": False,
+        }
+        return True, new_layout, f"Moved '{room.get('name')}' to ({test_room['x']}, {test_room['y']}).", [], move_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 4: SWAP ROOMS
     # ─────────────────────────────────────────────────────────────────────────────
     elif action == "swap_rooms":
         r1_idx = find_room_index(target_rooms, target_room_name)
-        second_name = params.get("second_room_name") or params.get("with_room")
+        second_name = params.get("second_room_name") or params.get("with_room") or params.get("target_room_b") or params.get("room_b")
         r2_idx = find_room_index(target_rooms, second_name)
 
         if r1_idx < 0 or r2_idx < 0:
-            return False, layout_data, f"Could not find both rooms to swap ('{target_room_name}' and '{second_name}').", ["Rooms not found."]
+            return False, layout_data, f"Could not find both rooms to swap ('{target_room_name}' and '{second_name}').", ["Rooms not found."], {}
 
         r1 = target_rooms[r1_idx]
         r2 = target_rooms[r2_idx]
@@ -262,7 +334,15 @@ def apply_architectural_operation(
         r1["height"], r2["height"] = r2["height"], r1["height"]
 
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Swapped positions of '{r1.get('name')}' and '{r2.get('name')}'.", []
+        swap_summary = {
+            "action": "swap_rooms",
+            "room": r1.get("name"),
+            "second_room": r2.get("name"),
+            "before": f"{r1.get('name')} at ({r2['x']},{r2['y']})",
+            "after": f"{r1.get('name')} at ({r1['x']},{r1['y']})",
+            "is_destructive": False,
+        }
+        return True, new_layout, f"Swapped positions of '{r1.get('name')}' and '{r2.get('name')}'.", [], swap_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 5: CHANGE ROOM TYPE / RENAME
@@ -270,7 +350,7 @@ def apply_architectural_operation(
     elif action == "change_room_type":
         r_idx = find_room_index(target_rooms, target_room_name)
         if r_idx < 0:
-            return False, layout_data, f"Could not find room '{target_room_name}'.", ["Room not found."]
+            return False, layout_data, f"Could not find room '{target_room_name}'.", ["Room not found."], {}
 
         new_name = params.get("new_name") or params.get("name") or "Reassigned Room"
         target_rooms[r_idx]["name"] = str(new_name)
@@ -278,7 +358,14 @@ def apply_architectural_operation(
             target_rooms[r_idx]["room_type"] = params["new_type"]
 
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Changed '{target_room_name}' to '{new_name}'.", []
+        change_type_summary = {
+            "action": "change_room_type",
+            "room": target_room_name,
+            "before": target_room_name,
+            "after": new_name,
+            "is_destructive": False,
+        }
+        return True, new_layout, f"Changed '{target_room_name}' to '{new_name}'.", [], change_type_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 6: ADD ROOM
@@ -321,7 +408,7 @@ def apply_architectural_operation(
             return False, layout_data, (
                 f"Cannot fit new '{new_name}' ({w:.1f}×{h:.1f}ft): "
                 f"plot is densely packed. Please resize or remove an existing room first."
-            ), ["No space available on floor."]
+            ), ["No space available on floor."], {}
 
         new_room_obj = {
             "name": new_name,
@@ -335,7 +422,15 @@ def apply_architectural_operation(
         }
         target_rooms.append(new_room_obj)
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Added '{new_name}' ({w:.1f}×{h:.1f}ft) at ({placed_x}, {placed_y}).", []
+
+        add_summary = {
+            "action": "add_room",
+            "room": new_name,
+            "dimensions": f"{w:.1f}×{h:.1f} ft",
+            "location": f"({placed_x}, {placed_y})",
+            "is_destructive": False,
+        }
+        return True, new_layout, f"Added '{new_name}' ({w:.1f}×{h:.1f}ft) at ({placed_x}, {placed_y}).", [], add_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 7: REMOVE ROOM
@@ -343,11 +438,17 @@ def apply_architectural_operation(
     elif action == "remove_room":
         r_idx = find_room_index(target_rooms, target_room_name)
         if r_idx < 0:
-            return False, layout_data, f"Could not find room '{target_room_name}' to remove.", ["Room not found."]
+            return False, layout_data, f"Could not find room '{target_room_name}' to remove.", ["Room not found."], {}
 
         removed_room = target_rooms.pop(r_idx)
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Removed '{removed_room.get('name')}' from floor plan.", []
+        del_summary = {
+            "action": "remove_room",
+            "room": removed_room.get("name"),
+            "dimensions": f"{removed_room.get('width')}×{removed_room.get('height')} ft",
+            "is_destructive": True,
+        }
+        return True, new_layout, f"Removed '{removed_room.get('name')}' from floor plan.", [], del_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 8: PLACE FURNITURE
@@ -389,7 +490,14 @@ def apply_architectural_operation(
         room["furniture"].append(furn_item)
 
         target_floor["rooms"] = target_rooms
-        return True, new_layout, f"Placed '{item_name}' in '{room.get('name')}'.", []
+        place_summary = {
+            "action": "place_furniture",
+            "room": room.get("name"),
+            "item": item_name,
+            "catalog_id": c_id,
+            "is_destructive": False,
+        }
+        return True, new_layout, f"Placed '{item_name}' in '{room.get('name')}'.", [], place_summary
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Action 9: REMOVE FURNITURE
@@ -419,7 +527,13 @@ def apply_architectural_operation(
 
         target_floor["rooms"] = target_rooms
         if removed_count > 0:
-            return True, new_layout, f"Removed {removed_count} furniture item(s).", []
-        return False, layout_data, f"No matching furniture found to remove.", ["No items matched."]
+            rem_furn_summary = {
+                "action": "remove_furniture",
+                "count": removed_count,
+                "item": f_name or f_id or "furniture",
+                "is_destructive": True,
+            }
+            return True, new_layout, f"Removed {removed_count} furniture item(s).", [], rem_furn_summary
+        return False, layout_data, f"No matching furniture found to remove.", ["No items matched."], {}
 
-    return False, layout_data, f"Unknown action: '{action}'.", [f"Unsupported action: {action}"]
+    return False, layout_data, f"Unknown action: '{action}'.", [f"Unsupported action: {action}"], {}

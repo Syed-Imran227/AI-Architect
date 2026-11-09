@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
   Send,
   AlertTriangle,
-  RefreshCw,
+  RotateCcw,
   Sliders,
   Layers,
   Compass,
@@ -12,12 +12,19 @@ import {
   Bot,
   User,
   Zap,
+  Eye,
+  EyeOff,
+  Check,
+  X,
+  Undo2,
+  HelpCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   sendAgentChat,
   getAgentHistory,
   type AgentChatMessage,
+  type AgentChatResponse,
   type LayoutData,
   type VastuResult,
   type NbcResult,
@@ -33,6 +40,23 @@ interface PlotContext {
   [key: string]: any;
 }
 
+interface PendingProposal {
+  id: string;
+  response: AgentChatResponse;
+  changeSummary?: {
+    action: string;
+    target_room?: string | null;
+    target_floor_level?: number;
+    details?: string;
+    is_destructive?: boolean;
+    before?: Record<string, any>;
+    after?: Record<string, any>;
+    [key: string]: any;
+  };
+  isDestructive: boolean;
+  confirmingDestruction?: boolean;
+}
+
 interface CopilotAgentPanelProps {
   projectId?: string;
   currentLayout: LayoutData;
@@ -40,7 +64,7 @@ interface CopilotAgentPanelProps {
   activeFloorName?: string;
   selectedRoomName?: string | null;
   plotContext: PlotContext;
-  onApplyLayout: (
+  onApplyLayout?: (
     updatedLayout: LayoutData,
     imageUrl?: string | null,
     compliance?: {
@@ -51,6 +75,17 @@ interface CopilotAgentPanelProps {
       bom?: BomResult;
     }
   ) => void;
+  onPreviewProposal?: (candidateLayout: LayoutData) => void;
+  onCancelPreview?: () => void;
+  onApplyProposal?: (
+    updatedLayout: LayoutData,
+    imageUrl?: string | null,
+    compliance?: any,
+    changeSummary?: any
+  ) => void;
+  onUndo?: () => void;
+  canUndo?: boolean;
+  isPreviewing?: boolean;
   disabled?: boolean;
 }
 
@@ -58,10 +93,10 @@ const QUICK_SUGGESTIONS = [
   'Expand Master Bedroom by 2 ft',
   'Swap Kitchen and Dining',
   'Place 3-Seater Sofa in Living Room',
-  'Add Warm Chandelier in Living Room',
-  'Convert Bedroom 2 to Home Office',
-  'Check Vastu alignment for entrance',
+  'Place Queen Bed in Master Bedroom',
   'Shift Living Room right by 1.5 ft',
+  'Check Vastu alignment for entrance',
+  'Add Balcony 8 by 5 ft',
 ];
 
 export function CopilotAgentPanel({
@@ -72,17 +107,30 @@ export function CopilotAgentPanel({
   selectedRoomName,
   plotContext,
   onApplyLayout,
+  onPreviewProposal,
+  onCancelPreview,
+  onApplyProposal,
+  onUndo,
+  canUndo = false,
+  isPreviewing = false,
   disabled = false,
 }: CopilotAgentPanelProps) {
   const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [_historyLoading, setHistoryLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [lastWarning, setLastWarning] = useState<string | null>(null);
+  const [lastFailedPrompt, setLastFailedPrompt] = useState<string | null>(null);
+
+  // Structured Pending Proposal State (Never auto-applied without user confirmation)
+  const [pendingProposal, setPendingProposal] = useState<PendingProposal | null>(null);
+  const [isLocalPreviewActive, setIsLocalPreviewActive] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const isActuallyPreviewing = isPreviewing || isLocalPreviewActive;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -90,7 +138,7 @@ export function CopilotAgentPanel({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading]);
+  }, [messages, loading, pendingProposal]);
 
   // Load chat history when projectId or component mounts
   useEffect(() => {
@@ -112,7 +160,7 @@ export function CopilotAgentPanel({
               {
                 sender: 'agent',
                 content:
-                  '⚡ System Initialized: AI Architectural Copilot ready. State your geometric modifications—such as room resizing, spatial translations, furniture layouts, or Vastu queries. All actions execute through deterministic geometry solvers.',
+                  'Studio Copilot initialized. I can modify room dimensions, shift boundaries, swap spatial zones, arrange furniture, and verify Vastu compliance. Proposed changes can be previewed on canvas before you confirm or undo them.',
                 created_at: new Date().toISOString(),
               },
             ]);
@@ -125,7 +173,7 @@ export function CopilotAgentPanel({
             {
               sender: 'agent',
               content:
-                '⚡ System Initialized: AI Architectural Copilot online. How would you like to modify the active plate today?',
+                'Studio Copilot initialized. Type an architectural change such as "Expand Master Bedroom by 2 ft" or "Swap Kitchen and Dining".',
               created_at: new Date().toISOString(),
             },
           ]);
@@ -148,6 +196,7 @@ export function CopilotAgentPanel({
 
     setInputValue('');
     setLastWarning(null);
+    setLastFailedPrompt(null);
 
     // Append user message optimistically
     const userMsg: AgentChatMessage = {
@@ -188,33 +237,37 @@ export function CopilotAgentPanel({
         setLastWarning(response.warnings.join(' • '));
       }
 
-      // If layout was modified successfully, sync to editor
+      // Handle Ambiguous Request
+      if (response.operation?.action === 'ambiguous_request' || (!response.updated_layout && !response.success)) {
+        // Handled via ambiguity card in the UI
+        return;
+      }
+
+      // If layout was modified successfully: HOLD AS PENDING PROPOSAL (Explicit User Confirmation)
       if (response.updated_layout) {
-        onApplyLayout(
-          response.updated_layout,
-          response.imageUrl,
-          response.compliance
-        );
-        toast.success(
-          `⚡ Layout modified: ${response.operation?.action || 'Updated'}`,
-          { id: 'copilot-action' }
-        );
-      } else if (response.operation?.action !== 'general_advice') {
-        if (response.warnings && response.warnings.length > 0) {
-          toast(response.warnings[0], {
-            icon: '⚠️',
-            style: { background: '#1E293B', color: '#FCD34D', border: '1px solid #F59E0B' },
-          });
-        }
+        const isDestructive = Boolean(response.change_summary?.is_destructive);
+        setPendingProposal({
+          id: `prop_${Date.now()}`,
+          response,
+          changeSummary: response.change_summary,
+          isDestructive,
+          confirmingDestruction: false,
+        });
+
+        toast('Architectural proposal ready for review. Click Preview or Apply.', {
+          icon: '📐',
+          id: 'copilot-proposal-ready',
+        });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Agent error: ${msg}`, { id: 'copilot-error' });
+      setLastFailedPrompt(textToSend);
       setMessages(prev => [
         ...prev,
         {
           sender: 'agent',
-          content: `⚠️ An error occurred while executing command: ${msg}`,
+          content: `⚠️ Failed to execute command: ${msg}`,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -222,6 +275,98 @@ export function CopilotAgentPanel({
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
+  };
+
+  // Toggle canvas preview of the candidate geometry
+  const handleTogglePreview = () => {
+    if (!pendingProposal?.response.updated_layout) return;
+
+    if (isActuallyPreviewing) {
+      if (onCancelPreview) {
+        onCancelPreview();
+      }
+      setIsLocalPreviewActive(false);
+      toast('Canvas preview exited.', { icon: '👁️' });
+    } else {
+      if (onPreviewProposal) {
+        onPreviewProposal(pendingProposal.response.updated_layout);
+      }
+      setIsLocalPreviewActive(true);
+      toast.success('Previewing proposed layout on 2D canvas.');
+    }
+  };
+
+  // Apply proposed changes into authoritative CommandEngine
+  const handleConfirmApply = () => {
+    if (!pendingProposal?.response.updated_layout) return;
+
+    const proposal = pendingProposal;
+    const { response, changeSummary } = proposal;
+
+    // Check if destructive confirmation is needed first
+    if (proposal.isDestructive && !proposal.confirmingDestruction) {
+      setPendingProposal({
+        ...proposal,
+        confirmingDestruction: true,
+      });
+      return;
+    }
+
+    // Cancel preview before applying real change
+    if (isActuallyPreviewing && onCancelPreview) {
+      onCancelPreview();
+    }
+    setIsLocalPreviewActive(false);
+
+    const updatedLayout = response.updated_layout;
+    if (!updatedLayout) return;
+
+    // Apply through Command Engine
+    if (onApplyProposal) {
+      onApplyProposal(
+        updatedLayout,
+        response.imageUrl,
+        response.compliance,
+        changeSummary
+      );
+    } else if (onApplyLayout) {
+      onApplyLayout(
+        updatedLayout,
+        response.imageUrl,
+        response.compliance
+      );
+    }
+
+    setPendingProposal(null);
+
+    // Record confirmation message in chat history
+    const actionDesc = changeSummary?.details || response.operation?.explanation || 'Applied modifications';
+    setMessages(prev => [
+      ...prev,
+      {
+        sender: 'system',
+        content: `✓ Applied to floor plan: ${actionDesc}`,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+  };
+
+  // Reject / Discard proposed change
+  const handleRejectProposal = () => {
+    if (isActuallyPreviewing && onCancelPreview) {
+      onCancelPreview();
+    }
+    setIsLocalPreviewActive(false);
+    setPendingProposal(null);
+    toast('Proposal discarded. Layout remains unchanged.', { icon: '✕' });
+    setMessages(prev => [
+      ...prev,
+      {
+        sender: 'system',
+        content: '✕ Proposed modification was discarded. Layout unchanged.',
+        created_at: new Date().toISOString(),
+      },
+    ]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -232,34 +377,42 @@ export function CopilotAgentPanel({
   };
 
   const handleClearChat = () => {
+    if (isActuallyPreviewing && onCancelPreview) {
+      onCancelPreview();
+    }
+    setIsLocalPreviewActive(false);
+    setPendingProposal(null);
     setMessages([
       {
         sender: 'agent',
-        content: 'System telemetry buffer reset. Standing by for spatial commands.',
+        content: 'Conversation history reset. Ready for your architectural instructions.',
         created_at: new Date().toISOString(),
       },
     ]);
     setLastWarning(null);
+    setLastFailedPrompt(null);
   };
 
-  const getActionBadgeColor = (action: string) => {
+  const getActionBadgeColor = (action?: string) => {
     switch (action) {
       case 'resize_room':
-        return '#00F2FE';
+        return '#365FA8';
       case 'move_room':
-        return '#A855F7';
+        return '#7C3AED';
       case 'swap_rooms':
-        return '#38BDF8';
+        return '#0284C7';
       case 'add_room':
-        return '#10B981';
+        return '#16A34A';
       case 'remove_room':
-        return '#EF4444';
+        return '#D85740';
       case 'place_furniture':
-        return '#F59E0B';
+        return '#B89A64';
       case 'remove_furniture':
-        return '#F97316';
+        return '#EA580C';
+      case 'ambiguous_request':
+        return '#D97706';
       default:
-        return '#00F2FE';
+        return '#365FA8';
     }
   };
 
@@ -278,7 +431,7 @@ export function CopilotAgentPanel({
         overflow: 'hidden',
       }}
     >
-      {/* ── Header: Stark-Grade HUD strip ── */}
+      {/* ── Header: Studio Desk HUD strip ── */}
       <div
         style={{
           padding: '0.85rem 1.25rem',
@@ -319,7 +472,7 @@ export function CopilotAgentPanel({
                 fontSize: '1.15rem',
               }}
             >
-              Studio Copilot // Natural CAD
+              Studio Copilot
               <span
                 style={{
                   fontSize: '0.65rem',
@@ -333,21 +486,46 @@ export function CopilotAgentPanel({
                   textTransform: 'uppercase',
                 }}
               >
-                GEOMETRY ENGINE
+                VERIFIED SOLVER
               </span>
             </div>
             <div
               style={{
                 fontSize: '0.72rem',
-                color: '#94A3B8',
+                color: '#64748B',
               }}
             >
-              Deterministic spatial solver • Natural-language architectural CAD
+              Deterministic geometry • Validated preview • Reversible undo
             </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          {canUndo && onUndo && (
+            <button
+              onClick={onUndo}
+              className="neu-btn-ghost"
+              title="Undo last change (Ctrl+Z)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                color: '#252622',
+                background: '#FFFFFF',
+                border: '1px solid #E7E1D5',
+                cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              <Undo2 size={13} style={{ color: '#365FA8' }} />
+              <span>Undo</span>
+            </button>
+          )}
+
           <button
             onClick={handleClearChat}
             className="neu-btn-ghost"
@@ -364,7 +542,7 @@ export function CopilotAgentPanel({
               cursor: 'pointer',
               transition: 'color 0.15s ease',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#EF4444')}
+            onMouseEnter={e => (e.currentTarget.style.color = '#D85740')}
             onMouseLeave={e => (e.currentTarget.style.color = '#64748B')}
           >
             <Trash2 size={15} />
@@ -391,7 +569,7 @@ export function CopilotAgentPanel({
             display: 'inline-flex',
             alignItems: 'center',
             gap: '0.3rem',
-            color: '#94A3B8',
+            color: '#64748B',
             fontWeight: 600,
           }}
         >
@@ -408,17 +586,17 @@ export function CopilotAgentPanel({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.3rem',
-              color: '#94A3B8',
+              color: '#64748B',
               fontWeight: 600,
             }}
           >
-            <Sliders size={12} style={{ color: '#A855F7' }} />
+            <Sliders size={12} style={{ color: '#7C3AED' }} />
             <span>SELECTED:</span>
             <span
               style={{
-                background: 'rgba(216, 87, 64, 0.08)',
-                color: '#D85740',
-                border: '1px solid #D85740',
+                background: 'rgba(54, 95, 168, 0.08)',
+                color: '#365FA8',
+                border: '1px solid rgba(54, 95, 168, 0.3)',
                 padding: '0px 5px',
                 borderRadius: '3px',
                 fontWeight: 700,
@@ -450,31 +628,27 @@ export function CopilotAgentPanel({
       {lastWarning && (
         <div
           style={{
-            margin: '0.65rem 1.25rem 0 1.25rem',
-            padding: '0.5rem 0.75rem',
-            borderRadius: '6px',
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            color: '#FCD34D',
-            fontSize: '0.74rem',
+            padding: '0.5rem 1.25rem',
+            background: 'rgba(216, 87, 64, 0.08)',
+            borderBottom: '1px solid rgba(216, 87, 64, 0.25)',
             display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.45rem',
+            alignItems: 'center',
+            gap: '0.5rem',
+            color: '#D85740',
+            fontSize: '0.72rem',
             fontFamily: "'JetBrains Mono', monospace",
           }}
         >
-          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '2px', color: '#F59E0B' }} />
-          <div>
-            <strong>GEOMETRIC CONSTRAINT:</strong> {lastWarning}
-          </div>
+          <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+          <span>{lastWarning}</span>
         </div>
       )}
 
-      {/* ── Message Thread ── */}
+      {/* ── Messages Feed ── */}
       <div
         style={{
           padding: '1rem 1.25rem',
-          height: '320px',
+          height: '340px',
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
@@ -482,26 +656,54 @@ export function CopilotAgentPanel({
           background: '#FAF8F2',
         }}
       >
-        {historyLoading && messages.length === 0 ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#64748B',
-              fontSize: '0.8rem',
-              gap: '0.5rem',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
-            <RefreshCw size={15} className="spin" style={{ color: '#00F2FE' }} />
-            <span>ESTABLISHING TELEMETRY STREAM...</span>
-          </div>
-        ) : null}
-
         {messages.map((msg, idx) => {
           const isUser = msg.sender === 'user';
+          const isSystem = msg.sender === 'system';
+          const isAmbiguous = msg.operation?.action === 'ambiguous_request';
+
+          if (isSystem) {
+            return (
+              <div
+                key={idx}
+                style={{
+                  alignSelf: 'center',
+                  maxWidth: '90%',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  background: '#F3F0E7',
+                  border: '1px solid #E7E1D5',
+                  fontSize: '0.72rem',
+                  color: '#474943',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <span>{msg.content}</span>
+                {canUndo && onUndo && msg.content.includes('Applied') && (
+                  <button
+                    onClick={onUndo}
+                    style={{
+                      marginLeft: '0.5rem',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#365FA8',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.2rem',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    <Undo2 size={11} /> Undo
+                  </button>
+                )}
+              </div>
+            );
+          }
+
           return (
             <div
               key={idx}
@@ -533,7 +735,7 @@ export function CopilotAgentPanel({
                 ) : (
                   <>
                     <Bot size={11} style={{ color: '#365FA8' }} />
-                    <span>ARCHITECTURAL AGENT // SOLVER</span>
+                    <span>ARCHITECTURAL COPILOT</span>
                   </>
                 )}
               </div>
@@ -541,13 +743,15 @@ export function CopilotAgentPanel({
               {/* Message bubble */}
               <div
                 style={{
-                  maxWidth: '85%',
+                  maxWidth: '88%',
                   padding: '0.75rem 0.95rem',
                   borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                   background: isUser ? '#252622' : '#FFFFFF',
                   color: isUser ? '#FAF8F2' : '#252622',
                   border: isUser ? '1px solid #252622' : '1px solid #E7E1D5',
-                  boxShadow: isUser ? '0 2px 8px rgba(37, 38, 34, 0.12)' : '0 2px 8px rgba(37, 38, 34, 0.04)',
+                  boxShadow: isUser
+                    ? '0 2px 8px rgba(37, 38, 34, 0.12)'
+                    : '0 2px 8px rgba(37, 38, 34, 0.04)',
                   fontSize: '0.82rem',
                   lineHeight: 1.5,
                   wordBreak: 'break-word',
@@ -556,8 +760,61 @@ export function CopilotAgentPanel({
               >
                 {msg.content}
 
+                {/* Ambiguity Clarification Box */}
+                {isAmbiguous && (
+                  <div
+                    style={{
+                      marginTop: '0.6rem',
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '6px',
+                      background: 'rgba(217, 119, 6, 0.08)',
+                      border: '1px solid rgba(217, 119, 6, 0.3)',
+                      color: '#92400E',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontWeight: 700,
+                        fontSize: '0.74rem',
+                        marginBottom: '0.3rem',
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }}
+                    >
+                      <HelpCircle size={13} />
+                      <span>CLARIFICATION NEEDED</span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', marginBottom: '0.5rem', lineHeight: 1.4 }}>
+                      Please specify the target room name or exact dimensions. Click a suggestion below to proceed:
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {['Expand Master Bedroom by 2 ft', 'Expand Living Room by 3 ft', 'Add Balcony 8 by 5 ft'].map((pill, pIdx) => (
+                        <button
+                          key={pIdx}
+                          onClick={() => handleSendMessage(pill)}
+                          style={{
+                            fontSize: '0.7rem',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            background: '#FFFFFF',
+                            border: '1px solid rgba(217, 119, 6, 0.4)',
+                            color: '#78350F',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            fontFamily: "'JetBrains Mono', monospace",
+                          }}
+                        >
+                          {pill}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Operation Pill Badge */}
-                {msg.operation && msg.operation.action !== 'general_advice' && (
+                {msg.operation && msg.operation.action !== 'general_advice' && !isAmbiguous && (
                   <div
                     style={{
                       marginTop: '0.6rem',
@@ -584,10 +841,10 @@ export function CopilotAgentPanel({
                       {msg.operation.target_room_name && (
                         <span
                           style={{
-                            background: 'rgba(255, 255, 255, 0.08)',
+                            background: 'rgba(37, 38, 34, 0.06)',
                             padding: '1px 5px',
                             borderRadius: '3px',
-                            color: '#FFFFFF',
+                            color: '#252622',
                           }}
                         >
                           Target: {msg.operation.target_room_name}
@@ -595,21 +852,20 @@ export function CopilotAgentPanel({
                       )}
                     </div>
 
-                    {msg.operation.parameters &&
-                      Object.keys(msg.operation.parameters).length > 0 && (
-                        <div
-                          style={{
-                            fontSize: '0.68rem',
-                            opacity: 0.8,
-                            color: '#94A3B8',
-                            marginTop: '2px',
-                          }}
-                        >
-                          {Object.entries(msg.operation.parameters)
-                            .map(([k, v]) => `${k}: ${v}`)
-                            .join(' • ')}
-                        </div>
-                      )}
+                    {msg.operation.parameters && Object.keys(msg.operation.parameters).length > 0 && (
+                      <div
+                        style={{
+                          fontSize: '0.68rem',
+                          opacity: 0.85,
+                          color: '#64748B',
+                          marginTop: '2px',
+                        }}
+                      >
+                        {Object.entries(msg.operation.parameters)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(' • ')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -617,7 +873,7 @@ export function CopilotAgentPanel({
           );
         })}
 
-        {/* Loading indicator with typing cursor */}
+        {/* Loading indicator with typing pulse */}
         {loading && (
           <div
             style={{
@@ -626,20 +882,21 @@ export function CopilotAgentPanel({
               gap: '0.6rem',
               padding: '0.65rem 0.95rem',
               borderRadius: '12px 12px 12px 2px',
-              background: 'rgba(14, 18, 27, 0.85)',
-              border: '1px solid rgba(0, 242, 254, 0.25)',
+              background: '#FFFFFF',
+              border: '1px solid #E7E1D5',
               width: 'fit-content',
-              fontSize: '0.78rem',
-              color: '#00F2FE',
+              fontSize: '0.76rem',
+              color: '#365FA8',
               fontFamily: "'JetBrains Mono', monospace",
+              boxShadow: '0 2px 8px rgba(37, 38, 34, 0.04)',
             }}
           >
             <div
               style={{
                 width: '12px',
                 height: '12px',
-                border: '2px solid rgba(0, 242, 254, 0.2)',
-                borderTopColor: '#00F2FE',
+                border: '2px solid rgba(54, 95, 168, 0.2)',
+                borderTopColor: '#365FA8',
                 borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }}
@@ -649,8 +906,296 @@ export function CopilotAgentPanel({
           </div>
         )}
 
+        {/* Retry button on error */}
+        {lastFailedPrompt && !loading && (
+          <div
+            style={{
+              alignSelf: 'flex-start',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              background: 'rgba(216, 87, 64, 0.08)',
+              border: '1px solid rgba(216, 87, 64, 0.3)',
+            }}
+          >
+            <span style={{ fontSize: '0.72rem', color: '#D85740', fontFamily: "'JetBrains Mono', monospace" }}>
+              Request interrupted.
+            </span>
+            <button
+              onClick={() => handleSendMessage(lastFailedPrompt)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#FAF8F2',
+                background: '#D85740',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              <RotateCcw size={11} /> Retry
+            </button>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
+
+      {/* ── Pending Proposal Confirmation HUD (Phase Two & Three) ── */}
+      <AnimatePresence>
+        {pendingProposal && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{
+              borderTop: '2px solid #365FA8',
+              background: '#FFFFFF',
+              padding: '0.85rem 1.25rem',
+              boxShadow: '0 -4px 16px rgba(37, 38, 34, 0.08)',
+            }}
+          >
+            {/* Header Badge */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '0.5rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: getActionBadgeColor(pendingProposal.response.operation?.action),
+                    color: '#FAF8F2',
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  PROPOSED: {pendingProposal.response.operation?.action?.toUpperCase() || 'MODIFICATION'}
+                </span>
+                {pendingProposal.changeSummary?.target_room && (
+                  <span
+                    style={{
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      color: '#252622',
+                      fontFamily: "'Newsreader', Georgia, serif",
+                    }}
+                  >
+                    {pendingProposal.changeSummary.target_room}
+                  </span>
+                )}
+              </div>
+
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  color: '#64748B',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                Awaiting Operator Approval
+              </span>
+            </div>
+
+            {/* Change explanation */}
+            <div
+              style={{
+                fontSize: '0.78rem',
+                color: '#474943',
+                lineHeight: 1.4,
+                marginBottom: '0.6rem',
+              }}
+            >
+              {pendingProposal.changeSummary?.details ||
+                pendingProposal.response.operation?.explanation ||
+                'Spatial modification ready to apply.'}
+            </div>
+
+            {/* Before vs After Metrics Comparison */}
+            {pendingProposal.changeSummary?.before && pendingProposal.changeSummary?.after && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0.5rem',
+                  padding: '0.5rem',
+                  background: '#FAF8F2',
+                  borderRadius: '6px',
+                  border: '1px solid #E7E1D5',
+                  marginBottom: '0.65rem',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '0.72rem',
+                }}
+              >
+                <div>
+                  <div style={{ color: '#94A3B8', fontSize: '0.65rem', fontWeight: 700 }}>PREVIOUS STATE</div>
+                  <div style={{ color: '#64748B', marginTop: '2px' }}>
+                    {pendingProposal.changeSummary.before.width !== undefined && (
+                      <div>
+                        Size: {pendingProposal.changeSummary.before.width}×{pendingProposal.changeSummary.before.height} ft
+                      </div>
+                    )}
+                    {pendingProposal.changeSummary.before.area_sqft !== undefined && (
+                      <div>Area: {pendingProposal.changeSummary.before.area_sqft} sq ft</div>
+                    )}
+                    {pendingProposal.changeSummary.before.x !== undefined && (
+                      <div>Pos: ({pendingProposal.changeSummary.before.x}, {pendingProposal.changeSummary.before.y})</div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ color: '#365FA8', fontSize: '0.65rem', fontWeight: 700 }}>PROPOSED STATE</div>
+                  <div style={{ color: '#252622', fontWeight: 600, marginTop: '2px' }}>
+                    {pendingProposal.changeSummary.after.width !== undefined && (
+                      <div>
+                        Size: {pendingProposal.changeSummary.after.width}×{pendingProposal.changeSummary.after.height} ft
+                      </div>
+                    )}
+                    {pendingProposal.changeSummary.after.area_sqft !== undefined && (
+                      <div style={{ color: '#16A34A' }}>
+                        Area: {pendingProposal.changeSummary.after.area_sqft} sq ft
+                      </div>
+                    )}
+                    {pendingProposal.changeSummary.after.x !== undefined && (
+                      <div>Pos: ({pendingProposal.changeSummary.after.x}, {pendingProposal.changeSummary.after.y})</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Destructive Warning Confirmation */}
+            {pendingProposal.isDestructive && (
+              <div
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  background: 'rgba(216, 87, 64, 0.08)',
+                  border: '1px solid rgba(216, 87, 64, 0.3)',
+                  marginBottom: '0.65rem',
+                  fontSize: '0.74rem',
+                  color: '#D85740',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                <span>
+                  {pendingProposal.confirmingDestruction
+                    ? '⚠️ Please confirm: This action permanently removes walls and interior fixtures.'
+                    : 'Destructive operation: Room deletion will unseat associated walls and items.'}
+                </span>
+              </div>
+            )}
+
+            {/* Action Buttons: Preview, Apply, Reject */}
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                onClick={handleTogglePreview}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: isActuallyPreviewing ? '1px solid #365FA8' : '1px solid #E7E1D5',
+                  background: isActuallyPreviewing ? '#EFF6FF' : '#FFFFFF',
+                  color: isActuallyPreviewing ? '#365FA8' : '#252622',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {isActuallyPreviewing ? (
+                  <>
+                    <EyeOff size={13} /> Exit Preview
+                  </>
+                ) : (
+                  <>
+                    <Eye size={13} /> Preview Canvas
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleConfirmApply}
+                style={{
+                  flex: 1.2,
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: pendingProposal.isDestructive ? '#D85740' : '#252622',
+                  color: '#FAF8F2',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  boxShadow: '0 2px 6px rgba(37, 38, 34, 0.15)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Check size={13} />
+                <span>
+                  {pendingProposal.isDestructive
+                    ? pendingProposal.confirmingDestruction
+                      ? 'Confirm Deletion'
+                      : 'Delete Room'
+                    : 'Apply Modification'}
+                </span>
+              </button>
+
+              <button
+                onClick={handleRejectProposal}
+                title="Discard proposal without modifying layout"
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #E7E1D5',
+                  background: '#FFFFFF',
+                  color: '#64748B',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.25rem',
+                  cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#D85740')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#64748B')}
+              >
+                <X size={13} />
+                <span>Reject</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Quick Suggestions Bar ── */}
       <div
@@ -771,15 +1316,10 @@ export function CopilotAgentPanel({
             fontWeight: 800,
             background: loading || !inputValue.trim() || disabled ? '#E7E1D5' : '#252622',
             color: loading || !inputValue.trim() || disabled ? '#777970' : '#FAF8F2',
-            cursor:
-              loading || !inputValue.trim() || disabled
-                ? 'not-allowed'
-                : 'pointer',
+            cursor: loading || !inputValue.trim() || disabled ? 'not-allowed' : 'pointer',
             border: 'none',
             boxShadow:
-              loading || !inputValue.trim() || disabled
-                ? 'none'
-                : '0 2px 8px rgba(37, 38, 34, 0.15)',
+              loading || !inputValue.trim() || disabled ? 'none' : '0 2px 8px rgba(37, 38, 34, 0.15)',
             transition: 'all 0.15s ease',
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: '0.04em',

@@ -1022,13 +1022,14 @@ export function FurnitureItem3D({
   timeOfDay = 'day',
 }: FurnitureItem3DProps) {
   const { positionFt, dimensionsFt, rotationDeg, color, isLight, assetId, name } = item;
-  const wx = positionFt.x;
-  const wy = positionFt.y;
-  const wz = positionFt.z;
-  const rotRad = THREE.MathUtils.degToRad(-rotationDeg);
   const fw = Math.max(dimensionsFt.width, 0.4);
   const fd = Math.max(dimensionsFt.depth, 0.4);
   const fh = Math.max(dimensionsFt.height, 0.4);
+  // Center of furniture footprint in world feet (aligning 3D procedural center with 2D bounding box)
+  const wx = positionFt.x + fw / 2;
+  const wy = positionFt.y;
+  const wz = positionFt.z + fd / 2;
+  const rotRad = THREE.MathUtils.degToRad(-rotationDeg);
 
   const cId = (assetId || '').toLowerCase();
   const n = (name || '').toLowerCase();

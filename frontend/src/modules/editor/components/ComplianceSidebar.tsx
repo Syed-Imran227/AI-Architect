@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { LayoutData, VastuResult, NbcResult, EnergyResult, SunlightResult, BomResult, VastuFixResult, NbcFixResult, LayoutUpdatePayload } from '../../../shared/api-client/api';
 import { vastuFix, nbcFix, recalculateBOM } from '../../../shared/api-client/api';
+import { calculateAuthoritativeBOM } from '../geometry/bomCalculator';
 import toast from 'react-hot-toast';
 
 interface PlotContext {
@@ -56,23 +57,64 @@ export default function ComplianceSidebar({
   const [tier, setTier] = useState<string>('standard');
   const [bomRecalculating, setBomRecalculating] = useState(false);
 
+  const rawBudget = Number(
+    (layout as any)?.budget_target ||
+    (layout as any)?.target_budget ||
+    bomResult?.budget?.target_budget ||
+    0
+  );
+  const [targetBudgetText, setTargetBudgetText] = useState<string>(rawBudget > 0 ? String(rawBudget) : '');
+
+  useEffect(() => {
+    if (rawBudget > 0 && !targetBudgetText) {
+      setTargetBudgetText(String(rawBudget));
+    }
+  }, [rawBudget]);
+
+  const effectiveBom = useMemo<BomResult>(() => {
+    const numBudget = Number(targetBudgetText) || 0;
+    if (bomResult) {
+      if (numBudget > 0 && (!bomResult.budget || bomResult.budget.target_budget !== numBudget)) {
+        return calculateAuthoritativeBOM(layout as LayoutData, { tier, targetBudget: numBudget });
+      }
+      return bomResult;
+    }
+    return calculateAuthoritativeBOM(layout as LayoutData, { tier, targetBudget: numBudget });
+  }, [bomResult, layout, tier, targetBudgetText]);
+
+  const handleApplyBudget = () => {
+    const numBudget = Number(targetBudgetText) || 0;
+    const updatedBom = calculateAuthoritativeBOM(layout as LayoutData, { tier, targetBudget: numBudget });
+    onLayoutUpdate({
+      new_bom_result: updatedBom,
+      budget_target: numBudget,
+    } as any);
+    toast.success(numBudget > 0 ? `Target budget set to ₹${numBudget.toLocaleString('en-IN')}` : 'Target budget reset');
+    if (onAutoSaveRequest) {
+      onAutoSaveRequest();
+    }
+  };
+
   const handleTierChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newTier = e.target.value;
     setTier(newTier);
     
     const sqft = plotContext.plotWidth * plotContext.plotHeight;
+    const numBudget = Number(targetBudgetText) || 0;
     setBomRecalculating(true);
     try {
-      const res = await recalculateBOM(layout as LayoutData, sqft, newTier);
+      const res = await recalculateBOM(layout as LayoutData, sqft, newTier, numBudget);
       onLayoutUpdate({ new_bom_result: res.bomResult });
       toast.success(`BOM updated for ${newTier} finish`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`BOM recalculation failed: ${msg}`);
+    } catch {
+      const localBom = calculateAuthoritativeBOM(layout as LayoutData, { tier: newTier, targetBudget: numBudget });
+      onLayoutUpdate({ new_bom_result: localBom });
+      toast.success(`BOM updated for ${newTier} finish`);
     } finally {
       setBomRecalculating(false);
     }
   };
+
 
   const handleVastuFix = async () => {
     setVastuFixing(true);
@@ -388,7 +430,7 @@ export default function ComplianceSidebar({
       )}
       
       {/* Bill of Materials (BOM) Estimation Panel */}
-      {bomResult && (
+      {effectiveBom && (
         <div style={{ background: '#FAF8F2', border: '1px solid #E7E1D5', borderRadius: '6px', overflow: 'hidden' }}>
           <div 
             onClick={() => setBomOpen(!bomOpen)}
@@ -398,8 +440,13 @@ export default function ComplianceSidebar({
               <span>💰</span> Cost Estimate (BOM)
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              {effectiveBom.budget?.is_over_budget && (
+                <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#ffffff', background: '#D85740' }}>
+                  OVERRUN
+                </span>
+              )}
               <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: '#252622', background: 'rgba(184, 154, 100, 0.2)', border: '1px solid #B89A64' }}>
-                ₹{bomResult.summary.grand_total.toLocaleString('en-IN')}
+                ₹{effectiveBom.summary.grand_total.toLocaleString('en-IN')}
               </span>
               <span style={{ fontSize: '0.65rem', color: '#777970' }}>{bomOpen ? '▲' : '▼'}</span>
             </div>
@@ -407,43 +454,164 @@ export default function ComplianceSidebar({
           {bomOpen && (
             <div style={{ padding: '1rem', borderTop: '1px solid #E7E1D5', background: '#FAF8F2' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#252622' }}>Specification Tier</label>
-                    <div style={{ position: 'relative' }}>
-                      <select value={tier} onChange={handleTierChange} disabled={bomRecalculating} style={{ padding: '0.35rem 1.6rem 0.35rem 0.75rem', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace", appearance: 'none', width: '120px', background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: '4px', color: '#252622' }}>
-                          <option value="economy">Economy</option>
-                          <option value="standard">Standard</option>
-                          <option value="premium">Premium</option>
-                      </select>
-                      <div style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#777970', fontSize: '0.6rem' }}>▼</div>
+                {/* Target Budget Controller */}
+                <div style={{ padding: '0.75rem', background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#252622', marginBottom: '0.4rem' }}>
+                    Project Target Budget (INR)
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#777970', fontFamily: "'JetBrains Mono', monospace" }}>
+                        ₹
+                      </span>
+                      <input
+                        type="number"
+                        placeholder="e.g. 2500000"
+                        value={targetBudgetText}
+                        onChange={(e) => setTargetBudgetText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleApplyBudget();
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '0.35rem 0.5rem 0.35rem 1.4rem',
+                          fontSize: '0.75rem',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          background: '#FAF8F2',
+                          border: '1px solid #E7E1D5',
+                          borderRadius: '4px',
+                          color: '#252622',
+                          outline: 'none',
+                        }}
+                      />
                     </div>
+                    <button
+                      onClick={handleApplyBudget}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        background: '#252622',
+                        color: '#FAF8F2',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Set Budget
+                    </button>
+                  </div>
+                </div>
+
+                {/* Overrun Status Banner */}
+                {effectiveBom.budget && effectiveBom.budget.target_budget > 0 && (
+                  <div style={{
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: effectiveBom.budget.is_over_budget ? '1px solid rgba(216, 87, 64, 0.4)' : '1px solid rgba(67, 122, 93, 0.4)',
+                    background: effectiveBom.budget.is_over_budget ? 'rgba(216, 87, 64, 0.08)' : 'rgba(67, 122, 93, 0.08)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        color: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+                      }}>
+                        {effectiveBom.budget.is_over_budget ? '⚠️ Target Budget Overrun' : '✓ Within Target Budget'}
+                      </span>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        color: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+                      }}>
+                        {effectiveBom.budget.is_over_budget
+                          ? `+₹${effectiveBom.budget.overrun_amount.toLocaleString('en-IN')}`
+                          : `₹${effectiveBom.budget.remaining_budget.toLocaleString('en-IN')} left`}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div style={{ width: '100%', height: '6px', background: '#E7E1D5', borderRadius: '3px', overflow: 'hidden', margin: '6px 0 4px 0' }}>
+                      <div style={{
+                        width: `${Math.min(100, effectiveBom.budget.budget_consumed_pct)}%`,
+                        height: '100%',
+                        background: effectiveBom.budget.is_over_budget ? '#D85740' : '#437A5D',
+                        borderRadius: '3px',
+                        transition: 'width 0.3s ease',
+                      }} />
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#777970', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
+                      {effectiveBom.budget.budget_consumed_pct}% of ₹{effectiveBom.budget.target_budget.toLocaleString('en-IN')} target
+                    </div>
+                  </div>
+                )}
+
+                {/* Finish Tier Selector */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#252622' }}>Specification Tier</label>
+                  <div style={{ position: 'relative' }}>
+                    <select value={tier} onChange={handleTierChange} disabled={bomRecalculating} style={{ padding: '0.35rem 1.6rem 0.35rem 0.75rem', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace", appearance: 'none', width: '120px', background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: '4px', color: '#252622' }}>
+                      <option value="economy">Economy</option>
+                      <option value="standard">Standard</option>
+                      <option value="premium">Premium</option>
+                    </select>
+                    <div style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#777970', fontSize: '0.6rem' }}>▼</div>
+                  </div>
                 </div>
                 
                 {bomRecalculating && <div style={{ fontSize: '0.75rem', color: '#777970', textAlign: 'center' }}>Recalculating rates…</div>}
                 
+                {/* Cost Breakdown Summary Card */}
                 <div style={{ padding: '0.85rem', background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: '4px', opacity: bomRecalculating ? 0.5 : 1 }}>
-                  <strong style={{ display: 'block', marginBottom: '0.6rem', color: '#252622', fontSize: '0.82rem', fontWeight: 600 }}>Construction Cost Summary</strong>
+                  <strong style={{ display: 'block', marginBottom: '0.6rem', color: '#252622', fontSize: '0.82rem', fontWeight: 600 }}>Construction & Furniture Summary</strong>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#777970', marginBottom: '0.35rem' }}>
-                    <span>Total Area:</span> <strong style={{ color: '#252622' }}>{bomResult.summary.total_area_sqft} sqft</strong>
+                    <span>Total Floor Area:</span> <strong style={{ color: '#252622' }}>{effectiveBom.summary.total_area_sqft} sqft</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#777970', marginBottom: '0.35rem' }}>
-                    <span>Rate per sqft:</span> <strong style={{ color: '#252622' }}>₹{bomResult.summary.rate_per_sqft.toLocaleString('en-IN')}</strong>
+                    <span>Rate per sqft:</span> <strong style={{ color: '#252622' }}>₹{effectiveBom.summary.rate_per_sqft.toLocaleString('en-IN')}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#777970', marginTop: '0.5rem', borderTop: '1px solid #E7E1D5', paddingTop: '0.5rem', marginBottom: '0.35rem' }}>
-                    <span>Material:</span> <strong style={{ color: '#252622' }}>₹{bomResult.summary.material_total.toLocaleString('en-IN')}</strong>
+                    <span>Construction Subtotal:</span> <strong style={{ color: '#252622' }}>₹{(effectiveBom.summary.construction_total ?? (effectiveBom.summary.material_total + effectiveBom.summary.labour_total)).toLocaleString('en-IN')}</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#777970' }}>
-                    <span>Labour:</span> <strong style={{ color: '#252622' }}>₹{bomResult.summary.labour_total.toLocaleString('en-IN')}</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#777970', marginBottom: '0.35rem' }}>
+                    <span>Placed Furniture Subtotal:</span> <strong style={{ color: '#252622' }}>₹{(effectiveBom.summary.furniture_total || 0).toLocaleString('en-IN')}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #252622', fontWeight: 700, color: '#252622', fontFamily: "'JetBrains Mono', monospace" }}>
-                    <span>Grand Total:</span> <span>₹{bomResult.summary.grand_total.toLocaleString('en-IN')}</span>
+                    <span>Grand Total:</span> <span>₹{effectiveBom.summary.grand_total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
+                {/* Placed Furniture Schedule */}
+                {effectiveBom.furniture_schedule && effectiveBom.furniture_schedule.length > 0 && (
+                  <div>
+                    <strong style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.4rem', color: '#777970', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Placed Furniture & Fixtures ({effectiveBom.furniture_schedule.reduce((s, f) => s + f.quantity, 0)} Items)
+                    </strong>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {effectiveBom.furniture_schedule.map((item, i) => (
+                        <div key={i} style={{ padding: '0.55rem 0.65rem', background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#252622' }}>{item.name}</div>
+                            <div style={{ fontSize: '0.68rem', color: '#777970' }}>
+                              Qty: {item.quantity} × {item.is_price_available && item.unit_price !== null ? `₹${item.unit_price.toLocaleString('en-IN')}` : 'Price unavailable'}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '0.76rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: '#252622' }}>
+                            {item.is_price_available && item.total_cost !== null ? `₹${item.total_cost.toLocaleString('en-IN')}` : '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Room-by-room Schedule */}
                 <div>
                   <strong style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.4rem', color: '#777970', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Room Schedule</strong>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    {bomResult.rooms.map((room, i) => (
+                    {effectiveBom.rooms.map((room, i) => (
                       <div key={i} style={{ padding: '0.65rem', background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: '4px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', alignItems: 'center' }}>
                           <strong style={{ color: '#252622', fontSize: '0.78rem', fontWeight: 600 }}>{room.name}</strong>
@@ -454,6 +622,11 @@ export default function ComplianceSidebar({
                           <span>Structure: ₹{room.costs.structure.toLocaleString('en-IN')}</span>
                           <span>Flooring: ₹{room.costs.flooring.toLocaleString('en-IN')}</span>
                           <span>Paint: ₹{room.costs.painting.toLocaleString('en-IN')}</span>
+                          {(room.costs.furniture || 0) > 0 && (
+                            <span style={{ color: '#2563eb', fontWeight: 600 }}>
+                              Furniture ({room.furniture_count}): ₹{(room.costs.furniture || 0).toLocaleString('en-IN')}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -467,3 +640,4 @@ export default function ComplianceSidebar({
     </div>
   );
 }
+

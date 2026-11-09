@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { generatePlans, exportDxf, exportReport, saveProject, updateProject, getProjectById } from '../../../shared/api-client/api';
 import toast from 'react-hot-toast';
 import type { Room, VastuResult, NbcResult, EnergyResult, SunlightResult, BomResult, LayoutData, LayoutUpdatePayload, Floor, FurnitureItem } from '../../../shared/api-client/api';
 import InteractiveBlueprint from '../components/InteractiveBlueprint';
-import FloorPlan3D from '../components/FloorPlan3D';
+const FloorPlan3D = lazy(() => import('../components/FloorPlan3D'));
 import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 import { MultiFloorWizardModal } from '../components/MultiFloorWizardModal';
 import { FurnitureCatalogDrawer } from '../components/FurnitureCatalogDrawer';
@@ -19,7 +19,9 @@ import {
   export2DFloorPlanPNG,
   exportArchitecturalPresentationSheet,
   type ExportResolutionPreset,
+  calculateAuthoritativeBOM,
 } from '../geometry';
+
 import { ArchitecturalBriefWizard } from '../components/ArchitecturalBriefWizard';
 import { ArchitecturalGenerationOverlay } from '../components/ArchitecturalGenerationOverlay';
 import { RayonFloatingToolbar } from '../components/RayonFloatingToolbar';
@@ -38,6 +40,7 @@ import {
   createDeleteItemCommand,
   createUpdateItemDimensionsCommand,
   createApplyGeneratedPlanCommand,
+  createApplyCopilotModificationCommand,
 } from '../geometry/commands';
 import type { Command, PlacedItem, CanonicalBuildingDocument } from '../geometry/types';
 import { ftToM } from '../geometry/types';
@@ -121,6 +124,34 @@ export default function Editor() {
     }
   }, [previewPlan]);
   const [floors, setFloors] = useState<Floor[]>([]);
+
+  const effectivePlan = previewPlan || activePlan;
+  const currentLayout = effectivePlan?.layout as Record<string, unknown> | undefined;
+  const effectiveFloors = useMemo(() => {
+    if (previewPlan) {
+      if (previewPlan.canonicalDocument && isCanonicalDocument(previewPlan.canonicalDocument)) {
+        return canonicalToLegacyFloors(previewPlan.canonicalDocument);
+      }
+      if (isCanonicalDocument((previewPlan.layout as any)?.canonical)) {
+        return canonicalToLegacyFloors((previewPlan.layout as any).canonical);
+      }
+      if (isCanonicalDocument((previewPlan.layout as any)?.canonical_document)) {
+        return canonicalToLegacyFloors((previewPlan.layout as any).canonical_document);
+      }
+      const pLayout = previewPlan.layout as any;
+      const nestedPLayout = (pLayout?.layout && typeof pLayout.layout === 'object') ? pLayout.layout : null;
+      const pFloors = (Array.isArray(pLayout?.floors) && pLayout.floors.length > 0)
+        ? pLayout.floors
+        : (nestedPLayout && Array.isArray(nestedPLayout.floors) && nestedPLayout.floors.length > 0 ? nestedPLayout.floors : null);
+      if (pFloors) {
+        return pFloors;
+      }
+      if (pLayout?.rooms) {
+        return [{ level: 'Ground Floor', rooms: pLayout.rooms }];
+      }
+    }
+    return floors;
+  }, [previewPlan, floors]);
   const [activeFloorIndex, setActiveFloorIndex] = useState(0);
   const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
@@ -138,6 +169,7 @@ export default function Editor() {
   const [showWizardModal, setShowWizardModal] = useState(false);
   const [isFurnitureDrawerOpen, setIsFurnitureDrawerOpen] = useState(false);
   const [selectedFurnitureItem, setSelectedFurnitureItem] = useState<FurnitureItem | null>(null);
+  const [targetBudget, setTargetBudget] = useState<number>(0);
 
   // Undo / Redo history
   const [history, setHistory] = useState<Floor[][]>([]);
@@ -151,7 +183,11 @@ export default function Editor() {
   const [blueprintPan, setBlueprintPan] = useState({ x: 0, y: 0 });
 
   const activeFloorIndexRef = useRef(0);
-  useEffect(() => { activeFloorIndexRef.current = activeFloorIndex; }, [activeFloorIndex]);
+  useEffect(() => {
+    activeFloorIndexRef.current = activeFloorIndex;
+    setSelectedRoomIndex(null);
+    setSelectedFurnitureItem(null);
+  }, [activeFloorIndex]);
 
   const pendingAutoSaveRef = useRef<boolean>(false);
   const requestAutoSave = useCallback(() => {
@@ -174,7 +210,14 @@ export default function Editor() {
     if (params.get('wizard') === 'true') {
       setShowWizardModal(true);
     }
+    const modeParam = params.get('mode') || params.get('tab');
+    if (modeParam === '3d') {
+      setActiveMode('3d');
+    } else if (modeParam === 'analysis' || modeParam === 'financial' || modeParam === 'bom') {
+      setActiveMode('analysis');
+    }
   }, [location.search]);
+
 
   // Update default project name when form changes if user hasn't custom renamed it
   useEffect(() => {
@@ -186,6 +229,19 @@ export default function Editor() {
 
   const openPlan = (plan: Plan) => {
     setActivePlan(plan);
+    setPreviewPlan(null);
+
+    const planLayout = plan.layout as Record<string, unknown> | undefined;
+    const nestedPlanLayout = (planLayout?.layout && typeof planLayout.layout === 'object') ? (planLayout.layout as Record<string, unknown>) : null;
+    const effectivePlanFloors = (Array.isArray(planLayout?.floors) && planLayout.floors.length > 0)
+      ? (planLayout.floors as Floor[])
+      : (nestedPlanLayout && Array.isArray(nestedPlanLayout.floors) ? (nestedPlanLayout.floors as Floor[]) : undefined);
+
+    const resolvedPlanLayout = {
+      ...(planLayout || {}),
+      ...(nestedPlanLayout || {}),
+      floors: effectivePlanFloors,
+    };
 
     // Initialize authoritative CommandEngine with CanonicalBuildingDocument
     const canonicalDoc = isCanonicalDocument((plan.layout as any)?.canonical)
@@ -195,24 +251,40 @@ export default function Editor() {
           : (isCanonicalDocument(plan.canonicalDocument)
               ? plan.canonicalDocument
               : migrateLegacyToCanonical(
-                  plan.layout || { floors: [] },
+                  resolvedPlanLayout || { floors: [] },
                   formData.width,
                   formData.length,
                   formData.entryDir as any
                 )));
 
     let newFloors: Floor[] = [];
-    if (canonicalDoc && Array.isArray(canonicalDoc.levels) && canonicalDoc.levels.length > 0) {
+    if (canonicalDoc && Array.isArray(canonicalDoc.levels) && canonicalDoc.levels.length >= (effectivePlanFloors?.length || 0) && canonicalDoc.levels.length > 0) {
       newFloors = canonicalToLegacyFloors(canonicalDoc);
+    } else if (effectivePlanFloors && effectivePlanFloors.length > 0) {
+      newFloors = effectivePlanFloors;
     } else if (plan.layout?.floors && plan.layout.floors.length > 0) {
       newFloors = plan.layout.floors;
+    } else if (canonicalDoc && Array.isArray(canonicalDoc.levels) && canonicalDoc.levels.length > 0) {
+      newFloors = canonicalToLegacyFloors(canonicalDoc);
     } else if (plan.layout?.rooms) {
       newFloors = [{ level: 'Ground Floor', rooms: plan.layout.rooms }];
     }
     setFloors(newFloors);
-    setActiveFloorIndex(0);
-    setSelectedRoomIndex(null);
-    setActiveMode('2d');
+    if (newFloors.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        floors: newFloors.length,
+      }));
+    }
+    const urlParams = new URLSearchParams(window.location.search);
+    const modeParam = urlParams.get('mode') || urlParams.get('tab');
+    if (modeParam === '3d') {
+      setActiveMode('3d');
+    } else if (modeParam === 'analysis' || modeParam === 'financial' || modeParam === 'bom') {
+      setActiveMode('analysis');
+    } else {
+      setActiveMode('2d');
+    }
 
     commandEngineRef.current = new CommandEngine(canonicalDoc);
     setCanUndoState(commandEngineRef.current.canUndo());
@@ -221,16 +293,47 @@ export default function Editor() {
     // Reset history for new plan
     setHistory([newFloors]);
     setHistoryIndex(0);
+
+    const planBudget = Number(
+      (plan.layout as any)?.budget_target ||
+      (plan.layout as any)?.target_budget ||
+      plan.bomResult?.budget?.target_budget ||
+      0
+    );
+    if (planBudget > 0) {
+      setTargetBudget(planBudget);
+    }
   };
 
   const loadSavedProject = useCallback(async (id: string) => {
     setLoading(true);
     try {
       const project = await getProjectById(id);
+      const loadedBudget = Number(
+        project.budget_target ||
+        (project.layout_data as any)?.budget_target ||
+        (project.layout_data as any)?.target_budget ||
+        0
+      );
+      if (loadedBudget > 0) {
+        setTargetBudget(loadedBudget);
+      }
+      const rawLayoutData = (project.layout_data || {}) as Record<string, unknown>;
+      const nestedLayout = (rawLayoutData.layout && typeof rawLayoutData.layout === 'object') ? (rawLayoutData.layout as Record<string, unknown>) : null;
+      const unwrappedFloors = (Array.isArray(rawLayoutData.floors) && rawLayoutData.floors.length > 0)
+        ? (rawLayoutData.floors as Floor[])
+        : (nestedLayout && Array.isArray(nestedLayout.floors) ? (nestedLayout.floors as Floor[]) : undefined);
+
+      const unwrappedLayout = {
+        ...rawLayoutData,
+        ...(nestedLayout || {}),
+        floors: unwrappedFloors || (rawLayoutData.floors as Floor[]) || (nestedLayout?.floors as Floor[]),
+      };
+
       const restoredPlan: Plan = {
         id: project.id,
         imageUrl: project.image_url || "",
-        layout: project.layout_data || { rooms: [] },
+        layout: unwrappedLayout as any,
         vastuScore: project.layout_data?.vastuScore ?? project.layout_data?.vastuResult?.score ?? 0,
         vastuResult: project.layout_data?.vastuResult,
         nbcResult: project.layout_data?.nbcResult,
@@ -258,6 +361,7 @@ export default function Editor() {
       openPlan(restoredPlan);
       toast.success('Loaded saved project archive', { id: 'load-project' });
     } catch (e: unknown) {
+
       console.error(e);
       setGenError("Failed to load saved project.");
       toast.error("Failed to load saved project.");
@@ -293,10 +397,12 @@ export default function Editor() {
       if (res?.candidates?.length) {
         const newPlans = res.candidates as Plan[];
         setPlans(newPlans);
-        // Put recommended candidate into preview mode without mutating authoritative design
-        setPreviewPlan(newPlans[0]);
+        // Newly generated plan immediately becomes the editable active plan
+        openPlan(newPlans[0]);
+        setPreviewPlan(null);
         setActiveMode('2d');
-        toast.success(`Generated ${newPlans.length} candidates! Previewing ${newPlans[0].title || '#1 Recommended'}.`, { id: 'gen-success' });
+        requestAutoSave();
+        toast.success(`Generated ${newPlans.length} candidates! ${newPlans[0].title || 'Candidate #1'} is active and ready for editing.`, { id: 'gen-success' });
       } else {
         throw new Error('No architectural layout candidates returned by solver.');
       }
@@ -310,6 +416,11 @@ export default function Editor() {
   };
 
   const handleLayoutUpdate = useCallback((data: LayoutUpdatePayload, imageUrl?: string, targetFloor: number = 0) => {
+    if (previewPlan) {
+      setActivePlan(previewPlan);
+      setPreviewPlan(null);
+    }
+
     const computeNewFloors = (prevFloors: Floor[]) => {
       let newFloors = [...prevFloors];
 
@@ -348,6 +459,10 @@ export default function Editor() {
       return updated;
     });
 
+    if ((data as any)?.budget_target !== undefined) {
+      setTargetBudget(Number((data as any).budget_target));
+    }
+
     setActivePlan(prevPlan => prevPlan ? {
       ...prevPlan,
       sunlightResult: data.new_sunlight_result || prevPlan.sunlightResult,
@@ -359,6 +474,7 @@ export default function Editor() {
         sunlightResult: data.new_sunlight_result || prevPlan.layout?.sunlightResult,
         energyResult: data.new_energy_result || prevPlan.layout?.energyResult,
         bomResult: data.new_bom_result || prevPlan.layout?.bomResult,
+        ...(data as any)?.budget_target !== undefined ? { budget_target: (data as any).budget_target } : {},
       },
       ...(imageUrl ? { imageUrl } : {}),
       ...(data.new_energy_result ? { energyResult: data.new_energy_result } : {}),
@@ -367,10 +483,35 @@ export default function Editor() {
     } : prevPlan);
 
     requestAutoSave();
-  }, [historyIndex, requestAutoSave]);
+  }, [historyIndex, previewPlan, requestAutoSave]);
+
 
   const executeGeometryCommand = useCallback((cmd: Command): boolean => {
-    if (!commandEngineRef.current) {
+    if (previewPlan) {
+      // Auto-promote previewPlan to activePlan so that any edit immediately mutates the design
+      // and is visible on screen without state shadowing!
+      const candidateDoc = isCanonicalDocument(previewPlan.canonicalDocument)
+        ? previewPlan.canonicalDocument
+        : (isCanonicalDocument((previewPlan.layout as any)?.canonical)
+            ? (previewPlan.layout as any).canonical
+            : (isCanonicalDocument((previewPlan.layout as any)?.canonical_document)
+                ? (previewPlan.layout as any).canonical_document
+                : migrateLegacyToCanonical(
+                    previewPlan.layout || { floors: effectiveFloors },
+                    formData.width,
+                    formData.length,
+                    formData.entryDir as any
+                  )));
+      commandEngineRef.current = new CommandEngine(candidateDoc);
+      setActivePlan({
+        ...previewPlan,
+        layout: {
+          ...previewPlan.layout,
+          canonical: candidateDoc,
+        } as any,
+      });
+      setPreviewPlan(null);
+    } else if (!commandEngineRef.current) {
       const initialDoc = migrateLegacyToCanonical({
         plot_width: formData.width,
         plot_length: formData.length,
@@ -402,7 +543,7 @@ export default function Editor() {
       toast.error(res.message || 'Geometry validation rejected this change', { id: 'geom-cmd' });
       return false;
     }
-  }, [floors, formData, requestAutoSave]);
+  }, [floors, formData, previewPlan, effectiveFloors, requestAutoSave]);
 
   const handleAcceptPlan = useCallback((planToAccept: Plan) => {
     const candidateDoc = isCanonicalDocument(planToAccept.canonicalDocument)
@@ -543,7 +684,8 @@ export default function Editor() {
   }, []);
 
   const handleAddCatalogItem = useCallback((catalogItem: FurnitureAssetDefinition | FurnitureCatalogItem) => {
-    const curRooms = floors[activeFloorIndexRef.current]?.rooms || [];
+    const curFloors = effectiveFloors.length > 0 ? effectiveFloors : floors;
+    const curRooms = curFloors[activeFloorIndexRef.current]?.rooms || [];
     if (!curRooms.length) {
       toast.error('No rooms available on this floor to place furniture.');
       return;
@@ -561,13 +703,16 @@ export default function Editor() {
     const itemW = dims.width;
     const itemD = dims.depth;
 
-    const rawX = (targetRoom.width - itemW) / 2;
-    const rawY = (targetRoom.height - itemD) / 2;
-
     const minX = 0.5;
     const minY = 0.5;
     const maxX = Math.max(minX, targetRoom.width - itemW - 0.5);
     const maxY = Math.max(minY, targetRoom.height - itemD - 0.5);
+
+    // Stagger slightly if furniture already exists in this room so items do not completely stack
+    const existingCount = targetRoom.furniture?.length || 0;
+    const staggerOffset = (existingCount % 4) * 0.75;
+    const rawX = Math.max(minX, Math.min(maxX, (targetRoom.width - itemW) / 2 + (staggerOffset - 1.1)));
+    const rawY = Math.max(minY, Math.min(maxY, (targetRoom.height - itemD) / 2 + (staggerOffset - 1.1)));
 
     const snappedX = Math.round(rawX * 2) / 2;
     const snappedY = Math.round(rawY * 2) / 2;
@@ -602,9 +747,23 @@ export default function Editor() {
     const ok = executeGeometryCommand(cmd);
     if (ok) {
       setSelectedRoomIndex(targetRoomIndex);
+      setSelectedFurnitureItem({
+        id: placedItem.id,
+        catalogId: catalogItem.id,
+        name: catalogItem.name,
+        x: relX,
+        y: relY,
+        width: itemW,
+        height: itemD,
+        rotation: placedItem.rotation,
+        elevation: defaultElev,
+        color: catalogItem.defaultColor,
+        isLight: placedItem.isLight,
+        lightProperties: catalogItem.lightProperties,
+      });
       toast.success(`Placed ${catalogItem.name} in ${targetRoom.name}`);
     }
-  }, [floors, selectedRoomIndex, executeGeometryCommand]);
+  }, [floors, effectiveFloors, selectedRoomIndex, executeGeometryCommand]);
 
   const handleUpdateFurniture = useCallback((updated: FurnitureItem) => {
     if (!commandEngineRef.current) return;
@@ -874,6 +1033,72 @@ export default function Editor() {
     requestAutoSave();
   }, [handleLayoutUpdate, handleVastuUpdate, handleNbcUpdate, requestAutoSave]);
 
+  const handlePreviewCopilotProposal = useCallback((candidateLayout: LayoutData) => {
+    const candidateDoc = migrateLegacyToCanonical(
+      candidateLayout.floors ? { floors: candidateLayout.floors } : candidateLayout,
+      formData.width,
+      formData.length,
+      formData.entryDir as any
+    );
+    const candidateFloors = canonicalToLegacyFloors(candidateDoc);
+
+    const previewCandidatePlan: Plan = {
+      id: `copilot-preview-${Date.now()}`,
+      title: 'AI Copilot Proposal Preview',
+      imageUrl: activePlan?.imageUrl || '',
+      layout: {
+        floors: candidateFloors,
+        canonical: candidateDoc,
+      } as any,
+      canonicalDocument: candidateDoc,
+      vastuScore: activePlan?.vastuScore ?? 0,
+    };
+
+    handlePreviewPlan(previewCandidatePlan);
+  }, [formData, handlePreviewPlan, activePlan?.vastuScore, activePlan?.imageUrl]);
+
+  const handleCancelCopilotPreview = useCallback(() => {
+    handleCancelPreview();
+  }, [handleCancelPreview]);
+
+  const handleApplyCopilotProposal = useCallback((
+    candidateLayout: LayoutData,
+    imageUrl?: string | null,
+    compliance?: any,
+    changeSummary?: any
+  ) => {
+    if (previewPlan) {
+      setPreviewPlan(null);
+    }
+
+    const candidateDoc = migrateLegacyToCanonical(
+      candidateLayout.floors ? { floors: candidateLayout.floors } : candidateLayout,
+      formData.width,
+      formData.length,
+      formData.entryDir as any
+    );
+
+    const actionDescription = changeSummary?.details || changeSummary?.action || 'AI Copilot Modification';
+    const cmd = createApplyCopilotModificationCommand(candidateDoc, actionDescription);
+
+    const ok = executeGeometryCommand(cmd);
+    if (ok) {
+      if (imageUrl) {
+        setActivePlan(prev => prev ? { ...prev, imageUrl } : prev);
+      }
+      if (compliance?.vastu) {
+        handleVastuUpdate(compliance.vastu, compliance.vastu.score);
+      }
+      if (compliance?.nbc) {
+        handleNbcUpdate(compliance.nbc, compliance.nbc.score);
+      }
+      requestAutoSave();
+      toast.success(`✓ Applied: ${actionDescription}`, { id: 'copilot-applied' });
+    } else {
+      toast.error('Candidate geometry rejected by architectural validation rules.');
+    }
+  }, [previewPlan, formData, executeGeometryCommand, handleVastuUpdate, handleNbcUpdate, requestAutoSave]);
+
   // Global Keyboard Shortcuts (Undo/Redo, Zoom, Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -909,6 +1134,22 @@ export default function Editor() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
+  const effectiveLayout = useMemo(() => ({
+    ...(currentLayout || {}),
+    floors: effectiveFloors,
+    budget_target: targetBudget,
+  }), [currentLayout, effectiveFloors, targetBudget]);
+
+  const authoritativeBom = useMemo<BomResult | undefined>(() => {
+    if (!effectiveFloors || effectiveFloors.length === 0) {
+      return activePlan?.bomResult;
+    }
+    return calculateAuthoritativeBOM(
+      { floors: effectiveFloors, budget_target: targetBudget },
+      { tier: 'standard', targetBudget }
+    );
+  }, [effectiveFloors, targetBudget, activePlan?.bomResult]);
+
   // Auto-save effect (inhibited during preview to guarantee preview immutability)
   useEffect(() => {
     if (pendingAutoSaveRef.current && activePlan?.id && floors.length > 0 && !previewPlan) {
@@ -925,6 +1166,7 @@ export default function Editor() {
 
           const payload = {
             name: projectName,
+            budget_target: targetBudget,
             layout_data: { 
               floors,
               canonical: canonicalDoc,
@@ -934,7 +1176,8 @@ export default function Editor() {
               nbcResult: activePlan.nbcResult,
               energyResult: activePlan.energyResult,
               sunlightResult: activePlan.sunlightResult,
-              bomResult: activePlan.bomResult,
+              bomResult: authoritativeBom || activePlan.bomResult,
+              budget_target: targetBudget,
             },
             image_url: activePlan.imageUrl
           };
@@ -954,30 +1197,8 @@ export default function Editor() {
       };
       doAutoSave();
     }
-  }, [activePlan, floors, formData, projectName, previewPlan]);
+  }, [activePlan, floors, formData, projectName, previewPlan, targetBudget, authoritativeBom]);
 
-  const effectivePlan = previewPlan || activePlan;
-  const currentLayout = effectivePlan?.layout as Record<string, unknown> | undefined;
-  const effectiveFloors = useMemo(() => {
-    if (previewPlan) {
-      if (previewPlan.canonicalDocument && isCanonicalDocument(previewPlan.canonicalDocument)) {
-        return canonicalToLegacyFloors(previewPlan.canonicalDocument);
-      }
-      if (isCanonicalDocument((previewPlan.layout as any)?.canonical)) {
-        return canonicalToLegacyFloors((previewPlan.layout as any).canonical);
-      }
-      if (isCanonicalDocument((previewPlan.layout as any)?.canonical_document)) {
-        return canonicalToLegacyFloors((previewPlan.layout as any).canonical_document);
-      }
-      if (previewPlan.layout?.floors && previewPlan.layout.floors.length > 0) {
-        return previewPlan.layout.floors;
-      }
-      if (previewPlan.layout?.rooms) {
-        return [{ level: 'Ground Floor', rooms: previewPlan.layout.rooms }];
-      }
-    }
-    return floors;
-  }, [previewPlan, floors]);
 
   const effectiveCanonicalDoc = useMemo<CanonicalBuildingDocument | undefined>(() => {
     if (previewPlan) {
@@ -1054,7 +1275,7 @@ export default function Editor() {
         activeFloorName={effectiveFloors[activeFloorIndex]?.name || `Level 0${activeFloorIndex + 1}`}
         totalFloors={effectiveFloors.length || formData.floors}
         activeFloorIndex={activeFloorIndex}
-        floorNames={effectiveFloors.map(f => String(f.name || f.level || 'Level'))}
+        floorNames={effectiveFloors.map((f: Floor) => String(f.name || f.level || 'Level'))}
         onSelectFloor={idx => {
           setActiveFloorIndex(idx);
           setSelectedRoomIndex(null);
@@ -1318,7 +1539,15 @@ export default function Editor() {
                   floorIndex={activeFloorIndex}
                   plotWidth={plotContext.plotWidth}
                   plotHeight={plotContext.plotHeight}
+                  activeFloorIndex={activeFloorIndex}
+                  totalFloors={effectiveFloors.length}
+                  floorNames={effectiveFloors.map((f: Floor) => String(f.name || f.level || 'Level'))}
+                  onSelectFloor={(idx) => {
+                    setActiveFloorIndex(idx);
+                    setSelectedRoomIndex(null);
+                  }}
                   onRegisterSvgRef={(ref) => { svgElementRef.current = ref; }}
+                  onSwitchTo3D={() => setActiveMode('3d')}
                 />
               ) : (
                 <div style={{
@@ -1382,7 +1611,7 @@ export default function Editor() {
                   }}
                   activeFloorIndex={activeFloorIndex}
                   totalFloors={effectiveFloors.length}
-                  floorNames={effectiveFloors.map(f => String(f.name || f.level || 'Level'))}
+                  floorNames={effectiveFloors.map((f: Floor) => String(f.name || f.level || 'Level'))}
                   onSelectFloor={idx => {
                     setActiveFloorIndex(idx);
                     setSelectedRoomIndex(null);
@@ -1416,8 +1645,8 @@ export default function Editor() {
               nbcResult={activePlan?.nbcResult}
               energyResult={activePlan?.energyResult}
               sunlightResult={activePlan?.sunlightResult}
-              bomResult={activePlan?.bomResult}
-              layoutData={currentLayout ?? {}}
+              bomResult={authoritativeBom || activePlan?.bomResult}
+              layoutData={effectiveLayout}
               onVastuUpdate={handleVastuUpdate}
               onNbcUpdate={handleNbcUpdate}
               onAutoSaveRequest={requestAutoSave}
@@ -1425,6 +1654,12 @@ export default function Editor() {
               activeFloorIndex={activeFloorIndex}
               activeFloorName={String(effectiveFloors[activeFloorIndex]?.name || effectiveFloors[activeFloorIndex]?.level || `Floor ${activeFloorIndex}`)}
               onAgentLayoutUpdate={handleAgentLayoutUpdate}
+              onPreviewCopilotProposal={handlePreviewCopilotProposal}
+              onCancelCopilotPreview={handleCancelCopilotPreview}
+              onApplyCopilotProposal={handleApplyCopilotProposal}
+              onUndoCopilot={handleUndo}
+              canUndo={canUndoState}
+              isPreviewingCopilot={Boolean(previewPlan && previewPlan.id.startsWith('copilot-preview-'))}
             />
           </div>
         )}
@@ -1434,7 +1669,38 @@ export default function Editor() {
           <div style={{ flex: 1, height: '100%', position: 'relative', background: '#1B1D1C' }}>
             {currentRooms.length > 0 ? (
               <ErrorBoundary fallback={<div style={{ padding: '2rem', textAlign: 'center', color: '#D85740' }}>3D WebGL viewport encountered an error.</div>}>
-                <FloorPlan3D
+                <Suspense
+                  fallback={
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        minHeight: '560px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#15171A',
+                        color: '#94a3b8',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        gap: '12px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          border: '3px solid #334155',
+                          borderTopColor: '#38bdf8',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                        }}
+                      />
+                      <span style={{ fontSize: '0.8rem', letterSpacing: '0.06em' }}>INITIALIZING 3D GRAPHICS PIPELINE...</span>
+                    </div>
+                  }
+                >
+                  <FloorPlan3D
                   rooms={currentRooms}
                   floors={effectiveFloors}
                   canonicalDoc={effectiveCanonicalDoc}
@@ -1442,6 +1708,18 @@ export default function Editor() {
                   entryDir={plotContext.entryDir}
                   plotWidth={plotContext.plotWidth}
                   plotHeight={plotContext.plotHeight}
+                  selectedRoomName={selectedRoomIndex !== null && currentRooms[selectedRoomIndex] ? currentRooms[selectedRoomIndex].name : undefined}
+                  onSelectRoom={(name) => {
+                    if (!name) {
+                      setSelectedRoomIndex(null);
+                      return;
+                    }
+                    const idx = currentRooms.findIndex((r: Room) => r.name === name);
+                    if (idx !== -1) {
+                      setSelectedRoomIndex(idx);
+                      setIsInspectorOpen(true);
+                    }
+                  }}
                   onSelectFloor={(idx) => {
                     setActiveFloorIndex(idx);
                     setSelectedRoomIndex(null);
@@ -1453,13 +1731,14 @@ export default function Editor() {
                       setSelectedFurnitureItem(null);
                       return;
                     }
-                    const allItems = effectiveFloors[activeFloorIndex]?.rooms?.flatMap(r => r.furniture || []) || [];
-                    const found = allItems.find(f => f.id === id);
+                    const allItems = effectiveFloors[activeFloorIndex]?.rooms?.flatMap((r: Room) => r.furniture || []) || [];
+                    const found = allItems.find((f: FurnitureItem) => f.id === id);
                     if (found) {
                       setSelectedFurnitureItem(found);
                     }
                   }}
                 />
+                </Suspense>
               </ErrorBoundary>
             ) : (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#777970' }}>
@@ -1477,8 +1756,8 @@ export default function Editor() {
             nbcResult={activePlan?.nbcResult}
             energyResult={activePlan?.energyResult}
             sunlightResult={activePlan?.sunlightResult}
-            bomResult={activePlan?.bomResult}
-            layout={currentLayout ?? {}}
+            bomResult={authoritativeBom || activePlan?.bomResult}
+            layout={effectiveLayout}
             plotContext={plotContext}
             circulation={floorCirculation}
             onLayoutUpdate={handleLayoutUpdate}
@@ -1592,10 +1871,12 @@ export default function Editor() {
           }));
           const allCands = (genCandidates && genCandidates.length > 0 ? genCandidates : [candidate]) as Plan[];
           setPlans(allCands);
-          setPreviewPlan(allCands[0]);
+          openPlan(allCands[0]);
+          setPreviewPlan(null);
           setActiveMode('2d');
+          requestAutoSave();
           setShowWizardModal(false);
-          toast.success(`Generated ${allCands.length} multi-floor candidates! Previewing ${allCands[0].title || '#1'}.`, { id: 'mf-gen' });
+          toast.success(`Generated ${allCands.length} multi-floor candidates! ${allCands[0].title || 'Candidate #1'} is active and ready for editing.`, { id: 'mf-gen' });
         }}
       />
 

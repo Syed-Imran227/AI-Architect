@@ -59,4 +59,20 @@ _audit/
 graphify-out/
 
 # Export outputs from scratch sessions
-scratch/exports/
+scratch/
+
+# Test suites and QA verification artifacts (skipped per production run instructions)
+frontend/test/
+backend/tests/test_agent_copilot_suite.py
+backend/tests/test_auth_token_passthrough.py
+backend/tests/test_authorization_hardening.py
+backend/tests/test_bom_financial_engine.py
+backend/tests/test_identity_bridge_persistence.py
+backend/tests/test_isolated_supabase_auth.py
+backend/tests/test_migrate_mongo_to_supabase.py
+backend/tests/test_production_security_hardening.py
+backend/tests/test_repository_mapping.py
+backend/tests/fixtures/
+scripts/
+figures/qa/
+

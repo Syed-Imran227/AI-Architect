@@ -17,12 +17,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from core.auth import get_current_user
+from core.auth import get_current_user, get_raw_bearer_token
 from exporters.dxf_exporter import export_multi_floor_dxf, export_to_dxf
 from exporters.pdf_dossier import generate_architectural_dossier_pdf
 from engines.bom_engine import compute_bom
 from db.supabase_client import get_database_provider, get_supabase_client
 from db.database import db
+from db.repositories import record_generated_asset, get_project_by_id
 
 router = APIRouter(tags=["Export"])
 
@@ -53,36 +54,26 @@ async def _record_asset_metadata(
     file_name: str,
     file_size: int,
     user_id: Optional[str] = None,
+    user_token: Optional[str] = None,
 ) -> None:
-    """Records asset creation metadata in public.generated_assets (Supabase) or MongoDB."""
-    if not project_id:
+    """Records asset creation metadata via record_generated_asset in repository layer after verifying project ownership."""
+    if not project_id or not user_id:
         return
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    record = {
-        "project_id": str(project_id),
-        "asset_type": asset_type,
-        "file_name": file_name,
-        "file_size": file_size,
-        "created_at": now_iso,
-    }
-    if user_id:
-        record["user_id"] = str(user_id)
+    # Verify project belongs to requesting user
+    proj = await get_project_by_id(project_id, user_id, user_token=user_token)
+    if not proj:
+        return
 
-    db_provider = get_database_provider()
-    if db_provider == "supabase":
-        try:
-            sb = get_supabase_client()
-            await sb.insert("generated_assets", record)
-        except Exception as e:
-            # Table might not exist yet or project_id isn't a foreign key UUID
-            print(f"[export_routes] Note: could not insert to generated_assets: {e}")
-    else:
-        try:
-            if db is not None:
-                await db["generated_assets"].insert_one(record)
-        except Exception as e:
-            print(f"[export_routes] Note: MongoDB asset recording skipped: {e}")
+    await record_generated_asset(
+        project_id=project_id,
+        asset_type=asset_type,
+        file_name=file_name,
+        file_size=file_size,
+        user_id=user_id,
+        user_token=user_token,
+        verify_ownership=True,
+    )
 
 
 # ── DXF Export Endpoints ──────────────────────────────────────────────────────
@@ -92,6 +83,7 @@ async def _record_asset_metadata(
 async def export_cad_dxf(
     req: MultiFloorDxfRequest,
     current_user: dict = Depends(get_current_user),
+    user_token: str = Depends(get_raw_bearer_token),
 ):
     """
     Exports a single- or multi-floor floor plan to AutoCAD-compatible DXF format.
@@ -123,6 +115,7 @@ async def export_cad_dxf(
             file_name=filename,
             file_size=len(dxf_bytes),
             user_id=current_user.get("id"),
+            user_token=user_token,
         )
 
         return Response(
@@ -147,6 +140,7 @@ async def export_cad_dxf(
 async def export_dossier_pdf(
     req: MultiPagePdfRequest,
     current_user: dict = Depends(get_current_user),
+    user_token: str = Depends(get_raw_bearer_token),
 ):
     """
     Compiles a comprehensive multi-page Architectural Blueprint Dossier PDF.
@@ -180,6 +174,7 @@ async def export_dossier_pdf(
             file_name=filename,
             file_size=len(pdf_bytes),
             user_id=current_user.get("id"),
+            user_token=user_token,
         )
 
         return Response(
@@ -197,22 +192,37 @@ async def export_dossier_pdf(
         )
 
 
+ALLOWED_AUDIT_EXTENSIONS = {".dxf", ".pdf", ".svg", ".json", ".png"}
+MAX_AUDIT_FILE_BYTES = 10 * 1024 * 1024  # 10 MB limit
+
+
 class SaveAuditFileRequest(BaseModel):
-    filename: str
-    data_url: str
+    filename: str = Field(..., max_length=255)
+    data_url: str = Field(..., max_length=15 * 1024 * 1024)  # 15MB max payload string
 
 
 @router.post("/api/export/save-audit-file")
 @router.post("/export/save-audit-file")
 @router.post("/save-audit-file")
-async def save_audit_file(req: SaveAuditFileRequest):
+async def save_audit_file(
+    req: SaveAuditFileRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Saves an exported file from browser E2E session directly into scratch/exports.
-    Decodes base64 data URLs or writes raw text for SVGs.
+    Saves an exported file from authenticated browser E2E session directly into scratch/exports.
+    Requires authentication, validates file extension to safe formats, and enforces size caps.
     """
     import base64
     import urllib.parse
+
     safe_name = os.path.basename(req.filename)
+    _, ext = os.path.splitext(safe_name)
+    if ext.lower() not in ALLOWED_AUDIT_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Disallowed file extension '{ext}'. Permitted: {sorted(ALLOWED_AUDIT_EXTENSIONS)}",
+        )
+
     dest_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scratch", "exports"))
     os.makedirs(dest_dir, exist_ok=True)
     dest_path = os.path.join(dest_dir, safe_name)
@@ -223,9 +233,14 @@ async def save_audit_file(req: SaveAuditFileRequest):
             file_bytes = base64.b64decode(raw_payload)
         else:
             file_bytes = urllib.parse.unquote(raw_payload).encode("utf-8")
+        if len(file_bytes) > MAX_AUDIT_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="File size exceeds maximum allowed 10MB limit.")
         with open(dest_path, "wb") as f:
             f.write(file_bytes)
     else:
+        text_bytes = req.data_url.encode("utf-8")
+        if len(text_bytes) > MAX_AUDIT_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="File size exceeds maximum allowed 10MB limit.")
         with open(dest_path, "w", encoding="utf-8") as f:
             f.write(req.data_url)
 

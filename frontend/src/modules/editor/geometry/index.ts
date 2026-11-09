@@ -10,3 +10,5 @@ export * from './architecturalMaterials';
 export * from './siteLandscapingGenerator';
 export * from './architecturalLighting';
 export * from './architecturalExport';
+export * from './bomCalculator';
+

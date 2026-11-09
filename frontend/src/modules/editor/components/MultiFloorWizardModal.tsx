@@ -1317,6 +1317,7 @@ export const MultiFloorWizardModal: React.FC<MultiFloorWizardModalProps> = ({
 
               {currentStep < 3 ? (
                 <button
+                  id="wizard-next-step"
                   onClick={() => setCurrentStep((currentStep + 1) as 1 | 2 | 3)}
                   style={{
                     padding: '0.55rem 1.5rem',
@@ -1335,6 +1336,7 @@ export const MultiFloorWizardModal: React.FC<MultiFloorWizardModalProps> = ({
                 </button>
               ) : (
                 <button
+                  id="wizard-generate-submit"
                   onClick={handleGenerate}
                   disabled={loading}
                   style={{

@@ -1,29 +1,67 @@
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './modules/auth/store/AuthContext';
 import Login from './modules/auth/pages/Login';
 import Register from './modules/auth/pages/Register';
-import Dashboard from './modules/dashboard/pages/Dashboard';
-import Editor from './modules/editor/pages/Editor';
-import Landing from './modules/dashboard/pages/Landing';
 import { Toaster, ToastBar, toast } from 'react-hot-toast';
+
+// Code-splitting heavy studio pages: loads Three.js and heavy engines only on route visit
+const Dashboard = lazy(() => import('./modules/dashboard/pages/Dashboard'));
+const Editor = lazy(() => import('./modules/editor/pages/Editor'));
+const Landing = lazy(() => import('./modules/dashboard/pages/Landing'));
+
+function LoadingFallback() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: '#080b11',
+        color: '#38bdf8',
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: '0.82rem',
+        letterSpacing: '0.08em',
+      }}
+    >
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          border: '2px solid rgba(56, 189, 248, 0.2)',
+          borderTopColor: '#38bdf8',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+          marginBottom: '1rem',
+        }}
+      />
+      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      <span>INITIALIZING ATELIER VIEWPORT...</span>
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-primary)' }}>Loading…</div>;
+  if (loading) return <LoadingFallback />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/editor" element={<ProtectedRoute><Editor /></ProtectedRoute>} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/editor" element={<ProtectedRoute><Editor /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

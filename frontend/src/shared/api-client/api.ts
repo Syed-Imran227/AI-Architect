@@ -13,6 +13,8 @@ export interface LightProperties {
 export interface FurnitureItem {
   id?: string;
   catalogId?: string;
+  catalog_id?: string;
+  category?: string;
   name: string;
   x: number;
   y: number;
@@ -46,6 +48,11 @@ export interface Room {
   furniture?: FurnitureItem[];
   doors?: DoorSpec[];
   windows?: WindowSpec[];
+  roomType?: string;
+  isShaft?: boolean;
+  isInteriorShaft?: boolean;
+  isExteriorShaft?: boolean;
+  isVoid?: boolean;
 }
 
 export interface VastuRule {
@@ -138,6 +145,50 @@ export interface SunlightResult {
   windows_sunlight: Record<string, { direction: string; intensity: number }>;
 }
 
+export interface BomFurnitureItemDetail {
+  id: string;
+  catalog_id: string;
+  name: string;
+  unit_price: number | null;
+  is_available: boolean;
+}
+
+export interface BomScheduleItem {
+  catalog_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number | null;
+  total_cost: number | null;
+  is_price_available: boolean;
+  is_available?: boolean;
+}
+
+export interface BomCategories {
+  structural: number;
+  masonry_and_plaster: number;
+  flooring: number;
+  ceiling: number;
+  electrical: number;
+  plumbing: number;
+  painting: number;
+  doors_and_windows: number;
+  labour: number;
+  furniture: number;
+}
+
+export interface BomBudgetSummary {
+  target_budget: number;
+  estimated_total: number;
+  construction_total: number;
+  furniture_total: number;
+  remaining_budget: number;
+  overrun_amount: number;
+  budget_consumed_pct: number;
+  is_over_budget: boolean;
+  currency: string;
+  currency_symbol: string;
+}
+
 export interface BomRoomCost {
   wall: number;
   flooring: number;
@@ -150,6 +201,8 @@ export interface BomRoomCost {
   structure: number;
   material: number;
   labour: number;
+  construction_total?: number;
+  furniture?: number;
   total: number;
 }
 
@@ -159,6 +212,8 @@ export interface BomRoom {
   wall_area_sqft: number;
   num_doors: number;
   num_windows: number;
+  furniture_count?: number;
+  furniture_items?: BomFurnitureItemDetail[];
   costs: BomRoomCost;
 }
 
@@ -166,6 +221,8 @@ export interface BomSummary {
   total_area_sqft: number;
   material_total: number;
   labour_total: number;
+  construction_total?: number;
+  furniture_total?: number;
   grand_total: number;
   rate_per_sqft: number;
 }
@@ -173,7 +230,11 @@ export interface BomSummary {
 export interface BomResult {
   rooms: BomRoom[];
   summary: BomSummary;
+  furniture_schedule?: BomScheduleItem[];
+  categories?: BomCategories;
+  budget?: BomBudgetSummary;
 }
+
 
 export interface CirculationPath {
   to: string;
@@ -266,6 +327,9 @@ export interface SaveProjectPayload {
   name: string;
   layout_data: LayoutData;
   image_url?: string;
+  budget_target?: number;
+  plot_width?: number;
+  plot_length?: number;
 }
 
 export interface GeneratePlansPayload {
@@ -294,6 +358,8 @@ export interface LayoutData {
   energyResult?: EnergyResult;
   sunlightResult?: SunlightResult;
   bomResult?: BomResult;
+  budget_target?: number;
+  target_budget?: number;
 }
 
 export interface ProjectMeta {
@@ -605,7 +671,8 @@ export const exportReport = async (
 export const recalculateBOM = async (
   layout: LayoutData,
   sqft: number,
-  tier: string
+  tier: string,
+  targetBudget?: number
 ): Promise<{ status: string; bomResult: BomResult }> => {
   const res = await authFetch(`${API_BASE_URL}/bom/recalculate`, {
     method: "POST",
@@ -614,11 +681,13 @@ export const recalculateBOM = async (
       layout,
       sqft,
       tier,
+      target_budget: targetBudget || 0,
     }),
   });
   if (!res.ok) throw new Error(`BOM recalculation failed: ${await res.text()}`);
   return res.json();
 };
+
 
 export interface ArchitecturalOperation {
   action:
@@ -630,6 +699,7 @@ export interface ArchitecturalOperation {
     | "remove_furniture"
     | "swap_rooms"
     | "change_room_type"
+    | "ambiguous_request"
     | "general_advice";
   target_floor_level: number;
   target_room_name?: string | null;
@@ -652,6 +722,16 @@ export interface AgentChatResponse {
   operation: ArchitecturalOperation;
   success: boolean;
   updated_layout?: LayoutData | null;
+  change_summary?: {
+    action: string;
+    target_room?: string | null;
+    target_floor_level?: number;
+    details?: string;
+    is_destructive?: boolean;
+    before?: Record<string, any>;
+    after?: Record<string, any>;
+    [key: string]: any;
+  };
   imageUrl?: string | null;
   warnings?: string[];
   compliance?: {

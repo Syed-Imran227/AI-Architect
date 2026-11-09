@@ -83,16 +83,78 @@ export function migrateLegacyToCanonical(
 
   // Resolve legacy floors
   let rawFloors: Record<string, unknown>[] = [];
+  const nestedLayout = (raw.layout && typeof raw.layout === 'object') ? (raw.layout as Record<string, unknown>) : null;
+  const nestedLayoutData = (raw.layout_data && typeof raw.layout_data === 'object') ? (raw.layout_data as Record<string, unknown>) : null;
+
   if (Array.isArray(raw.floors) && raw.floors.length > 0) {
     rawFloors = raw.floors as Record<string, unknown>[];
+  } else if (nestedLayout && Array.isArray(nestedLayout.floors) && nestedLayout.floors.length > 0) {
+    rawFloors = nestedLayout.floors as Record<string, unknown>[];
+  } else if (nestedLayoutData && Array.isArray(nestedLayoutData.floors) && nestedLayoutData.floors.length > 0) {
+    rawFloors = nestedLayoutData.floors as Record<string, unknown>[];
   } else if (Array.isArray(raw.rooms)) {
     rawFloors = [{ level: 0, name: 'Ground Floor', rooms: raw.rooms }];
+  } else if (nestedLayout && Array.isArray(nestedLayout.rooms)) {
+    rawFloors = [{ level: 0, name: 'Ground Floor', rooms: nestedLayout.rooms }];
   } else {
     rawFloors = [{ level: 0, name: 'Ground Floor', rooms: [] }];
   }
 
-  const plotWFt = Number(raw.plot_width || raw.plotWidth || fallbackPlotWidthFt) || 30;
-  const plotLFt = Number(raw.plot_length || raw.plot_height || raw.plotLength || fallbackPlotLengthFt) || 40;
+  // Resolve explicit plot dimensions from all possible legacy/canonical formats
+  const rawExplicitWFt = Number(
+    raw.plot_width ||
+    raw.plotWidth ||
+    (rawFloors[0] && (rawFloors[0].plot_width || rawFloors[0].plotWidth)) ||
+    (raw.form as any)?.width ||
+    (raw.dimensions as any)?.width
+  );
+
+  const rawExplicitLFt = Number(
+    raw.plot_length ||
+    raw.plot_height ||
+    raw.plotLength ||
+    (rawFloors[0] && (rawFloors[0].plot_height || rawFloors[0].plot_length || rawFloors[0].plotLength)) ||
+    (raw.form as any)?.length ||
+    (raw.dimensions as any)?.length
+  );
+
+  // Scan all floors to find the maximum extent of rooms and placed furniture items (used only for untyped legacy plans)
+  let maxExtentXFt = 0;
+  let maxExtentYFt = 0;
+  for (const fl of rawFloors) {
+    const rms = Array.isArray(fl.rooms) ? (fl.rooms as Record<string, unknown>[]) : [];
+    for (const r of rms) {
+      const rx = Number(r.x) || 0;
+      const ry = Number(r.y) || 0;
+      const rw = Number(r.width) || 0;
+      const rh = Number(r.height) || 0;
+      if (rx + rw > maxExtentXFt) maxExtentXFt = rx + rw;
+      if (ry + rh > maxExtentYFt) maxExtentYFt = ry + rh;
+
+      if (Array.isArray(r.furniture)) {
+        for (const f of r.furniture as Record<string, unknown>[]) {
+          const fx = rx + (Number(f.x) || 0);
+          const fy = ry + (Number(f.y) || 0);
+          const fw = Number(f.width) || 2;
+          const fh = Number(f.height) || 2;
+          if (fx + fw > maxExtentXFt) maxExtentXFt = fx + fw;
+          if (fy + fh > maxExtentYFt) maxExtentYFt = fy + fh;
+        }
+      }
+    }
+  }
+
+  // Authoritative plot dimensions:
+  // If explicitly declared in the input payload, respect them strictly without silent expansion.
+  // Only for untyped legacy payloads lacking any declared plot dimensions do we infer from room extents.
+  const plotWFt = rawExplicitWFt > 0
+    ? rawExplicitWFt
+    : Math.max(fallbackPlotWidthFt || 30, maxExtentXFt > 0 ? Math.ceil(maxExtentXFt) : 30);
+
+  const plotLFt = rawExplicitLFt > 0
+    ? rawExplicitLFt
+    : Math.max(fallbackPlotLengthFt || 40, maxExtentYFt > 0 ? Math.ceil(maxExtentYFt) : 40);
+
   const entryDir = (String(raw.entry_direction || raw.entryDir || fallbackEntryDir).toLowerCase()) as
     | 'north'
     | 'south'
@@ -218,10 +280,11 @@ export function migrateLegacyToCanonical(
       const wallBottom = getOrCreateWall(br, bl, isExtBottom);
       const wallLeft = getOrCreateWall(bl, tl, isExtLeft);
 
+      const rType = typeof r.roomType === 'string' && r.roomType ? r.roomType : rName.toLowerCase().replace(/\s+/g, '_');
       rooms.push({
         id: roomId,
         name: rName,
-        roomType: rName.toLowerCase().replace(/\s+/g, '_'),
+        roomType: rType,
         boundaryNodeIds: [tl.id, tr.id, br.id, bl.id],
       });
 
@@ -234,24 +297,45 @@ export function migrateLegacyToCanonical(
           const n2 = nodes.find(n => n.id === targetWall.endNodeId);
           const wallLenM = (n1 && n2) ? Math.hypot(n2.x - n1.x, n2.y - n1.y) : (side === 'top' || side === 'bottom' ? rwM : rhM);
 
-          if (wallLenM < 0.6) return;
+          let chosenWall = targetWall;
+          let chosenWallLen = wallLenM;
+
+          if (chosenWallLen < 0.80) {
+            // Target wall is too short to host a door with required 0.15m margins.
+            // Check adjacent walls of this room that have sufficient length.
+            const candidateWalls = [wallBottom, wallRight, wallLeft, wallTop];
+            for (const cw of candidateWalls) {
+              const cn1 = nodes.find(n => n.id === cw.startNodeId);
+              const cn2 = nodes.find(n => n.id === cw.endNodeId);
+              const clen = (cn1 && cn2) ? Math.hypot(cn2.x - cn1.x, cn2.y - cn1.y) : 0;
+              if (clen >= 0.90) {
+                chosenWall = cw;
+                chosenWallLen = clen;
+                break;
+              }
+            }
+          }
+
+          if (chosenWallLen < 0.80) return;
 
           const CORNER_MARGIN = 0.15;
+          const maxAllowedWidth = chosenWallLen - 2 * CORNER_MARGIN;
           let widthM = ftToM(Number(d.width) || 3);
-          if (widthM > wallLenM - 2 * CORNER_MARGIN) {
-            widthM = Math.max(0.60, wallLenM - 2 * CORNER_MARGIN);
+          widthM = Math.max(0.50, Math.min(widthM, maxAllowedWidth));
+          if (widthM > maxAllowedWidth) {
+            widthM = maxAllowedWidth;
           }
 
           const posM = ftToM(Number(d.position) || 3);
           const minOffset = CORNER_MARGIN + widthM / 2;
-          const maxOffset = wallLenM - CORNER_MARGIN - widthM / 2;
-          const opOffset = minOffset >= maxOffset ? wallLenM / 2 : Math.max(minOffset, Math.min(maxOffset, posM));
+          const maxOffset = chosenWallLen - CORNER_MARGIN - widthM / 2;
+          const opOffset = minOffset >= maxOffset ? chosenWallLen / 2 : Math.max(minOffset, Math.min(maxOffset, posM));
 
-          // Deduplicate shared doorway: check if an opening on targetWall already covers this exact doorway
+          // Deduplicate shared doorway: check if an opening on chosenWall already covers this exact doorway
           const s = opOffset - widthM / 2;
           const e = opOffset + widthM / 2;
           const isDuplicate = openings.some(existingOp => {
-            if (existingOp.wallId !== targetWall.id) return false;
+            if (existingOp.wallId !== chosenWall.id) return false;
             const es = existingOp.offset - existingOp.width / 2;
             const ee = existingOp.offset + existingOp.width / 2;
             return (Math.min(e, ee) - Math.max(s, es)) > 0.1;
@@ -261,12 +345,12 @@ export function migrateLegacyToCanonical(
             const isEntrance = Boolean(
               d.is_entrance ||
               d.name?.toLowerCase().includes('entrance') ||
-              (levelId === 'lvl_0' && targetWall.kind === 'exterior' && (rName.toLowerCase().includes('foyer') || rName.toLowerCase().includes('entrance') || rName.toLowerCase().includes('living')))
+              (levelId === 'lvl_0' && chosenWall.kind === 'exterior' && (rName.toLowerCase().includes('foyer') || rName.toLowerCase().includes('entrance') || rName.toLowerCase().includes('living')))
             );
 
             openings.push({
               id: `op_door_${roomId}_${dIdx + 1}`,
-              wallId: targetWall.id,
+              wallId: chosenWall.id,
               offset: Math.round(opOffset * 1000) / 1000,
               width: Math.round(widthM * 1000) / 1000,
               height: 2.13,
@@ -287,12 +371,14 @@ export function migrateLegacyToCanonical(
           const n2 = nodes.find(n => n.id === targetWall.endNodeId);
           const wallLenM = (n1 && n2) ? Math.hypot(n2.x - n1.x, n2.y - n1.y) : (side === 'top' || side === 'bottom' ? rwM : rhM);
 
-          if (wallLenM < 0.8) return;
+          if (wallLenM < 0.90) return;
 
           const CORNER_MARGIN = 0.15;
+          const maxAllowedWidth = wallLenM - 2 * CORNER_MARGIN;
           let widthM = ftToM(Number(w.width) || 4);
-          if (widthM > wallLenM - 2 * CORNER_MARGIN) {
-            widthM = Math.max(0.60, wallLenM - 2 * CORNER_MARGIN);
+          widthM = Math.max(0.60, Math.min(widthM, maxAllowedWidth));
+          if (widthM > maxAllowedWidth) {
+            widthM = maxAllowedWidth;
           }
 
           const posM = ftToM(Number(w.position) || 3);
@@ -346,6 +432,43 @@ export function migrateLegacyToCanonical(
         });
       }
     });
+
+    // Topological Wall Classification:
+    // Determine exterior building envelope vs interior dividing partitions based on room incidence
+    for (const w of walls) {
+      let incidentCount = 0;
+      let bordersOpen = false;
+
+      for (const rm of rooms) {
+        const nids = rm.boundaryNodeIds;
+        const i1 = nids.indexOf(w.startNodeId);
+        const i2 = nids.indexOf(w.endNodeId);
+        if (i1 !== -1 && i2 !== -1) {
+          const diff = Math.abs(i1 - i2);
+          if (diff === 1 || diff === nids.length - 1) {
+            incidentCount++;
+            const rn = rm.name.toLowerCase();
+            if (
+              rn.includes('balcony') ||
+              rn.includes('terrace') ||
+              rn.includes('patio') ||
+              rn.includes('sundeck') ||
+              rn.includes('garden')
+            ) {
+              bordersOpen = true;
+            }
+          }
+        }
+      }
+
+      if (incidentCount <= 1 || bordersOpen) {
+        w.kind = 'exterior';
+        w.thickness = 0.23; // 230mm (9 in) exterior envelope
+      } else {
+        w.kind = 'interior';
+        w.thickness = 0.115; // 115mm (4.5 in) interior partition
+      }
+    }
 
     return {
       id: levelId,

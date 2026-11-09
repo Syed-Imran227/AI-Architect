@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FURNITURE_CATEGORIES,
   getAllFurnitureAssets,
   type FurnitureAssetDefinition,
   type FurnitureCategory,
@@ -14,12 +13,9 @@ import {
   Plus,
   GripVertical,
   Layers,
-  Sparkles,
-  Info,
   Box,
   Compass,
-  CheckCircle2,
-  Maximize2,
+  Check,
   LayoutGrid,
   List,
   Eye,
@@ -38,20 +34,20 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
   onClose,
   onAddItem,
   selectedRoomName,
-  activeFloorName = 'Ground Floor',
+  activeFloorName = 'Ground floor',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FurnitureCategory | 'All'>('All');
-  const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d');
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [layoutStyle, setLayoutStyle] = useState<'grid' | 'list'>('grid');
   const [inspectingAsset, setInspectingAsset] = useState<FurnitureAssetDefinition | null>(null);
   const [recentlyPlacedId, setRecentlyPlacedId] = useState<string | null>(null);
-  const [drawerWidth, setDrawerWidth] = useState(460);
+  const [drawerWidth, setDrawerWidth] = useState(440);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const categoryScrollRef = useRef<HTMLDivElement>(null);
 
-  // Track window resize for mobile logic
+  // Responsive window listener
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -60,7 +56,7 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Close on Escape key
+  // Keyboard shortcut: close drawer or modal on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -77,17 +73,9 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
 
   const allAssets = useMemo(() => getAllFurnitureAssets(), []);
 
-  // Compute item counts per category for the chips
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: allAssets.length };
-    for (const cat of FURNITURE_CATEGORIES) {
-      counts[cat] = allAssets.filter(item => item.category === cat).length;
-    }
-    return counts;
-  }, [allAssets]);
-
+  // Filtered catalog assets
   const filteredItems = useMemo(() => {
-    return allAssets.filter(item => {
+    return allAssets.filter((item) => {
       const matchesCategory =
         selectedCategory === 'All' || item.category === selectedCategory;
       const q = searchQuery.toLowerCase().trim();
@@ -105,11 +93,11 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
     onAddItem(item);
     setRecentlyPlacedId(item.id);
     setTimeout(() => {
-      setRecentlyPlacedId(prev => (prev === item.id ? null : prev));
-    }, 1400);
+      setRecentlyPlacedId((prev) => (prev === item.id ? null : prev));
+    }, 1500);
   };
 
-  // Drawer Width Resizing Handlers
+  // Draggable width resizing handlers
   const handleResizePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -119,7 +107,7 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
 
   const handleResizePointerMove = (e: React.PointerEvent) => {
     if (!isResizing) return;
-    const clamped = Math.max(340, Math.min(640, e.clientX));
+    const clamped = Math.max(340, Math.min(620, e.clientX));
     setDrawerWidth(clamped);
   };
 
@@ -129,14 +117,24 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
     (e.target as Element).releasePointerCapture(e.pointerId);
   };
 
-  // Check if grid should collapse to 1 column on narrow widths
-  const isSingleColGrid = drawerWidth < 410;
+  const isSingleColGrid = drawerWidth < 400;
+
+  // Category pills definition matching screenshot
+  const categoryPills: Array<{ key: FurnitureCategory | 'All'; label: string }> = [
+    { key: 'All', label: 'All' },
+    { key: 'Living Room', label: 'Living' },
+    { key: 'Bedroom', label: 'Bedroom' },
+    { key: 'Kitchen & Dining', label: 'Kitchen' },
+    { key: 'Bathroom', label: 'Bathroom' },
+    { key: 'Outdoor / Terrace', label: 'Outdoor' },
+    { key: 'Lighting Fixtures', label: 'Lighting' },
+  ];
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Responsive overlay backdrop on mobile */}
+          {/* Responsive backdrop on mobile */}
           {isMobile && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -150,15 +148,15 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                 left: 0,
                 right: 0,
                 bottom: 0,
-                background: 'rgba(5, 7, 12, 0.7)',
-                backdropFilter: 'blur(5px)',
-                WebkitBackdropFilter: 'blur(5px)',
+                background: 'rgba(37, 38, 34, 0.45)',
+                backdropFilter: 'blur(4px)',
+                WebkitBackdropFilter: 'blur(4px)',
                 zIndex: 48,
               }}
             />
           )}
 
-          {/* Dedicated Architectural Catalog Drawer (left-docked with draggable divider) */}
+          {/* Warm Architectural Design Toolkit Drawer */}
           <motion.div
             initial={{ x: -drawerWidth, opacity: 0.8 }}
             animate={{ x: 0, opacity: 1 }}
@@ -170,18 +168,19 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
               left: 0,
               bottom: 0,
               width: `${drawerWidth}px`,
-              maxWidth: '94vw',
-              background: '#090D16',
-              borderRight: '1px solid rgba(56, 189, 248, 0.22)',
-              boxShadow: '16px 0 48px rgba(0, 0, 0, 0.85), 0 0 32px rgba(56, 189, 248, 0.08)',
+              maxWidth: '95vw',
+              background: '#FAF8F5',
+              borderRight: '1px solid #E8E2D6',
+              boxShadow: '12px 0 36px rgba(40, 36, 28, 0.08), 2px 0 8px rgba(0, 0, 0, 0.03)',
               zIndex: 50,
               display: 'flex',
               flexDirection: 'column',
-              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+              fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              color: '#252622',
               userSelect: isResizing ? 'none' : 'auto',
             }}
           >
-            {/* ── Draggable Divider on Right Border ── */}
+            {/* ── Draggable Resize Divider on Right Border ── */}
             <div
               onPointerDown={handleResizePointerDown}
               onPointerMove={handleResizePointerMove}
@@ -199,176 +198,294 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                 justifyContent: 'center',
                 touchAction: 'none',
               }}
-              title="Drag to resize library width (340px - 640px)"
+              title="Drag to resize panel width (340px - 620px)"
             >
               <div
                 style={{
                   width: '3px',
-                  height: '52px',
+                  height: '48px',
                   borderRadius: '2px',
-                  background: isResizing ? '#38BDF8' : 'rgba(56, 189, 248, 0.35)',
-                  boxShadow: isResizing ? '0 0 12px #38BDF8' : 'none',
-                  transition: 'background 0.15s ease, box-shadow 0.15s ease',
+                  background: isResizing ? '#252622' : 'rgba(216, 210, 197, 0.7)',
+                  transition: 'background 0.15s ease',
                 }}
               />
             </div>
 
-            {/* ── Drawer Header ── */}
+            {/* ── Drawer Header (Warm Editorial Style) ── */}
             <div
               style={{
-                padding: '0.9rem 1.25rem',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '1.25rem 1.4rem 0.8rem 1.4rem',
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: '#060910',
+                flexDirection: 'column',
+                gap: '4px',
                 flexShrink: 0,
               }}
             >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={16} color="#38BDF8" />
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: '0.9rem',
-                      fontWeight: 800,
-                      color: '#F8FAFC',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    ARCHITECTURAL ASSETS
-                  </h3>
-                </div>
-                <div
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span
                   style={{
-                    margin: '3px 0 0 0',
-                    fontSize: '0.7rem',
-                    color: '#94A3B8',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
+                    fontSize: '0.66rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: '#8E8B82',
                   }}
                 >
-                  <span>LEVEL: <strong style={{ color: '#38BDF8' }}>{activeFloorName.toUpperCase()}</strong></span>
-                  {selectedRoomName && (
-                    <span>• ZONE: <strong style={{ color: '#C084FC' }}>{selectedRoomName.toUpperCase()}</strong></span>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  YOUR DESIGN TOOLKIT
+                </span>
                 <button
                   onClick={onClose}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#94A3B8',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#777970',
                     cursor: 'pointer',
-                    padding: '6px',
+                    padding: '4px',
                     borderRadius: '6px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     transition: 'all 0.15s ease',
                   }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.color = '#F8FAFC';
-                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = '#252622';
+                    e.currentTarget.style.background = '#EFEAE1';
                   }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.color = '#94A3B8';
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = '#777970';
+                    e.currentTarget.style.background = 'transparent';
                   }}
                   title="Close Library (Esc)"
                 >
-                  <X size={15} />
+                  <X size={16} />
                 </button>
+              </div>
+
+              <h2
+                style={{
+                  margin: '2px 0 0 0',
+                  fontSize: '1.22rem',
+                  fontWeight: 700,
+                  color: '#252622',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Make it feel like home
+              </h2>
+
+              {/* Floor / Zone indicator tag */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.72rem',
+                  color: '#777970',
+                  marginTop: '2px',
+                }}
+              >
+                <span>Level: <strong style={{ color: '#252622' }}>{activeFloorName}</strong></span>
+                {selectedRoomName && (
+                  <>
+                    <span>•</span>
+                    <span>Target: <strong style={{ color: '#365FA8' }}>{selectedRoomName}</strong></span>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* ── Mode & Layout Controls Bar ── */}
+            {/* ── Search Bar ── */}
+            <div style={{ padding: '0 1.4rem 0.75rem 1.4rem', flexShrink: 0 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '9px',
+                  background: '#FFFFFF',
+                  border: '1px solid #E8E2D6',
+                  borderRadius: '10px',
+                  padding: '0.52rem 0.85rem',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                }}
+              >
+                <Search size={15} color="#8E8B82" />
+                <input
+                  type="text"
+                  placeholder="Find the perfect piece..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: '#252622',
+                    fontSize: '0.82rem',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#8E8B82',
+                      cursor: 'pointer',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Category Filter Pills ── */}
+            <div
+              ref={categoryScrollRef}
+              style={{
+                display: 'flex',
+                gap: '6px',
+                overflowX: 'auto',
+                padding: '0 1.4rem 0.85rem 1.4rem',
+                scrollbarWidth: 'none',
+                flexShrink: 0,
+              }}
+            >
+              {categoryPills.map(({ key, label }) => {
+                const isSelected = selectedCategory === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedCategory(key)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '20px',
+                      border: isSelected ? '1px solid #252622' : '1px solid #E8E2D6',
+                      background: isSelected ? '#252622' : '#FFFFFF',
+                      color: isSelected ? '#FAF8F5' : '#5A5850',
+                      fontSize: '0.74rem',
+                      fontWeight: isSelected ? 600 : 500,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      boxShadow: isSelected ? '0 2px 6px rgba(37, 38, 34, 0.15)' : 'none',
+                      transition: 'all 0.15s ease',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = '#F3EFE6';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = '#FFFFFF';
+                      }
+                    }}
+                  >
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Section Title & Mode Bar ── */}
             <div
               style={{
-                padding: '0.7rem 1.25rem 0.4rem 1.25rem',
+                padding: '0 1.4rem 0.65rem 1.4rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexShrink: 0,
-                gap: '8px',
               }}
             >
-              {/* 3D Render vs 2D CAD Segmented Pill */}
-              <div
-                style={{
-                  display: 'flex',
-                  background: '#04060C',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '7px',
-                  padding: '2px',
-                  gap: '2px',
-                }}
-              >
-                <button
-                  onClick={() => setViewMode('3d')}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#252622' }}>
+                  {selectedCategory === 'All'
+                    ? 'Thoughtful essentials'
+                    : categoryPills.find((p) => p.key === selectedCategory)?.label || selectedCategory}
+                </span>
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '3px 8px',
-                    borderRadius: '5px',
-                    border: 'none',
-                    background: viewMode === '3d' ? 'rgba(56, 189, 248, 0.22)' : 'transparent',
-                    color: viewMode === '3d' ? '#38BDF8' : '#64748B',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    color: '#8E8B82',
                     fontFamily: "'JetBrains Mono', monospace",
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: viewMode === '3d' ? '0 0 10px rgba(56, 189, 248, 0.25)' : 'none',
                   }}
-                  title="View photorealistic 3D architectural asset renders"
                 >
-                  <Box size={12} />
-                  <span>3D RENDER</span>
-                </button>
-
-                <button
-                  onClick={() => setViewMode('2d')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '3px 8px',
-                    borderRadius: '5px',
-                    border: 'none',
-                    background: viewMode === '2d' ? 'rgba(56, 189, 248, 0.22)' : 'transparent',
-                    color: viewMode === '2d' ? '#38BDF8' : '#64748B',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    fontFamily: "'JetBrains Mono', monospace",
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: viewMode === '2d' ? '0 0 10px rgba(56, 189, 248, 0.25)' : 'none',
-                  }}
-                  title="View top-down 2D CAD architectural plan symbols"
-                >
-                  <Compass size={12} />
-                  <span>2D CAD</span>
-                </button>
+                  {filteredItems.length} items
+                </span>
               </div>
 
-              {/* Density / Layout Switcher (Grid vs List) + Count */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* View switchers (2D CAD / 3D Render & Grid / List) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {/* 2D CAD vs 3D */}
                 <div
                   style={{
                     display: 'flex',
-                    background: '#04060C',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: '#FFFFFF',
+                    border: '1px solid #E8E2D6',
+                    borderRadius: '6px',
+                    padding: '2px',
+                    gap: '2px',
+                  }}
+                >
+                  <button
+                    onClick={() => setViewMode('2d')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 7px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: viewMode === '2d' ? '#252622' : 'transparent',
+                      color: viewMode === '2d' ? '#FAF8F5' : '#777970',
+                      fontSize: '0.66rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="2D CAD architectural plan symbols"
+                  >
+                    <Compass size={11} />
+                    <span>2D</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('3d')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 7px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: viewMode === '3d' ? '#252622' : 'transparent',
+                      color: viewMode === '3d' ? '#FAF8F5' : '#777970',
+                      fontSize: '0.66rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="3D perspective renders"
+                  >
+                    <Box size={11} />
+                    <span>3D</span>
+                  </button>
+                </div>
+
+                {/* Grid vs List */}
+                <div
+                  style={{
+                    display: 'flex',
+                    background: '#FFFFFF',
+                    border: '1px solid #E8E2D6',
                     borderRadius: '6px',
                     padding: '2px',
                     gap: '2px',
@@ -377,162 +494,61 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                   <button
                     onClick={() => setLayoutStyle('grid')}
                     style={{
-                      background: layoutStyle === 'grid' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
-                      color: layoutStyle === 'grid' ? '#38BDF8' : '#64748B',
+                      background: layoutStyle === 'grid' ? '#EFEAE1' : 'transparent',
+                      color: layoutStyle === 'grid' ? '#252622' : '#8E8B82',
                       border: 'none',
                       borderRadius: '4px',
                       padding: '3px 5px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
                     }}
-                    title="Spacious 2-column architectural grid"
+                    title="Grid view"
                   >
                     <LayoutGrid size={12} />
                   </button>
                   <button
                     onClick={() => setLayoutStyle('list')}
                     style={{
-                      background: layoutStyle === 'list' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
-                      color: layoutStyle === 'list' ? '#38BDF8' : '#64748B',
+                      background: layoutStyle === 'list' ? '#EFEAE1' : 'transparent',
+                      color: layoutStyle === 'list' ? '#252622' : '#8E8B82',
                       border: 'none',
                       borderRadius: '4px',
                       padding: '3px 5px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
                     }}
-                    title="Detailed architectural spec list"
+                    title="List view"
                   >
                     <List size={12} />
                   </button>
                 </div>
-
-                <div
-                  style={{
-                    fontSize: '0.64rem',
-                    color: '#94A3B8',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  <strong style={{ color: '#38BDF8' }}>{filteredItems.length}</strong> / {allAssets.length}
-                </div>
               </div>
             </div>
 
-            {/* ── Search Bar ── */}
-            <div style={{ padding: '0.35rem 1.25rem 0.45rem 1.25rem', flexShrink: 0 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: '#04060C',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                  borderRadius: '7px',
-                  padding: '0.45rem 0.75rem',
-                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
-                }}
-              >
-                <Search size={14} color="#38BDF8" />
-                <input
-                  type="text"
-                  placeholder="Search 32 premium architectural assets..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: '#F8FAFC',
-                    fontSize: '0.78rem',
-                    width: '100%',
-                    fontFamily: "'JetBrains Mono', monospace",
-                  }}
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 0 }}
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* ── Category Filter Pills with Item Counts ── */}
-            <div
-              ref={categoryScrollRef}
-              style={{
-                display: 'flex',
-                gap: '6px',
-                overflowX: 'auto',
-                padding: '0.2rem 1.25rem 0.65rem 1.25rem',
-                scrollbarWidth: 'none',
-                flexShrink: 0,
-              }}
-            >
-              {(['All', ...FURNITURE_CATEGORIES] as const).map((cat) => {
-                const isSelected = selectedCategory === cat;
-                const count = categoryCounts[cat] || 0;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      padding: '0.32rem 0.7rem',
-                      borderRadius: '6px',
-                      border: isSelected ? '1px solid #38BDF8' : '1px solid rgba(255, 255, 255, 0.08)',
-                      background: isSelected ? 'rgba(56, 189, 248, 0.18)' : '#04060C',
-                      color: isSelected ? '#38BDF8' : '#94A3B8',
-                      fontSize: '0.68rem',
-                      fontWeight: isSelected ? 700 : 500,
-                      whiteSpace: 'nowrap',
-                      cursor: 'pointer',
-                      boxShadow: isSelected ? '0 0 10px rgba(56, 189, 248, 0.2)' : 'none',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      transition: 'all 0.15s ease',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span>{cat}</span>
-                    <span
-                      style={{
-                        fontSize: '0.62rem',
-                        opacity: isSelected ? 0.9 : 0.6,
-                        background: isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)',
-                        padding: '1px 5px',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* ── Catalog Item Cards Container (Independent Scrolling) ── */}
+            {/* ── Catalog Item Cards Container (Scrollable) ── */}
             <div
               style={{
                 flex: 1,
                 overflowY: 'auto',
-                padding: '0 1.25rem 0.85rem 1.25rem',
+                padding: '0 1.4rem 1.4rem 1.4rem',
               }}
             >
               {filteredItems.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: '#64748B', fontFamily: "'JetBrains Mono', monospace" }}>
-                  <Layers size={28} style={{ margin: '0 auto 8px auto', opacity: 0.4 }} />
-                  <p style={{ margin: 0, fontSize: '0.82rem' }}>NO ASSETS MATCHING "{searchQuery}"</p>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.72rem', color: '#475569' }}>
-                    Try searching for sofa, bed, table, desk, lamp, or shower
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '3.5rem 1rem',
+                    color: '#8E8B82',
+                  }}
+                >
+                  <Layers size={28} style={{ margin: '0 auto 8px auto', opacity: 0.5 }} />
+                  <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 600, color: '#252622' }}>
+                    No pieces matching &ldquo;{searchQuery}&rdquo;
+                  </p>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '0.74rem' }}>
+                    Try searching for sofa, chair, table, bed, cabinet, or plant
                   </p>
                   <button
                     onClick={() => {
@@ -541,36 +557,38 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                     }}
                     style={{
                       marginTop: '12px',
-                      background: 'rgba(56, 189, 248, 0.15)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      color: '#38BDF8',
-                      fontSize: '0.72rem',
-                      padding: '4px 10px',
-                      borderRadius: '5px',
+                      background: '#FFFFFF',
+                      border: '1px solid #E8E2D6',
+                      color: '#252622',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      padding: '5px 12px',
+                      borderRadius: '6px',
                       cursor: 'pointer',
                     }}
                   >
-                    Reset Filters
+                    Reset filters
                   </button>
                 </div>
               ) : layoutStyle === 'grid' ? (
                 /* ══════════════════════════════════════════════════════════════
-                   GRID VIEW (2-COLUMN ARCHITECTURAL TILES)
+                   GRID VIEW: 2-COLUMN ARCHITECTURAL TILES
                    ══════════════════════════════════════════════════════════════ */
                 <motion.div
                   key={`grid-${selectedCategory}-${viewMode}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.15 }}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: isSingleColGrid ? '1fr' : 'repeat(2, 1fr)',
-                    gap: '10px',
+                    gap: '12px',
                   }}
                 >
-                  {filteredItems.map(item => {
-                    const isLighting = item.category === 'Lighting Fixtures';
+                  {filteredItems.map((item) => {
                     const isRecentlyPlaced = recentlyPlacedId === item.id;
+                    const dimLabelM = `${item.dimensions.widthM.toFixed(2)} × ${item.dimensions.depthM.toFixed(2)} m`;
+                    const dimLabelFt = `${item.dimensions.widthFt} × ${item.dimensions.depthFt} ft`;
 
                     return (
                       <div
@@ -581,48 +599,39 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                           e.dataTransfer.effectAllowed = 'copy';
                         }}
                         style={{
-                          background: '#070B14',
-                          border: isRecentlyPlaced
-                            ? '1px solid #10B981'
-                            : isLighting
-                            ? '1px solid rgba(253, 224, 71, 0.28)'
-                            : '1px solid rgba(255, 255, 255, 0.09)',
-                          borderRadius: '9px',
+                          background: '#FFFFFF',
+                          border: isRecentlyPlaced ? '1px solid #16A34A' : '1px solid #ECE7DD',
+                          borderRadius: '10px',
                           display: 'flex',
                           flexDirection: 'column',
                           overflow: 'hidden',
                           cursor: 'grab',
                           boxShadow: isRecentlyPlaced
-                            ? '0 0 16px rgba(16, 185, 129, 0.3)'
-                            : '0 2px 10px rgba(0, 0, 0, 0.45)',
-                          transition: 'border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease',
+                            ? '0 0 14px rgba(22, 163, 74, 0.2)'
+                            : '0 1px 4px rgba(0, 0, 0, 0.03)',
+                          transition: 'all 0.18s ease',
                         }}
-                        onMouseEnter={e => {
+                        onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateY(-2px)';
                           if (!isRecentlyPlaced) {
-                            e.currentTarget.style.borderColor = isLighting ? '#FDE047' : '#38BDF8';
-                            e.currentTarget.style.boxShadow = isLighting
-                              ? '0 6px 18px rgba(0,0,0,0.6), 0 0 14px rgba(253, 224, 71, 0.22)'
-                              : '0 6px 18px rgba(0,0,0,0.6), 0 0 14px rgba(56, 189, 248, 0.22)';
+                            e.currentTarget.style.borderColor = '#D4CDC0';
+                            e.currentTarget.style.boxShadow = '0 6px 18px rgba(40, 36, 28, 0.08)';
                           }
                         }}
-                        onMouseLeave={e => {
+                        onMouseLeave={(e) => {
                           e.currentTarget.style.transform = 'translateY(0)';
                           if (!isRecentlyPlaced) {
-                            e.currentTarget.style.borderColor = isLighting
-                              ? 'rgba(253, 224, 71, 0.28)'
-                              : 'rgba(255, 255, 255, 0.09)';
-                            e.currentTarget.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.45)';
+                            e.currentTarget.style.borderColor = '#ECE7DD';
+                            e.currentTarget.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.03)';
                           }
                         }}
                       >
-                        {/* Architectural Viewport Container (108px height) */}
+                        {/* Thumbnail Viewport (96px height) */}
                         <div
                           style={{
-                            height: '108px',
-                            background:
-                              'radial-gradient(circle, rgba(56, 189, 248, 0.08) 1px, transparent 1px) 0 0 / 12px 12px, #030509',
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                            height: '96px',
+                            background: '#FBF9F5',
+                            borderBottom: '1px solid #F0ECE4',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -630,23 +639,23 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                             overflow: 'hidden',
                           }}
                         >
-                          {/* Drag grip indicator in top left */}
+                          {/* Drag affordance indicator */}
                           <div
                             style={{
                               position: 'absolute',
                               top: 6,
                               left: 6,
-                              color: '#475569',
+                              color: '#B8B4AA',
                               display: 'flex',
                               alignItems: 'center',
                               cursor: 'grab',
                             }}
-                            title="Drag onto floor plan"
+                            title="Drag directly onto floor plan"
                           >
                             <GripVertical size={13} />
                           </div>
 
-                          {/* Quick spec inspect button in top right */}
+                          {/* Quick spec inspector */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -656,32 +665,31 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                               position: 'absolute',
                               top: 6,
                               right: 6,
-                              background: 'rgba(5, 7, 12, 0.8)',
-                              border: '1px solid rgba(255, 255, 255, 0.15)',
+                              background: '#FFFFFF',
+                              border: '1px solid #E8E2D6',
                               borderRadius: '4px',
                               padding: '3px',
-                              color: '#94A3B8',
+                              color: '#777970',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               transition: 'all 0.15s ease',
-                              zIndex: 2,
                             }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.color = '#38BDF8';
-                              e.currentTarget.style.borderColor = '#38BDF8';
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = '#252622';
+                              e.currentTarget.style.borderColor = '#252622';
                             }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.color = '#94A3B8';
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = '#777970';
+                              e.currentTarget.style.borderColor = '#E8E2D6';
                             }}
-                            title="Inspect specifications & materials"
+                            title="Inspect dimensions & specifications"
                           >
                             <Eye size={12} />
                           </button>
 
-                          {/* Vector Asset Preview */}
+                          {/* Visual Presentation (2D CAD vector or 3D) */}
                           <div
                             onClick={() => setInspectingAsset(item)}
                             style={{
@@ -691,141 +699,118 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                               alignItems: 'center',
                               justifyContent: 'center',
                               cursor: 'pointer',
+                              padding: '8px',
                             }}
                           >
                             {viewMode === '3d' ? (
-                              <FurnitureProductImage assetId={item.id} width={130} height={96} />
+                              <FurnitureProductImage assetId={item.id} width={120} height={80} />
                             ) : (
-                              <FurnitureThumbnail assetId={item.id} width={100} height={75} />
+                              <FurnitureThumbnail assetId={item.id} width={80} height={64} darkMode={false} />
                             )}
                           </div>
                         </div>
 
-                        {/* Card Body & Information */}
+                        {/* Card Information & Action */}
                         <div
                           style={{
                             padding: '0.65rem 0.75rem',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '5px',
-                            flex: 1,
+                            gap: '3px',
                           }}
                         >
-                          {/* Asset Name */}
                           <div
                             style={{
                               fontSize: '0.8rem',
                               fontWeight: 700,
-                              color: '#F8FAFC',
+                              color: '#252622',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              lineHeight: 1.2,
                             }}
                             title={item.name}
                           >
                             {item.name}
                           </div>
 
-                          {/* Dimensions */}
+                          {/* Dual units dimension readout */}
                           <div
                             style={{
-                              fontSize: '0.66rem',
-                              color: '#94A3B8',
+                              fontSize: '0.68rem',
+                              color: '#777970',
                               fontFamily: "'JetBrains Mono', monospace",
+                              letterSpacing: '-0.01em',
+                            }}
+                          >
+                            {dimLabelM}
+                          </div>
+
+                          {/* Card Footer: Category tag & Add button */}
+                          <div
+                            style={{
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
+                              marginTop: '5px',
+                              paddingTop: '5px',
+                              borderTop: '1px solid #F4EFE6',
                             }}
                           >
-                            <span style={{ color: '#E2E8F0', fontWeight: 600 }}>
-                              {item.dimensions.widthFt} × {item.dimensions.depthFt} ft
+                            <span
+                              style={{
+                                fontSize: '0.62rem',
+                                color: '#8E8B82',
+                                fontFamily: "'JetBrains Mono', monospace",
+                              }}
+                            >
+                              {dimLabelFt}
                             </span>
-                            <span style={{ color: '#64748B', fontSize: '0.62rem' }}>
-                              {item.dimensions.widthM.toFixed(1)}×{item.dimensions.depthM.toFixed(1)}m
-                            </span>
-                          </div>
 
-                          {/* Tag / Category */}
-                          <div
-                            style={{
-                              fontSize: '0.62rem',
-                              color: isLighting ? '#FDE047' : '#64748B',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              fontFamily: "'JetBrains Mono', monospace",
-                            }}
-                          >
-                            {item.lightProperties ? (
-                              <span>⚡ {item.lightProperties.radius}ft radius</span>
-                            ) : (
-                              <span>{item.category}</span>
-                            )}
+                            <button
+                              onClick={() => handleAddItemWithFeedback(item)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                background: isRecentlyPlaced ? '#16A34A' : '#FAF8F5',
+                                border: isRecentlyPlaced ? '1px solid #16A34A' : '1px solid #E8E2D6',
+                                borderRadius: '5px',
+                                padding: '2px 7px',
+                                color: isRecentlyPlaced ? '#FFFFFF' : '#252622',
+                                fontSize: '0.68rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isRecentlyPlaced) {
+                                  e.currentTarget.style.background = '#252622';
+                                  e.currentTarget.style.color = '#FAF8F5';
+                                  e.currentTarget.style.borderColor = '#252622';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isRecentlyPlaced) {
+                                  e.currentTarget.style.background = '#FAF8F5';
+                                  e.currentTarget.style.color = '#252622';
+                                  e.currentTarget.style.borderColor = '#E8E2D6';
+                                }
+                              }}
+                              title="Add to floor plan"
+                            >
+                              {isRecentlyPlaced ? (
+                                <>
+                                  <Check size={11} />
+                                  <span>Added</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus size={11} />
+                                  <span>Add</span>
+                                </>
+                              )}
+                            </button>
                           </div>
-
-                          {/* Add Action Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddItemWithFeedback(item);
-                            }}
-                            style={{
-                              marginTop: '3px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '4px',
-                              padding: '0.38rem 0.5rem',
-                              borderRadius: '6px',
-                              border: isRecentlyPlaced
-                                ? '1px solid #10B981'
-                                : isLighting
-                                ? '1px solid #FDE047'
-                                : '1px solid #38BDF8',
-                              background: isRecentlyPlaced
-                                ? 'rgba(16, 185, 129, 0.22)'
-                                : isLighting
-                                ? 'rgba(234, 179, 8, 0.18)'
-                                : 'rgba(56, 189, 248, 0.15)',
-                              color: isRecentlyPlaced
-                                ? '#10B981'
-                                : isLighting
-                                ? '#FDE047'
-                                : '#38BDF8',
-                              fontSize: '0.7rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                              fontFamily: "'JetBrains Mono', monospace",
-                              width: '100%',
-                            }}
-                            onMouseEnter={e => {
-                              if (!isRecentlyPlaced) {
-                                e.currentTarget.style.background = isLighting ? '#FDE047' : '#38BDF8';
-                                e.currentTarget.style.color = '#0B0F19';
-                              }
-                            }}
-                            onMouseLeave={e => {
-                              if (!isRecentlyPlaced) {
-                                e.currentTarget.style.background = isLighting ? 'rgba(234, 179, 8, 0.18)' : 'rgba(56, 189, 248, 0.15)';
-                                e.currentTarget.style.color = isLighting ? '#FDE047' : '#38BDF8';
-                              }
-                            }}
-                            title={`Place ${item.name} onto floor plan`}
-                          >
-                            {isRecentlyPlaced ? (
-                              <>
-                                <CheckCircle2 size={12} color="#10B981" />
-                                <span>ADDED</span>
-                              </>
-                            ) : (
-                              <>
-                                <Plus size={12} />
-                                <span>ADD</span>
-                              </>
-                            )}
-                          </button>
                         </div>
                       </div>
                     );
@@ -833,22 +818,19 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                 </motion.div>
               ) : (
                 /* ══════════════════════════════════════════════════════════════
-                   LIST VIEW (TECHNICAL ARCHITECTURAL ROWS)
+                   LIST VIEW: DETAILED ARCHITECTURAL SPEC LIST
                    ══════════════════════════════════════════════════════════════ */
                 <motion.div
                   key={`list-${selectedCategory}-${viewMode}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                  }}
+                  transition={{ duration: 0.15 }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
                 >
-                  {filteredItems.map(item => {
-                    const isLighting = item.category === 'Lighting Fixtures';
+                  {filteredItems.map((item) => {
                     const isRecentlyPlaced = recentlyPlacedId === item.id;
+                    const dimLabelM = `${item.dimensions.widthM.toFixed(2)} × ${item.dimensions.depthM.toFixed(2)} m`;
+                    const dimLabelFt = `${item.dimensions.widthFt} × ${item.dimensions.depthFt} ft`;
 
                     return (
                       <div
@@ -859,229 +841,85 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
                           e.dataTransfer.effectAllowed = 'copy';
                         }}
                         style={{
-                          background: '#070B14',
-                          border: isRecentlyPlaced
-                            ? '1px solid #10B981'
-                            : isLighting
-                            ? '1px solid rgba(253, 224, 71, 0.28)'
-                            : '1px solid rgba(255, 255, 255, 0.09)',
+                          background: '#FFFFFF',
+                          border: isRecentlyPlaced ? '1px solid #16A34A' : '1px solid #ECE7DD',
                           borderRadius: '8px',
-                          padding: '0.55rem 0.75rem',
+                          padding: '8px 12px',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
                           gap: '12px',
                           cursor: 'grab',
-                          boxShadow: isRecentlyPlaced
-                            ? '0 0 16px rgba(16, 185, 129, 0.3)'
-                            : '0 2px 8px rgba(0, 0, 0, 0.4)',
-                          transition: 'border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease',
+                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                          transition: 'all 0.15s ease',
                         }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
+                        onMouseEnter={(e) => {
                           if (!isRecentlyPlaced) {
-                            e.currentTarget.style.borderColor = isLighting ? '#FDE047' : '#38BDF8';
-                            e.currentTarget.style.boxShadow = isLighting
-                              ? '0 0 14px rgba(253, 224, 71, 0.2)'
-                              : '0 0 14px rgba(56, 189, 248, 0.2)';
+                            e.currentTarget.style.borderColor = '#D4CDC0';
+                            e.currentTarget.style.background = '#FAF8F5';
                           }
                         }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.transform = 'translateY(0)';
+                        onMouseLeave={(e) => {
                           if (!isRecentlyPlaced) {
-                            e.currentTarget.style.borderColor = isLighting
-                              ? 'rgba(253, 224, 71, 0.28)'
-                              : 'rgba(255, 255, 255, 0.09)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.4)';
+                            e.currentTarget.style.borderColor = '#ECE7DD';
+                            e.currentTarget.style.background = '#FFFFFF';
                           }
                         }}
                       >
-                        {/* Left: Drag Grip + Preview */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                          <span style={{ color: '#475569', cursor: 'grab' }} title="Drag onto floor plan">
-                            <GripVertical size={14} />
-                          </span>
-
-                          <div
-                            onClick={() => setInspectingAsset(item)}
-                            style={{
-                              width: '84px',
-                              height: '62px',
-                              flexShrink: 0,
-                              background: '#030509',
-                              borderRadius: '6px',
-                              border: '1px solid rgba(255, 255, 255, 0.08)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              overflow: 'hidden',
-                              position: 'relative',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {viewMode === '3d' ? (
-                              <FurnitureProductImage assetId={item.id} width={80} height={58} />
-                            ) : (
-                              <FurnitureThumbnail assetId={item.id} width={64} height={48} />
-                            )}
-
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setInspectingAsset(item);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                top: 2,
-                                right: 2,
-                                background: 'rgba(5, 7, 12, 0.75)',
-                                border: '1px solid rgba(255, 255, 255, 0.15)',
-                                borderRadius: '4px',
-                                padding: '2px',
-                                color: '#94A3B8',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                              title="Inspect specifications & materials"
-                            >
-                              <Maximize2 size={10} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Middle: Metadata */}
-                        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span
-                              style={{
-                                fontSize: '0.82rem',
-                                fontWeight: 700,
-                                color: '#F8FAFC',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                              title={item.name}
-                            >
-                              {item.name}
-                            </span>
-                            {isLighting && (
-                              <span
-                                style={{
-                                  fontSize: '0.58rem',
-                                  padding: '1px 4px',
-                                  borderRadius: '3px',
-                                  background: 'rgba(234, 179, 8, 0.2)',
-                                  color: '#FDE047',
-                                  border: '1px solid rgba(234, 179, 8, 0.4)',
-                                  fontWeight: 800,
-                                  fontFamily: "'JetBrains Mono', monospace",
-                                  flexShrink: 0,
-                                }}
-                              >
-                                LIGHT
-                              </span>
-                            )}
-                          </div>
-
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '0.68rem',
-                              color: '#94A3B8',
-                              marginTop: '2px',
-                              fontFamily: "'JetBrains Mono', monospace",
-                            }}
-                          >
-                            <span style={{ color: '#E2E8F0', fontWeight: 600 }}>
-                              {item.dimensions.widthFt} × {item.dimensions.depthFt} ft
-                            </span>
-                            <span style={{ color: '#64748B' }}>
-                              • {item.dimensions.widthM.toFixed(1)}×{item.dimensions.depthM.toFixed(1)}m
-                            </span>
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: '0.64rem',
-                              color: '#64748B',
-                              marginTop: '2px',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {item.lightProperties ? (
-                              <span style={{ color: '#FDE047', fontWeight: 600 }}>⚡ {item.lightProperties.radius}ft luminous radius</span>
-                            ) : (
-                              <span style={{ color: '#94A3B8' }}>{item.category}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Right: ADD Action Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddItemWithFeedback(item);
+                        <div
+                          style={{
+                            width: '46px',
+                            height: '40px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: '#FBF9F5',
+                            borderRadius: '5px',
+                            border: '1px solid #E8E2D6',
+                            flexShrink: 0,
                           }}
+                        >
+                          {viewMode === '3d' ? (
+                            <FurnitureProductImage assetId={item.id} width={42} height={36} />
+                          ) : (
+                            <FurnitureThumbnail assetId={item.id} width={40} height={34} darkMode={false} />
+                          )}
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#252622' }}>
+                            {item.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '0.68rem',
+                              color: '#777970',
+                              fontFamily: "'JetBrains Mono', monospace",
+                              marginTop: '1px',
+                            }}
+                          >
+                            {dimLabelM} · {dimLabelFt}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleAddItemWithFeedback(item)}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: '3px',
-                            padding: '0.38rem 0.7rem',
-                            borderRadius: '6px',
-                            border: isRecentlyPlaced
-                              ? '1px solid #10B981'
-                              : isLighting
-                              ? '1px solid #FDE047'
-                              : '1px solid #38BDF8',
-                            background: isRecentlyPlaced
-                              ? 'rgba(16, 185, 129, 0.22)'
-                              : isLighting
-                              ? 'rgba(234, 179, 8, 0.18)'
-                              : 'rgba(56, 189, 248, 0.15)',
-                            color: isRecentlyPlaced
-                              ? '#10B981'
-                              : isLighting
-                              ? '#FDE047'
-                              : '#38BDF8',
+                            background: isRecentlyPlaced ? '#16A34A' : '#252622',
+                            border: 'none',
+                            borderRadius: '5px',
+                            padding: '4px 10px',
+                            color: '#FAF8F5',
                             fontSize: '0.72rem',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease',
                             flexShrink: 0,
-                            fontFamily: "'JetBrains Mono', monospace",
                           }}
-                          onMouseEnter={e => {
-                            if (!isRecentlyPlaced) {
-                              e.currentTarget.style.background = isLighting ? '#FDE047' : '#38BDF8';
-                              e.currentTarget.style.color = '#0B0F19';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            if (!isRecentlyPlaced) {
-                              e.currentTarget.style.background = isLighting ? 'rgba(234, 179, 8, 0.18)' : 'rgba(56, 189, 248, 0.15)';
-                              e.currentTarget.style.color = isLighting ? '#FDE047' : '#38BDF8';
-                            }
-                          }}
-                          title={`Place ${item.name}`}
                         >
-                          {isRecentlyPlaced ? (
-                            <>
-                              <CheckCircle2 size={12} color="#10B981" />
-                              <span>ADDED</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={12} />
-                              <span>ADD</span>
-                            </>
-                          )}
+                          {isRecentlyPlaced ? <Check size={12} /> : <Plus size={12} />}
+                          <span>{isRecentlyPlaced ? 'Added' : 'Add'}</span>
                         </button>
                       </div>
                     );
@@ -1090,267 +928,226 @@ export const FurnitureCatalogDrawer: React.FC<FurnitureCatalogDrawerProps> = ({
               )}
             </div>
 
-            {/* ── Footer Tips & Status ── */}
-            <div
-              style={{
-                padding: '0.7rem 1.25rem',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-                background: '#060910',
-                fontSize: '0.7rem',
-                color: '#94A3B8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontFamily: "'JetBrains Mono', monospace",
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Info size={13} color="#38BDF8" />
-                <span>Drag to plan or click <strong>ADD</strong>. Press Esc to close.</span>
-              </div>
-              <span style={{ fontSize: '0.62rem', color: '#64748B' }}>32 ASSETS</span>
-            </div>
-          </motion.div>
-
-          {/* ── Asset Specifications / Quick Specs Modal ── */}
-          {inspectingAsset && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setInspectingAsset(null)}
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'rgba(3, 5, 10, 0.78)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
-                zIndex: 70,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '1rem',
-              }}
-            >
+            {/* ── Asset Specification Inspection Modal (Warm Architectural) ── */}
+            {inspectingAsset && (
               <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setInspectingAsset(null)}
                 style={{
-                  width: '480px',
-                  maxWidth: '94vw',
-                  background: '#0B0F19',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  borderRadius: '12px',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(56, 189, 248, 0.15)',
-                  overflow: 'hidden',
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(37, 38, 34, 0.45)',
+                  backdropFilter: 'blur(4px)',
+                  WebkitBackdropFilter: 'blur(4px)',
                   display: 'flex',
-                  flexDirection: 'column',
-                  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 80,
+                  padding: '1rem',
                 }}
               >
-                {/* Modal Header */}
-                <div
+                <motion.div
+                  initial={{ scale: 0.94, opacity: 0, y: 10 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.94, opacity: 0, y: 10 }}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
-                    padding: '0.85rem 1.2rem',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    width: '100%',
+                    maxWidth: '480px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E8E2D6',
+                    borderRadius: '14px',
+                    boxShadow: '0 20px 48px rgba(40, 36, 28, 0.15)',
+                    overflow: 'hidden',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: '#070A12',
+                    flexDirection: 'column',
+                    fontFamily: 'inherit',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Sparkles size={15} color="#38BDF8" />
-                    <span
-                      style={{
-                        fontSize: '0.82rem',
-                        fontWeight: 800,
-                        color: '#F8FAFC',
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >
-                      ARCHITECTURAL SPECIFICATION
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setInspectingAsset(null)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#94A3B8',
-                      cursor: 'pointer',
-                      padding: '4px',
-                    }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                {/* High-Res Asset View */}
-                <div
-                  style={{
-                    height: '200px',
-                    background: 'radial-gradient(circle, rgba(56, 189, 248, 0.08) 1px, transparent 1px) 0 0 / 14px 14px, #04060B',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                  }}
-                >
-                  {viewMode === '3d' ? (
-                    <FurnitureProductImage assetId={inspectingAsset.id} width={260} height={175} />
-                  ) : (
-                    <FurnitureThumbnail assetId={inspectingAsset.id} width={200} height={150} />
-                  )}
-                  <span
-                    style={{
-                      position: 'absolute',
-                      bottom: 8,
-                      right: 12,
-                      fontSize: '0.62rem',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      color: '#64748B',
-                    }}
-                  >
-                    {viewMode === '3d' ? 'ISOMETRIC 3D CAD RENDER' : 'PLAN CAD VECTOR SYMBOL'}
-                  </span>
-                </div>
-
-                {/* Details Content */}
-                <div style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#F8FAFC' }}>
-                      {inspectingAsset.name}
-                    </h4>
-                    <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#94A3B8' }}>
-                      {inspectingAsset.description}
-                    </p>
-                  </div>
-
+                  {/* Modal Header */}
                   <div
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: '8px',
-                      background: '#060910',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      borderRadius: '8px',
-                      padding: '0.75rem',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '0.7rem',
+                      padding: '1rem 1.4rem',
+                      borderBottom: '1px solid #F0ECE4',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#FAF8F5',
                     }}
                   >
                     <div>
-                      <span style={{ color: '#64748B' }}>CATEGORY:</span>
-                      <div style={{ color: '#F8FAFC', fontWeight: 600 }}>{inspectingAsset.category}</div>
+                      <span
+                        style={{
+                          fontSize: '0.64rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.08em',
+                          textTransform: 'uppercase',
+                          color: '#8E8B82',
+                        }}
+                      >
+                        ARCHITECTURAL SPECIFICATION
+                      </span>
+                      <h3 style={{ margin: '2px 0 0 0', fontSize: '1.05rem', fontWeight: 700, color: '#252622' }}>
+                        {inspectingAsset.name}
+                      </h3>
                     </div>
-                    <div>
-                      <span style={{ color: '#64748B' }}>DIMENSIONS (FT):</span>
-                      <div style={{ color: '#38BDF8', fontWeight: 600 }}>
-                        {inspectingAsset.dimensions.widthFt} × {inspectingAsset.dimensions.depthFt} ft
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748B' }}>METRIC (M):</span>
-                      <div style={{ color: '#F8FAFC', fontWeight: 600 }}>
-                        {inspectingAsset.dimensions.widthM.toFixed(2)} × {inspectingAsset.dimensions.depthM.toFixed(2)} m
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748B' }}>HEIGHT:</span>
-                      <div style={{ color: '#A78BFA', fontWeight: 600 }}>
-                        {inspectingAsset.dimensions.heightFt} ft ({inspectingAsset.dimensions.heightM.toFixed(2)} m)
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Architectural Placement Guidance */}
-                  <div
-                    style={{
-                      background: 'rgba(56, 189, 248, 0.06)',
-                      border: '1px solid rgba(56, 189, 248, 0.18)',
-                      borderRadius: '6px',
-                      padding: '0.6rem 0.8rem',
-                      fontSize: '0.7rem',
-                      color: '#94A3B8',
-                      fontFamily: "'JetBrains Mono', monospace",
-                    }}
-                  >
-                    <strong style={{ color: '#38BDF8' }}>PLANNING GUIDANCE:</strong> Maintain min 2.5 ft clearance from circulation corridors and door swing arcs. Snap to interior room perimeter.
-                  </div>
-
-                  {inspectingAsset.lightProperties && (
-                    <div
-                      style={{
-                        background: 'rgba(234, 179, 8, 0.1)',
-                        border: '1px solid rgba(234, 179, 8, 0.3)',
-                        borderRadius: '6px',
-                        padding: '0.6rem 0.8rem',
-                        fontSize: '0.72rem',
-                        color: '#FDE047',
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >
-                      ⚡ <strong>Luminous Fixture:</strong> {inspectingAsset.lightProperties.radius}ft radius •{' '}
-                      {inspectingAsset.lightProperties.intensity} intensity ({inspectingAsset.lightProperties.color})
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                    <button
-                      onClick={() => {
-                        handleAddItemWithFeedback(inspectingAsset);
-                        setInspectingAsset(null);
-                      }}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        padding: '0.55rem',
-                        borderRadius: '6px',
-                        border: '1px solid #38BDF8',
-                        background: '#38BDF8',
-                        color: '#0B0F19',
-                        fontWeight: 700,
-                        fontSize: '0.78rem',
-                        cursor: 'pointer',
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >
-                      <Plus size={14} />
-                      <span>PLACE ASSET ON FLOOR PLAN</span>
-                    </button>
                     <button
                       onClick={() => setInspectingAsset(null)}
                       style={{
-                        padding: '0.55rem 0.9rem',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: '#94A3B8',
-                        fontWeight: 600,
-                        fontSize: '0.78rem',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#777970',
                         cursor: 'pointer',
-                        fontFamily: "'JetBrains Mono', monospace",
+                        padding: '4px',
                       }}
                     >
-                      CLOSE
+                      <X size={16} />
                     </button>
                   </div>
-                </div>
+
+                  {/* High-res asset preview */}
+                  <div
+                    style={{
+                      height: '180px',
+                      background: '#FBF9F5',
+                      borderBottom: '1px solid #F0ECE4',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    {viewMode === '3d' ? (
+                      <FurnitureProductImage assetId={inspectingAsset.id} width={240} height={160} />
+                    ) : (
+                      <FurnitureThumbnail assetId={inspectingAsset.id} width={180} height={140} darkMode={false} />
+                    )}
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 12,
+                        fontSize: '0.64rem',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        color: '#8E8B82',
+                      }}
+                    >
+                      {viewMode === '3d' ? 'ISOMETRIC 3D CAD' : '2D PLAN CAD SYMBOL'}
+                    </span>
+                  </div>
+
+                  {/* Spec Metadata */}
+                  <div style={{ padding: '1.25rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#5A5850', lineHeight: 1.5 }}>
+                      {inspectingAsset.description}
+                    </p>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '8px',
+                        background: '#FAF8F5',
+                        border: '1px solid #E8E2D6',
+                        borderRadius: '8px',
+                        padding: '0.85rem',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: '#8E8B82' }}>CATEGORY</span>
+                        <div style={{ color: '#252622', fontWeight: 600, marginTop: '2px' }}>
+                          {inspectingAsset.category}
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#8E8B82' }}>IMPERIAL (FT)</span>
+                        <div style={{ color: '#365FA8', fontWeight: 600, marginTop: '2px' }}>
+                          {inspectingAsset.dimensions.widthFt} × {inspectingAsset.dimensions.depthFt} ft
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#8E8B82' }}>METRIC (M)</span>
+                        <div style={{ color: '#252622', fontWeight: 600, marginTop: '2px' }}>
+                          {inspectingAsset.dimensions.widthM.toFixed(2)} × {inspectingAsset.dimensions.depthM.toFixed(2)} m
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#8E8B82' }}>HEIGHT</span>
+                        <div style={{ color: '#252622', fontWeight: 600, marginTop: '2px' }}>
+                          {inspectingAsset.dimensions.heightFt} ft ({inspectingAsset.dimensions.heightM.toFixed(2)} m)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        background: '#F6F3EB',
+                        border: '1px solid #E8E2D6',
+                        borderRadius: '6px',
+                        padding: '0.65rem 0.85rem',
+                        fontSize: '0.72rem',
+                        color: '#5A5850',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      <strong style={{ color: '#252622' }}>Placement rule:</strong> Maintain standard clearance
+                      from entryways and circulation paths. Snap flush against walls where appropriate.
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      <button
+                        onClick={() => {
+                          handleAddItemWithFeedback(inspectingAsset);
+                          setInspectingAsset(null);
+                        }}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '0.65rem',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: '#252622',
+                          color: '#FAF8F5',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Plus size={15} />
+                        <span>Place Piece on Plan</span>
+                      </button>
+                      <button
+                        onClick={() => setInspectingAsset(null)}
+                        style={{
+                          padding: '0.65rem 1rem',
+                          borderRadius: '8px',
+                          border: '1px solid #E8E2D6',
+                          background: '#FFFFFF',
+                          color: '#777970',
+                          fontWeight: 600,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
         </>
       )}
     </AnimatePresence>

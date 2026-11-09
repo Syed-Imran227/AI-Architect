@@ -22,12 +22,21 @@ import type {
 } from './types';
 import { mToFt } from './types';
 import { migrateLegacyToCanonical } from './migration';
-import { canonicalToLegacyFloors } from './selectors';
+import { canonicalToLegacyFloors, deriveRoomBoundingBox } from './selectors';
+import { propagateRoomBoundsWithSharedWalls, resizeRoomDirectly } from './layoutConstraints';
+import { validateCanonicalDocument } from './validators';
 import type { Room as LegacyRoom } from '../../../shared/api-client/api';
 
 // Helper: Deep clone document
 export function cloneDoc(doc: CanonicalBuildingDocument): CanonicalBuildingDocument {
-  return JSON.parse(JSON.stringify(doc));
+  const cloned = JSON.parse(JSON.stringify(doc));
+  if (!cloned.metadata) {
+    cloned.metadata = {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  return cloned;
 }
 
 // ── 1. Move Wall Node Command ────────────────────────────────────────────────
@@ -232,11 +241,13 @@ export function createTransformItemCommand(
   itemId: string,
   newX: number,
   newY: number,
-  newRotation: number
+  newRotation: number,
+  newRoomId?: string
 ): Command {
   let prevX = 0;
   let prevY = 0;
   let prevRotation = 0;
+  let prevRoomId: string | undefined = undefined;
 
   return {
     id: `transform_item_${itemId}_${Date.now()}`,
@@ -252,10 +263,35 @@ export function createTransformItemCommand(
       prevX = item.x;
       prevY = item.y;
       prevRotation = item.rotation;
+      prevRoomId = item.properties?.roomId as string | undefined;
 
       item.x = Math.round(newX * 1000) / 1000;
       item.y = Math.round(newY * 1000) / 1000;
       item.rotation = (newRotation % 360 + 360) % 360;
+
+      if (!item.properties) item.properties = {};
+      if (newRoomId) {
+        item.properties.roomId = newRoomId;
+      } else {
+        const itemW = item.width || 0.5;
+        const itemD = item.depth || 0.5;
+        const cx = item.x + itemW / 2;
+        const cy = item.y + itemD / 2;
+        const roomBboxes = lvl.rooms.map(r => ({
+          room: r,
+          bbox: deriveRoomBoundingBox(r, lvl),
+        }));
+        const containing = roomBboxes.find(rb =>
+          cx >= rb.bbox.x - 0.25 &&
+          cx <= rb.bbox.x + rb.bbox.width + 0.25 &&
+          cy >= rb.bbox.y - 0.25 &&
+          cy <= rb.bbox.y + rb.bbox.height + 0.25
+        );
+        if (containing) {
+          item.properties.roomId = containing.room.name || containing.room.id;
+        }
+      }
+
       next.metadata.updatedAt = new Date().toISOString();
       return next;
     },
@@ -268,6 +304,8 @@ export function createTransformItemCommand(
       item.x = prevX;
       item.y = prevY;
       item.rotation = prevRotation;
+      if (!item.properties) item.properties = {};
+      item.properties.roomId = prevRoomId;
       prev.metadata.updatedAt = new Date().toISOString();
       return prev;
     },
@@ -316,17 +354,23 @@ export function createUpdateItemDimensionsCommand(
   itemId: string,
   newWidth: number,
   newDepth: number,
-  newHeight: number
+  newHeight: number,
+  newX?: number,
+  newY?: number,
+  newRoomId?: string
 ): Command {
   let prevWidth = 0;
   let prevDepth = 0;
   let prevHeight = 0;
+  let prevX: number | undefined = undefined;
+  let prevY: number | undefined = undefined;
+  let prevRoomId: string | undefined = undefined;
 
   return {
     id: `resize_item_${itemId}_${Date.now()}`,
     name: 'Resize Item',
     category: 'furniture',
-    description: `Resize item ${itemId} to ${newWidth.toFixed(2)}x${newDepth.toFixed(2)}m`,
+    description: `Resize item ${itemId} to ${newWidth.toFixed(2)}x${newDepth.toFixed(2)}m${newX !== undefined ? ` at (${newX.toFixed(2)}, ${newY?.toFixed(2)}m)` : ''}`,
     execute: (doc: CanonicalBuildingDocument) => {
       const next = cloneDoc(doc);
       const lvl = next.levels[levelIndex];
@@ -336,10 +380,24 @@ export function createUpdateItemDimensionsCommand(
       prevWidth = item.width;
       prevDepth = item.depth;
       prevHeight = item.height;
+      prevX = item.x;
+      prevY = item.y;
+      prevRoomId = item.properties?.roomId as string | undefined;
 
       item.width = Math.max(0.1, Math.round(newWidth * 1000) / 1000);
       item.depth = Math.max(0.1, Math.round(newDepth * 1000) / 1000);
       item.height = Math.max(0.1, Math.round(newHeight * 1000) / 1000);
+
+      if (newX !== undefined && !isNaN(newX)) {
+        item.x = Math.round(newX * 1000) / 1000;
+      }
+      if (newY !== undefined && !isNaN(newY)) {
+        item.y = Math.round(newY * 1000) / 1000;
+      }
+      if (!item.properties) item.properties = {};
+      if (newRoomId) {
+        item.properties.roomId = newRoomId;
+      }
       next.metadata.updatedAt = new Date().toISOString();
       return next;
     },
@@ -352,6 +410,10 @@ export function createUpdateItemDimensionsCommand(
       item.width = prevWidth;
       item.depth = prevDepth;
       item.height = prevHeight;
+      if (prevX !== undefined) item.x = prevX;
+      if (prevY !== undefined) item.y = prevY;
+      if (!item.properties) item.properties = {};
+      item.properties.roomId = prevRoomId;
       prev.metadata.updatedAt = new Date().toISOString();
       return prev;
     },
@@ -477,15 +539,42 @@ export function createUpdateFloorRoomsCommand(
 export function createUpdateRoomBoundsCommand(
   levelIndex: number,
   roomIdentifier: string,
-  newBoundsFt: { x: number; y: number; width: number; height: number }
+  newBoundsFt: { x: number; y: number; width: number; height: number },
+  syncSharedWalls: boolean = true
 ): Command {
   let previousLevelSnapshot: Level | null = null;
+  let propagationError: string | null = null;
 
   return {
     id: `update_room_bounds_${Date.now()}`,
     name: 'Update Room Dimensions',
     category: 'geometry',
     description: `Resize ${roomIdentifier} to ${newBoundsFt.width}×${newBoundsFt.height} ft at (${newBoundsFt.x}, ${newBoundsFt.y})`,
+    validate: (candidate: CanonicalBuildingDocument) => {
+      if (newBoundsFt.width < 2.5 || newBoundsFt.height < 2.5) {
+        return {
+          valid: false,
+          issues: [{
+            code: 'MIN_ROOM_DIMENSION',
+            severity: 'error' as const,
+            message: `Room dimension must be at least 2.5 ft (requested ${newBoundsFt.width}×${newBoundsFt.height} ft).`,
+            levelId: candidate.levels[levelIndex]?.id,
+          }],
+        };
+      }
+      if (propagationError) {
+        return {
+          valid: false,
+          issues: [{
+            code: 'PROPAGATION_FAILED',
+            severity: 'error' as const,
+            message: propagationError,
+            levelId: candidate.levels[levelIndex]?.id,
+          }],
+        };
+      }
+      return validateCanonicalDocument(candidate);
+    },
     execute: (doc: CanonicalBuildingDocument) => {
       const next = cloneDoc(doc);
       const lvl = next.levels[levelIndex];
@@ -495,25 +584,66 @@ export function createUpdateRoomBoundsCommand(
 
       const legacyFloors = canonicalToLegacyFloors(next);
       const currentRooms = legacyFloors[levelIndex]?.rooms || [];
-      const updatedRooms = currentRooms.map(r => {
-        if (
-          r.name === roomIdentifier ||
-          r.name.toLowerCase() === roomIdentifier.toLowerCase()
-        ) {
-          return {
-            ...r,
-            x: newBoundsFt.x,
-            y: newBoundsFt.y,
-            width: newBoundsFt.width,
-            height: newBoundsFt.height,
-          };
+      const plotWFt = mToFt(doc.site.width);
+      const plotLFt = mToFt(doc.site.length);
+
+      let propRes = syncSharedWalls
+        ? propagateRoomBoundsWithSharedWalls(
+            currentRooms,
+            roomIdentifier,
+            newBoundsFt,
+            plotWFt,
+            plotLFt
+          )
+        : resizeRoomDirectly(
+            currentRooms,
+            roomIdentifier,
+            newBoundsFt,
+            plotWFt,
+            plotLFt
+          );
+
+      // If synced propagation encounters a collision, fallback to direct independent resize
+      if (!propRes.success && syncSharedWalls) {
+        const directRes = resizeRoomDirectly(
+          currentRooms,
+          roomIdentifier,
+          newBoundsFt,
+          plotWFt,
+          plotLFt
+        );
+        if (directRes.success) {
+          propRes = directRes;
         }
-        return r;
-      });
+      }
+
+      if (!propRes.success) {
+        propagationError = propRes.message;
+      } else {
+        propagationError = null;
+      }
+
+      const updatedRooms = propRes.success
+        ? propRes.rooms
+        : currentRooms.map(r => {
+            if (
+              r.name === roomIdentifier ||
+              r.name.toLowerCase() === roomIdentifier.toLowerCase()
+            ) {
+              return {
+                ...r,
+                x: newBoundsFt.x,
+                y: newBoundsFt.y,
+                width: newBoundsFt.width,
+                height: newBoundsFt.height,
+              };
+            }
+            return r;
+          });
 
       const tempLegacy = {
-        plot_width: mToFt(doc.site.width),
-        plot_length: mToFt(doc.site.length),
+        plot_width: plotWFt,
+        plot_length: plotLFt,
         entry_direction: doc.site.entrySide,
         floors: [
           {
@@ -570,6 +700,32 @@ export function createApplyGeneratedPlanCommand(
     },
     inverse: (doc: CanonicalBuildingDocument) => {
       if (!previousDocSnapshot) return doc;
+      return cloneDoc(previousDocSnapshot);
+    },
+  };
+}
+
+// ── 12. Apply Copilot Modification Command ─────────────────────────────────────
+
+export function createApplyCopilotModificationCommand(
+  newDoc: CanonicalBuildingDocument,
+  description: string = 'Apply AI Copilot Modification'
+): Command {
+  let previousDocSnapshot: CanonicalBuildingDocument | null = null;
+
+  return {
+    id: `apply_copilot_mod_${Date.now()}`,
+    name: 'Apply AI Copilot Modification',
+    category: 'geometry',
+    description,
+    execute: (doc: CanonicalBuildingDocument) => {
+      previousDocSnapshot = cloneDoc(doc);
+      const next = cloneDoc(newDoc);
+      next.metadata.updatedAt = new Date().toISOString();
+      return next;
+    },
+    inverse: (_doc: CanonicalBuildingDocument) => {
+      if (!previousDocSnapshot) return _doc;
       return cloneDoc(previousDocSnapshot);
     },
   };

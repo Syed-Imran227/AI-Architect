@@ -20,7 +20,7 @@
  */
 
 export type TimeOfDay = 'morning' | 'noon' | 'golden_hour' | 'night' | 'day' | 'sunset';
-export type CameraPreset = 'perspective' | 'isometric' | 'topdown' | 'front' | 'side' | 'exterior';
+export type CameraPreset = 'perspective' | 'isometric' | 'topdown' | 'front' | 'side' | 'exterior' | 'interior';
 export type ViewMode = 'all' | 'single' | 'exploded' | 'active';
 
 export interface DirectionalLightConfig {
@@ -102,6 +102,11 @@ export interface CameraFramingInput {
   numFloors: number;
   preset: CameraPreset;
   fov?: number;
+  focusRoomBounds?: { x: number; y: number; width: number; height: number };
+  focusItem?: {
+    positionFt: { x: number; y: number; z: number };
+    dimensionsFt: { width: number; depth: number; height: number };
+  };
 }
 
 export interface CameraFramingResult {
@@ -145,21 +150,21 @@ export function getArchitecturalLightingConfig(
   if (timeOfDay === 'night') {
     return {
       timeOfDay: 'night',
-      toneMappingExposure: 0.98,
-      backgroundColor: '#090d16',
-      fogColor: '#0a101d',
-      fogDensity: 0.0028,
+      toneMappingExposure: 1.05,
+      backgroundColor: '#0a0f1d',
+      fogColor: '#0d1326',
+      fogDensity: 0.0016,
       sky: {
-        sunPosition: [sunX, -20, sunZ], // Below horizon
+        sunPosition: [sunX, -25, sunZ], // Below horizon
         turbidity: 15,
         rayleigh: 0.1,
         mieCoefficient: 0.001,
         mieDirectionalG: 0.8,
       },
       directionalLight: {
-        color: '#93c5fd', // Cool silver moonlight
-        intensity: 0.52,
-        position: [centerX + 35, 70, centerZ + 35],
+        color: '#a5c9f3', // Cool soft silver-blue moonlight
+        intensity: 0.68,
+        position: [centerX + 35, 75, centerZ + 35],
         castShadow: true,
         shadowMapSize: 2048,
         shadowBias: -0.0003,
@@ -169,18 +174,18 @@ export function getArchitecturalLightingConfig(
         shadowFrustumSize: frustumSize,
       },
       hemisphereLight: {
-        skyColor: '#1e293b',
-        groundColor: '#0f172a',
-        intensity: 0.42,
+        skyColor: '#1e293b', // Deep midnight blue sky bounce
+        groundColor: '#0b1120', // Dark ground bounce
+        intensity: 0.52,
       },
       ambientLight: {
-        color: '#334155',
-        intensity: 0.28,
+        color: '#1e293b',
+        intensity: 0.38,
       },
       interiorGlow: {
-        color: '#fef08a', // Warm 2700K interior architectural lamp glow
-        intensity: 0.90,
-        distance: Math.max(effectiveDim * 0.75, 40),
+        color: '#ffedd5', // Warm 2700K incandescent interior architectural spill
+        intensity: 1.25,
+        distance: Math.max(effectiveDim * 0.85, 45),
       },
     };
   }
@@ -334,50 +339,109 @@ export function calculateCameraFraming(input: CameraFramingInput): CameraFraming
   let minZ = bounds.minZ;
   let maxZ = bounds.maxZ;
 
+  // Include subtle landscaping breathing room when enabled, without pushing building into distance
   if (isLandscapingEnabled && plotBounds) {
-    minX = Math.min(minX, plotBounds.minX);
-    maxX = Math.max(maxX, plotBounds.maxX);
-    minZ = Math.min(minZ, plotBounds.minZ);
-    maxZ = Math.max(maxZ, plotBounds.maxZ);
+    minX = Math.min(minX, bounds.minX - Math.min(8, Math.max(0, (bounds.minX - plotBounds.minX) * 0.25)));
+    maxX = Math.max(maxX, bounds.maxX + Math.min(8, Math.max(0, (plotBounds.maxX - bounds.maxX) * 0.25)));
+    minZ = Math.min(minZ, bounds.minZ - Math.min(8, Math.max(0, (bounds.minZ - plotBounds.minZ) * 0.25)));
+    maxZ = Math.max(maxZ, bounds.maxZ + Math.min(8, Math.max(0, (plotBounds.maxZ - bounds.maxZ) * 0.25)));
   }
 
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
-  const spanX = maxX - minX;
-  const spanZ = maxZ - minZ;
+  const spanX = bounds.width !== undefined ? bounds.width : (maxX - minX);
+  const spanZ = bounds.depth !== undefined ? bounds.depth : (maxZ - minZ);
   const effectiveDim = Math.max(spanX, spanZ, 20);
 
   // Determine vertical framing center (targetY) and height
+  const safeTotalHeight = typeof bounds.totalHeight === 'number' && !isNaN(bounds.totalHeight)
+    ? bounds.totalHeight
+    : ((bounds as any).height ?? (bounds.maxZ !== undefined && bounds.minZ !== undefined ? Math.abs(bounds.maxZ - bounds.minZ) : 10.0));
+
   let targetY = 5.0; // Half standard 10ft room
   let effectiveHeight = 10.0;
 
   if (viewMode === 'single') {
     // Single isolated floor sits at grade Y = 0
-    targetY = 5.0;
+    targetY = input.activeFloorElevation !== undefined ? input.activeFloorElevation : 5.0;
     effectiveHeight = 10.0;
   } else if (viewMode === 'active') {
     // Focus on active floor at its elevation
-    const floorElevation = input.activeFloorElevation ?? (activeFloorIndex * 10.83);
+    const floorElevation = input.activeFloorElevation ?? ((activeFloorIndex ?? 0) * 10.83);
     targetY = floorElevation + 5.0;
     effectiveHeight = 10.0;
   } else if (viewMode === 'exploded') {
     // Multi-floor exploded stack
     const explodedPitch = 10.83 + 14.0; // 24.83 ft per floor
-    const totalExplodedHeight = Math.max(numFloors * explodedPitch, 20);
+    const totalExplodedHeight = Math.max((numFloors ?? 1) * explodedPitch, 20);
     targetY = totalExplodedHeight / 2;
     effectiveHeight = totalExplodedHeight;
   } else {
     // Stacked full building
-    targetY = Math.max(bounds.totalHeight / 2, 5.0);
-    effectiveHeight = Math.max(bounds.totalHeight, 10.0);
+    targetY = Math.max(safeTotalHeight / 2, 5.0);
+    effectiveHeight = Math.max(safeTotalHeight, 10.0);
   }
 
-  // Trigonometric frustum fit distance
   const fovRad = (fov * Math.PI) / 180;
   const halfFovTan = Math.tan(fovRad / 2);
-  const baseFitDistance = (effectiveDim / 2) / halfFovTan * 1.25; // 25% safety margin
-  const heightFitDistance = (effectiveHeight / 2) / halfFovTan * 1.35;
-  const fitDistance = Math.max(baseFitDistance, heightFitDistance, 28);
+
+  // ── SPECIALIZED FOCUS MODES ───────────────────────────────────────────────
+  // Focus Room Mode
+  if (input.focusRoomBounds) {
+    const { x, y, width, height } = input.focusRoomBounds;
+    const roomCenterX = x + width / 2;
+    const roomCenterZ = y + height / 2;
+    const roomRadius = Math.hypot(width / 2, height / 2, 5.0);
+    const roomFitDist = Math.max(16, (roomRadius / halfFovTan) * 1.15);
+    const elevRad = (36 * Math.PI) / 180;
+    const azimRad = (45 * Math.PI) / 180;
+    return {
+      targetLookAt: { x: roomCenterX, y: targetY, z: roomCenterZ },
+      targetPosition: {
+        x: roomCenterX + roomFitDist * Math.cos(elevRad) * Math.sin(azimRad),
+        y: targetY + roomFitDist * Math.sin(elevRad),
+        z: roomCenterZ + roomFitDist * Math.cos(elevRad) * Math.cos(azimRad),
+      },
+      minDistance: 2.0,
+      maxDistance: 600,
+      near: 0.5,
+      far: 3500,
+      effectiveDim: Math.max(width, height),
+      fitDistance: roomFitDist,
+    };
+  }
+
+  // Focus Furniture Item Mode
+  if (input.focusItem) {
+    const { positionFt, dimensionsFt } = input.focusItem;
+    const itemCenterX = positionFt.x + dimensionsFt.width / 2;
+    const itemCenterY = positionFt.y + dimensionsFt.height / 2;
+    const itemCenterZ = positionFt.z + dimensionsFt.depth / 2;
+    const itemRadius = Math.hypot(dimensionsFt.width / 2, dimensionsFt.depth / 2, dimensionsFt.height / 2);
+    const itemFitDist = Math.max(8, (itemRadius / halfFovTan) * 1.25);
+    const elevRad = (32 * Math.PI) / 180;
+    const azimRad = (45 * Math.PI) / 180;
+    return {
+      targetLookAt: { x: itemCenterX, y: itemCenterY, z: itemCenterZ },
+      targetPosition: {
+        x: itemCenterX + itemFitDist * Math.cos(elevRad) * Math.sin(azimRad),
+        y: itemCenterY + itemFitDist * Math.sin(elevRad),
+        z: itemCenterZ + itemFitDist * Math.cos(elevRad) * Math.cos(azimRad),
+      },
+      minDistance: 1.0,
+      maxDistance: 600,
+      near: 0.5,
+      far: 3500,
+      effectiveDim: Math.max(dimensionsFt.width, dimensionsFt.depth),
+      fitDistance: itemFitDist,
+    };
+  }
+
+  // ── STANDARD BUILDING FRAMING ─────────────────────────────────────────────
+  // Frustum fit distance based on 3D bounding sphere
+  const sphereRadius = Math.hypot(spanX / 2, spanZ / 2, effectiveHeight / 2);
+  const baseFitDistance = (sphereRadius / halfFovTan) * 1.15;
+  const fitDistance = Math.max(baseFitDistance, 28);
 
   // Preset positions
   let camX = centerX;
@@ -387,35 +451,42 @@ export function calculateCameraFraming(input: CameraFramingInput): CameraFraming
   if (preset === 'topdown') {
     // Top-down Orthographic-style Plan View
     camX = centerX + 0.001; // Slight epsilon prevents lookAt singularity along Y axis
-    camY = targetY + fitDistance * 1.15;
+    camY = targetY + fitDistance * 1.05;
     camZ = centerZ;
   } else if (preset === 'isometric') {
     // True Axonometric 45° elevation angle
-    const isoSpan = fitDistance * 0.82;
+    const isoSpan = fitDistance * 0.72;
     camX = centerX + isoSpan;
-    camY = targetY + fitDistance * 0.72;
+    camY = targetY + fitDistance * 0.62;
     camZ = centerZ + isoSpan;
   } else if (preset === 'front') {
     // South / Front Elevation View
     camX = centerX;
     camY = targetY + 1.5;
-    camZ = centerZ - fitDistance * 1.15;
+    camZ = centerZ - fitDistance * 0.95;
   } else if (preset === 'side') {
     // East / Side Elevation View
-    camX = centerX - fitDistance * 1.15;
+    camX = centerX - fitDistance * 0.95;
     camY = targetY + 1.5;
     camZ = centerZ;
   } else if (preset === 'exterior') {
     // Cinematic Low-Angle Exterior Beauty View (Architectural Photograph Framing)
-    const extDist = fitDistance * 0.95;
+    const extDist = fitDistance * 0.88;
     camX = centerX + extDist * 0.72;
     camY = Math.max(3.5, bounds.totalHeight * 0.28);
-    camZ = centerZ + extDist * 0.82;
+    camZ = centerZ + extDist * 0.72;
+  } else if (preset === 'interior') {
+    // Interior Eye-Level View (5.5 ft above active floor level)
+    camX = centerX;
+    camY = targetY + 0.5;
+    camZ = centerZ + Math.min(spanZ * 0.25, 6.0);
   } else {
-    // Perspective / Dollhouse 3D view
-    camX = centerX + fitDistance * 0.65;
-    camY = targetY + fitDistance * 0.52;
-    camZ = centerZ + fitDistance * 0.85;
+    // Perspective / Dollhouse 3D view (36° elevation, 45° azimuth)
+    const elevRad = (36 * Math.PI) / 180;
+    const azimRad = (45 * Math.PI) / 180;
+    camX = centerX + fitDistance * Math.cos(elevRad) * Math.sin(azimRad);
+    camY = targetY + fitDistance * Math.sin(elevRad);
+    camZ = centerZ + fitDistance * Math.cos(elevRad) * Math.cos(azimRad);
   }
 
   const minDistance = 4.0;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { regenerateRoom, type Room, type LayoutUpdatePayload } from '../../../shared/api-client/api';
-import { validateRoomPlacement } from '../../../shared/utils/validateRooms';
+import { propagateRoomBoundsWithSharedWalls, resizeRoomDirectly, type PropagationResult } from '../geometry/layoutConstraints';
 import { toast } from 'react-hot-toast';
 
 interface PlotContext {
@@ -37,6 +37,7 @@ const FIELD_LABELS: Record<NumericRoomKey, string> = {
 const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoomUpdate, onLayoutUpdate, onClose }) => {
   const [local, setLocal] = useState<Room>({ ...room });
   const [prevRoomName, setPrevRoomName] = useState(room.name);
+  const [resizeMode, setResizeMode] = useState<'independent' | 'synced'>('independent');
   const [instruction, setInstruction] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -64,13 +65,66 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
   };
 
   const handleApply = () => {
-    const newRooms = allRooms.map((r, i) => i === index ? local : r);
-    const violations = validateRoomPlacement(newRooms, plotContext.plotWidth, plotContext.plotHeight);
-    if (violations.length > 0) {
-      toast.error(violations[0].reason);
+    let res: PropagationResult;
+
+    if (resizeMode === 'synced') {
+      res = propagateRoomBoundsWithSharedWalls(
+        allRooms,
+        room.name,
+        { x: local.x, y: local.y, width: local.width, height: local.height },
+        plotContext.plotWidth,
+        plotContext.plotHeight
+      );
+
+      // Graceful fallback to direct independent resize if neighbors cannot be further shrunk
+      if (!res.success) {
+        const directRes = resizeRoomDirectly(
+          allRooms,
+          room.name,
+          { x: local.x, y: local.y, width: local.width, height: local.height },
+          plotContext.plotWidth,
+          plotContext.plotHeight
+        );
+        if (directRes.success) {
+          res = directRes;
+          toast('Synced partition could not shrink neighbors; applied as independent room resize.', { icon: 'ℹ️' });
+        }
+      }
+    } else {
+      res = resizeRoomDirectly(
+        allRooms,
+        room.name,
+        { x: local.x, y: local.y, width: local.width, height: local.height },
+        plotContext.plotWidth,
+        plotContext.plotHeight
+      );
+    }
+
+    if (!res.success) {
+      toast.error(res.message);
       return;
     }
-    onRoomUpdate(index, local);
+    const updatedRooms = res.rooms.map(r => {
+      if (r.name === room.name || r.name === local.name) {
+        return {
+          ...r,
+          name: local.name,
+          roomType: local.roomType,
+          isShaft: local.isShaft,
+          isInteriorShaft: local.isInteriorShaft,
+          isExteriorShaft: local.isExteriorShaft,
+          isVoid: local.isVoid,
+        };
+      }
+      return r;
+    });
+    const updatedTarget = updatedRooms.find(r => r.name === local.name) || local;
+    if (onRoomUpdate) {
+      onRoomUpdate(index, updatedTarget);
+    } else {
+      onLayoutUpdate({ rooms: updatedRooms });
+    }
+    toast.success(res.message);
   };
 
   const handleReset = () => {
@@ -146,9 +200,119 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
         </div>
       )}
 
+      {/* Room Name & Architectural Classification */}
+      <div className="neu-panel-inset" style={{ padding: '1rem 1.25rem' }}>
+        <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+          Room Identity & Classification
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Room Name</label>
+            <input
+              type="text"
+              className="neu-input"
+              style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+              value={local.name}
+              onChange={e => setLocal(prev => ({ ...prev, name: e.target.value }))}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Architecture Type</label>
+            <select
+              className="neu-input"
+              style={{ padding: '0.4rem 0.6rem', fontSize: '0.82rem', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+              value={
+                local.isExteriorShaft || local.name.toLowerCase().includes('lightwell') || (local.name.toLowerCase().includes('shaft') && local.name.toLowerCase().includes('ext'))
+                  ? 'external_shaft'
+                  : local.isInteriorShaft || local.name.toLowerCase().includes('mep') || local.name.toLowerCase().includes('duct') || (local.name.toLowerCase().includes('shaft') && !local.name.toLowerCase().includes('ext'))
+                  ? 'interior_shaft'
+                  : 'standard_room'
+              }
+              onChange={e => {
+                const val = e.target.value;
+                if (val === 'external_shaft') {
+                  setLocal(prev => ({
+                    ...prev,
+                    name: prev.name.toLowerCase().includes('lightwell') || prev.name.toLowerCase().includes('shaft') ? prev.name : 'External Lightwell',
+                    roomType: 'external_shaft',
+                    isShaft: true,
+                    isExteriorShaft: true,
+                    isInteriorShaft: false,
+                    isVoid: true,
+                  }));
+                } else if (val === 'interior_shaft') {
+                  setLocal(prev => ({
+                    ...prev,
+                    name: prev.name.toLowerCase().includes('mep') || prev.name.toLowerCase().includes('chase') || prev.name.toLowerCase().includes('shaft') ? prev.name : 'MEP Service Chase',
+                    roomType: 'interior_shaft',
+                    isShaft: true,
+                    isExteriorShaft: false,
+                    isInteriorShaft: true,
+                    isVoid: true,
+                  }));
+                } else {
+                  setLocal(prev => ({
+                    ...prev,
+                    roomType: 'room',
+                    isShaft: false,
+                    isExteriorShaft: false,
+                    isInteriorShaft: false,
+                    isVoid: false,
+                  }));
+                }
+              }}
+            >
+              <option value="standard_room">Standard Enclosed Room</option>
+              <option value="external_shaft">External Lightwell Shaft (Open to Sky)</option>
+              <option value="interior_shaft">Internal MEP Chase (Plumbing/Ducts)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Numeric precision editing */}
       <div className="neu-panel-inset" style={{ padding: '1.25rem' }}>
-        <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Precise Dimensions</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Precise Dimensions</p>
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.06)', borderRadius: '14px', padding: '2px' }}>
+            <button
+              type="button"
+              onClick={() => setResizeMode('independent')}
+              style={{
+                border: 'none',
+                background: resizeMode === 'independent' ? 'var(--text-primary)' : 'transparent',
+                color: resizeMode === 'independent' ? '#FAF8F2' : 'var(--text-secondary)',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '3px 8px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title="Resize only this room independently"
+            >
+              ⤢ Independent
+            </button>
+            <button
+              type="button"
+              onClick={() => setResizeMode('synced')}
+              style={{
+                border: 'none',
+                background: resizeMode === 'synced' ? 'var(--text-primary)' : 'transparent',
+                color: resizeMode === 'synced' ? '#FAF8F2' : 'var(--text-secondary)',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '3px 8px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title="Sync shared partition walls with neighbors"
+            >
+              🔗 Sync Shared
+            </button>
+          </div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
           {(Object.keys(FIELD_LABELS) as NumericRoomKey[]).map(field => (
             <div key={field} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>

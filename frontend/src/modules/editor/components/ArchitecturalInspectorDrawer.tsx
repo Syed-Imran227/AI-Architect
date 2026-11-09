@@ -60,6 +60,17 @@ interface ArchitecturalInspectorDrawerProps {
       bom?: BomResult;
     }
   ) => void;
+  onPreviewCopilotProposal?: (candidateLayout: LayoutData) => void;
+  onCancelCopilotPreview?: () => void;
+  onApplyCopilotProposal?: (
+    updatedLayout: LayoutData,
+    imageUrl?: string | null,
+    compliance?: any,
+    changeSummary?: any
+  ) => void;
+  onUndoCopilot?: () => void;
+  canUndo?: boolean;
+  isPreviewingCopilot?: boolean;
 
   // Selected Furniture Item
   selectedFurniture?: FurnitureItem | null;
@@ -98,6 +109,12 @@ export const ArchitecturalInspectorDrawer: React.FC<ArchitecturalInspectorDrawer
   activeFloorIndex,
   activeFloorName,
   onAgentLayoutUpdate,
+  onPreviewCopilotProposal,
+  onCancelCopilotPreview,
+  onApplyCopilotProposal,
+  onUndoCopilot,
+  canUndo,
+  isPreviewingCopilot,
 }) => {
   const [activeTab, setActiveTab] = useState<'properties' | 'compliance' | 'copilot'>('properties');
 
@@ -539,6 +556,12 @@ export const ArchitecturalInspectorDrawer: React.FC<ArchitecturalInspectorDrawer
                 selectedRoomName={selectedRoom?.name || null}
                 plotContext={plotContext}
                 onApplyLayout={onAgentLayoutUpdate}
+                onPreviewProposal={onPreviewCopilotProposal}
+                onCancelPreview={onCancelCopilotPreview}
+                onApplyProposal={onApplyCopilotProposal}
+                onUndo={onUndoCopilot}
+                canUndo={canUndo}
+                isPreviewing={isPreviewingCopilot}
                 disabled={allRooms.length === 0}
               />
             )}

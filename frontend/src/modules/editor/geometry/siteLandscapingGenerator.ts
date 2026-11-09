@@ -29,9 +29,16 @@ import type { ArchitecturalMaterialKey } from './architecturalMaterials';
 
 // ── Configuration Options ───────────────────────────────────────────────────
 
+export type LandscapeStyle = 'modern_minimal' | 'tropical' | 'natural_prairie';
+export type GreeneryDensity = 'low' | 'medium' | 'lush';
+
 export interface SiteLandscapingOptions {
   /** Master toggle: enable or disable the site landscaping presentation */
   enabled?: boolean;
+  /** Landscape style aesthetic preset */
+  landscapeStyle?: LandscapeStyle;
+  /** Greenery density modifier */
+  greeneryDensity?: GreeneryDensity;
   /** Render exterior boundary walls around property line */
   showBoundaryWalls?: boolean;
   /** Render manicured lawn turf within plot bounds */
@@ -42,6 +49,16 @@ export interface SiteLandscapingOptions {
   showHedges?: boolean;
   /** Render paved entry walkway connecting to building */
   showPathways?: boolean;
+  /** Render front garden zone with flowering shrubs and flower beds */
+  showFrontGarden?: boolean;
+  /** Render stepping-stone pathway to entrance */
+  showSteppingStones?: boolean;
+  /** Render vehicular driveway approach to parking */
+  showDriveway?: boolean;
+  /** Render outdoor bollard landscape lights */
+  showOutdoorLights?: boolean;
+  /** Render garden benches and architectural planters */
+  showGardenFurniture?: boolean;
   /** Render rear terrace patio connecting to building */
   showPatio?: boolean;
   /** Render sunken swimming pool with water shader and coping */
@@ -62,11 +79,18 @@ export interface SiteLandscapingOptions {
 
 export const DEFAULT_LANDSCAPING_OPTIONS: Required<SiteLandscapingOptions> = {
   enabled: true,
+  landscapeStyle: 'modern_minimal',
+  greeneryDensity: 'medium',
   showBoundaryWalls: true,
   showLawn: true,
   showTrees: true,
   showHedges: true,
   showPathways: true,
+  showFrontGarden: true,
+  showSteppingStones: true,
+  showDriveway: true,
+  showOutdoorLights: true,
+  showGardenFurniture: true,
   showPatio: true,
   showPool: true,
   showDeck: true,
@@ -160,13 +184,45 @@ export interface GeneratedPool3D {
   underwaterLightPosFt: { x: number; y: number; z: number };
 }
 
+export interface GeneratedSteppingStone3D {
+  id: string;
+  positionFt: { x: number; y: number; z: number };
+  dimensionsFt: { width: number; length: number };
+  rotationDeg: number;
+}
+
+export interface GeneratedDriveway3D {
+  id: string;
+  centerFt: { x: number; z: number };
+  dimensionsFt: { width: number; length: number };
+  elevationFt: number;
+  materialKey: ArchitecturalMaterialKey;
+}
+
+export interface GeneratedOutdoorLight3D {
+  id: string;
+  positionFt: { x: number; y: number; z: number };
+  heightFt: number;
+  lightColor: string;
+}
+
+export interface GeneratedGardenFurniture3D {
+  id: string;
+  type: 'bench' | 'planter_box';
+  positionFt: { x: number; y: number; z: number };
+  rotationDeg: number;
+  dimensionsFt: { width: number; depth: number; height: number };
+  materialColor: string;
+}
+
 export interface GeneratedVegetationItem3D {
   id: string;
-  type: 'palm_tree' | 'shade_tree' | 'boxwood_hedge';
+  type: 'palm_tree' | 'shade_tree' | 'boxwood_hedge' | 'flowering_shrub' | 'ornamental_bush' | 'evergreen_tree' | 'flower_bed';
   positionFt: { x: number; y: number; z: number };
   scale: { width: number; height: number; depth: number };
   rotationDeg: number;
   color?: string;
+  flowerColor?: string;
 }
 
 export interface GeneratedPoolsideItem3D {
@@ -184,6 +240,10 @@ export interface GeneratedSiteLandscaping3D {
   groundZones: GeneratedGroundZone3D[];
   boundaryWalls: GeneratedBoundaryWallSegment3D[];
   pathways: GeneratedPathway3D[];
+  driveway?: GeneratedDriveway3D;
+  steppingStones: GeneratedSteppingStone3D[];
+  outdoorLights: GeneratedOutdoorLight3D[];
+  gardenFurniture: GeneratedGardenFurniture3D[];
   patio?: GeneratedPatio3D;
   deck?: GeneratedDeck3D;
   pool?: GeneratedPool3D;
@@ -374,6 +434,9 @@ export function generateSiteLandscaping(
       groundZones: [],
       boundaryWalls: [],
       pathways: [],
+      steppingStones: [],
+      outdoorLights: [],
+      gardenFurniture: [],
       vegetation: [],
       poolsideItems: [],
     };
@@ -530,6 +593,133 @@ export function generateSiteLandscaping(
         elevationFt: 0.02,
         materialKey: 'travertine_paver',
       });
+    }
+  }
+
+  // ── 4B. Vehicular Driveway Approach & Stepping Stone Path ───────────────────
+  let driveway: GeneratedDriveway3D | undefined;
+  const steppingStones: GeneratedSteppingStone3D[] = [];
+
+  // Check if Ground Floor has a dedicated Parking/Garage room
+  let parkingRoomCenter: { x: number; z: number; width: number; depth: number } | null = null;
+  const groundRooms = doc.levels[0]?.rooms || [];
+  for (const gr of groundRooms) {
+    const rn = gr.name.toLowerCase();
+    const rt = (gr.roomType || '').toLowerCase();
+    if (rn.includes('park') || rn.includes('garage') || rn.includes('carport') || rt.includes('park') || rt.includes('garage')) {
+      const nids = gr.boundaryNodeIds;
+      const nodes = nids.map(nid => doc.levels[0].nodes.find(n => n.id === nid)).filter(Boolean);
+      if (nodes.length >= 3) {
+        const xs = nodes.map(n => n!.x * METRES_TO_FEET);
+        const ys = nodes.map(n => n!.y * METRES_TO_FEET);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minZ = Math.min(...ys), maxZ = Math.max(...ys);
+        parkingRoomCenter = {
+          x: (minX + maxX) / 2,
+          z: (minZ + maxZ) / 2,
+          width: maxX - minX,
+          depth: maxZ - minZ,
+        };
+        break;
+      }
+    }
+  }
+
+  if (options.showDriveway) {
+    const driveWidth = parkingRoomCenter ? Math.max(10.0, parkingRoomCenter.width) : 11.0;
+    if (entrySide === 'south') {
+      const driveX = parkingRoomCenter ? parkingRoomCenter.x : plotBox.minX + driveWidth / 2 + 2.5;
+      const driveLen = Math.max(6.0, plotBox.maxZ - (parkingRoomCenter ? parkingRoomCenter.z + parkingRoomCenter.depth / 2 : buildingBox.maxZ));
+      driveway = {
+        id: 'driveway_approach',
+        centerFt: { x: driveX, z: plotBox.maxZ - driveLen / 2 },
+        dimensionsFt: { width: driveWidth, length: driveLen },
+        elevationFt: 0.015,
+        materialKey: 'honed_concrete',
+      };
+    } else if (entrySide === 'north') {
+      const driveX = parkingRoomCenter ? parkingRoomCenter.x : plotBox.minX + driveWidth / 2 + 2.5;
+      const driveLen = Math.max(6.0, (parkingRoomCenter ? parkingRoomCenter.z - parkingRoomCenter.depth / 2 : buildingBox.minZ) - plotBox.minZ);
+      driveway = {
+        id: 'driveway_approach',
+        centerFt: { x: driveX, z: plotBox.minZ + driveLen / 2 },
+        dimensionsFt: { width: driveWidth, length: driveLen },
+        elevationFt: 0.015,
+        materialKey: 'honed_concrete',
+      };
+    } else if (entrySide === 'west') {
+      const driveZ = parkingRoomCenter ? parkingRoomCenter.z : plotBox.minZ + driveWidth / 2 + 2.5;
+      const driveLen = Math.max(6.0, (parkingRoomCenter ? parkingRoomCenter.x - parkingRoomCenter.width / 2 : buildingBox.minX) - plotBox.minX);
+      driveway = {
+        id: 'driveway_approach',
+        centerFt: { x: plotBox.minX + driveLen / 2, z: driveZ },
+        dimensionsFt: { width: driveLen, length: driveWidth },
+        elevationFt: 0.015,
+        materialKey: 'honed_concrete',
+      };
+    } else {
+      // East
+      const driveZ = parkingRoomCenter ? parkingRoomCenter.z : plotBox.minZ + driveWidth / 2 + 2.5;
+      const driveLen = Math.max(6.0, plotBox.maxX - (parkingRoomCenter ? parkingRoomCenter.x + parkingRoomCenter.width / 2 : buildingBox.maxX));
+      driveway = {
+        id: 'driveway_approach',
+        centerFt: { x: plotBox.maxX - driveLen / 2, z: driveZ },
+        dimensionsFt: { width: driveLen, length: driveWidth },
+        elevationFt: 0.015,
+        materialKey: 'honed_concrete',
+      };
+    }
+  }
+
+  // Stepping Stones through the front garden
+  if (options.showSteppingStones && options.showFrontGarden) {
+    const numStones = 7;
+    if (entrySide === 'south') {
+      const startZ = plotBox.maxZ - 2.5;
+      const endZ = buildingBox.maxZ + 2.0;
+      const stepZ = (endZ - startZ) / numStones;
+      const baseX = buildingBox.centerX + (parkingRoomCenter ? -6.0 : 6.0);
+      for (let sIdx = 0; sIdx < numStones; sIdx++) {
+        const stoneZ = startZ + sIdx * stepZ;
+        const curveOffset = Math.sin((sIdx / numStones) * Math.PI) * 1.5;
+        steppingStones.push({
+          id: `stone_${sIdx + 1}`,
+          positionFt: { x: baseX + curveOffset, y: 0.04, z: stoneZ },
+          dimensionsFt: { width: 2.2, length: 1.4 },
+          rotationDeg: (sIdx % 2 === 0 ? 3 : -3),
+        });
+      }
+    } else if (entrySide === 'north') {
+      const startZ = plotBox.minZ + 2.5;
+      const endZ = buildingBox.minZ - 2.0;
+      const stepZ = (endZ - startZ) / numStones;
+      const baseX = buildingBox.centerX + (parkingRoomCenter ? -6.0 : 6.0);
+      for (let sIdx = 0; sIdx < numStones; sIdx++) {
+        const stoneZ = startZ + sIdx * stepZ;
+        const curveOffset = Math.sin((sIdx / numStones) * Math.PI) * 1.5;
+        steppingStones.push({
+          id: `stone_${sIdx + 1}`,
+          positionFt: { x: baseX + curveOffset, y: 0.04, z: stoneZ },
+          dimensionsFt: { width: 2.2, length: 1.4 },
+          rotationDeg: (sIdx % 2 === 0 ? 3 : -3),
+        });
+      }
+    } else {
+      // East/West
+      const startX = entrySide === 'west' ? plotBox.minX + 2.5 : plotBox.maxX - 2.5;
+      const endX = entrySide === 'west' ? buildingBox.minX - 2.0 : buildingBox.maxX + 2.0;
+      const stepX = (endX - startX) / numStones;
+      const baseZ = buildingBox.centerZ + 6.0;
+      for (let sIdx = 0; sIdx < numStones; sIdx++) {
+        const stoneX = startX + sIdx * stepX;
+        const curveOffset = Math.sin((sIdx / numStones) * Math.PI) * 1.5;
+        steppingStones.push({
+          id: `stone_${sIdx + 1}`,
+          positionFt: { x: stoneX, y: 0.04, z: baseZ + curveOffset },
+          dimensionsFt: { width: 1.4, length: 2.2 },
+          rotationDeg: (sIdx % 2 === 0 ? 3 : -3),
+        });
+      }
     }
   }
 
@@ -692,30 +882,55 @@ export function generateSiteLandscaping(
     }
   }
 
-  // ── 6. Vegetation (Palm Trees, Shade Trees, Boxwood Hedges) ───────────────
+  // ── 6. Vegetation (Trees, Flowering Shrubs, Ornamental Plants & Hedges) ──
   const vegetation: GeneratedVegetationItem3D[] = [];
+  const outdoorLights: GeneratedOutdoorLight3D[] = [];
+  const gardenFurniture: GeneratedGardenFurniture3D[] = [];
+
+  const style = options.landscapeStyle || 'modern_minimal';
+  const density = options.greeneryDensity || 'medium';
+  const densityMultiplier = density === 'low' ? 0.6 : density === 'lush' ? 1.4 : 1.0;
 
   if (options.showTrees) {
-    // Deterministic tree positioning anchored at safe garden corners
-    const candidateTreeSpots: { x: number; z: number; type: 'palm_tree' | 'shade_tree' }[] = [
-      // 4 corner spots
-      { x: plotBox.minX + 4.5, z: plotBox.minZ + 4.5, type: 'palm_tree' },
-      { x: plotBox.maxX - 4.5, z: plotBox.minZ + 4.5, type: 'shade_tree' },
-      { x: plotBox.minX + 4.5, z: plotBox.maxZ - 4.5, type: 'shade_tree' },
-      { x: plotBox.maxX - 4.5, z: plotBox.maxZ - 4.5, type: 'palm_tree' },
+    // Tree spots parameterized by plot corners and front garden
+    const candidateTreeSpots: { x: number; z: number; type: 'palm_tree' | 'shade_tree' | 'evergreen_tree' }[] = [
+      // 4 perimeter corner spots
+      { x: plotBox.minX + 4.5, z: plotBox.minZ + 4.5, type: style === 'tropical' ? 'palm_tree' : style === 'modern_minimal' ? 'evergreen_tree' : 'shade_tree' },
+      { x: plotBox.maxX - 4.5, z: plotBox.minZ + 4.5, type: style === 'tropical' ? 'palm_tree' : 'shade_tree' },
+      { x: plotBox.minX + 4.5, z: plotBox.maxZ - 4.5, type: style === 'tropical' ? 'palm_tree' : 'shade_tree' },
+      { x: plotBox.maxX - 4.5, z: plotBox.maxZ - 4.5, type: style === 'tropical' ? 'palm_tree' : style === 'modern_minimal' ? 'evergreen_tree' : 'shade_tree' },
     ];
 
-    // If pool exists, add 2 poolside palms
-    if (pool && pool.isValid) {
+    // Front garden accent trees
+    if (options.showFrontGarden) {
+      if (entrySide === 'south') {
+        const fgZ = (buildingBox.maxZ + plotBox.maxZ) / 2;
+        candidateTreeSpots.push(
+          { x: plotBox.minX + 7.0, z: fgZ, type: style === 'tropical' ? 'palm_tree' : 'shade_tree' },
+          { x: plotBox.maxX - 7.0, z: fgZ, type: style === 'tropical' ? 'palm_tree' : style === 'modern_minimal' ? 'evergreen_tree' : 'shade_tree' }
+        );
+      } else if (entrySide === 'north') {
+        const fgZ = (plotBox.minZ + buildingBox.minZ) / 2;
+        candidateTreeSpots.push(
+          { x: plotBox.minX + 7.0, z: fgZ, type: style === 'tropical' ? 'palm_tree' : 'shade_tree' },
+          { x: plotBox.maxX - 7.0, z: fgZ, type: style === 'tropical' ? 'palm_tree' : style === 'modern_minimal' ? 'evergreen_tree' : 'shade_tree' }
+        );
+      }
+    }
+
+    // Poolside palms if pool exists
+    if (pool && pool.isValid && style === 'tropical') {
       candidateTreeSpots.push(
         { x: pool.boundsFt.x + pool.boundsFt.width + 3.0, z: pool.boundsFt.z - 2.0, type: 'palm_tree' },
         { x: pool.boundsFt.x - 3.0, z: pool.boundsFt.z + pool.boundsFt.length + 2.0, type: 'palm_tree' }
       );
     }
 
-    // Filter spots to ensure no collision with building, patio, deck, or pool
     let treeSeed = 101;
     candidateTreeSpots.forEach((spot, idx) => {
+      // Density filter
+      if (idx > 3 && densityMultiplier < 0.9) return;
+
       const treeRadius = 2.5;
       const treeBox = {
         minX: spot.x - treeRadius,
@@ -724,13 +939,17 @@ export function generateSiteLandscaping(
         maxZ: spot.z + treeRadius,
       };
 
-      // Ensure inside plot
       if (!isBoxContained(treeBox, plotBox, 1.0)) return;
-
-      // Ensure no building collision
       if (doBoxesOverlap(treeBox, buildingBox, 2.0)) return;
-
-      // Ensure no pool collision
+      if (driveway) {
+        const dwBox = {
+          minX: driveway.centerFt.x - driveway.dimensionsFt.width / 2,
+          maxX: driveway.centerFt.x + driveway.dimensionsFt.width / 2,
+          minZ: driveway.centerFt.z - driveway.dimensionsFt.length / 2,
+          maxZ: driveway.centerFt.z + driveway.dimensionsFt.length / 2,
+        };
+        if (doBoxesOverlap(treeBox, dwBox, 1.5)) return;
+      }
       if (pool && pool.isValid) {
         const poolBox = {
           minX: pool.boundsFt.x,
@@ -741,7 +960,6 @@ export function generateSiteLandscaping(
         if (doBoxesOverlap(treeBox, poolBox, 1.5)) return;
       }
 
-      // Add tree
       const rndScale = 0.9 + pseudoRandom(treeSeed++) * 0.25;
       vegetation.push({
         id: `tree_${idx + 1}_${spot.type}`,
@@ -749,7 +967,7 @@ export function generateSiteLandscaping(
         positionFt: { x: spot.x, y: 0, z: spot.z },
         scale: {
           width: rndScale,
-          height: spot.type === 'palm_tree' ? rndScale * 1.1 : rndScale,
+          height: spot.type === 'palm_tree' ? rndScale * 1.15 : rndScale,
           depth: rndScale,
         },
         rotationDeg: Math.round(pseudoRandom(treeSeed++) * 360),
@@ -757,16 +975,173 @@ export function generateSiteLandscaping(
     });
   }
 
-  // Perimeter Boxwood Hedges
+  // ── 7. Front Garden Flowering Shrubs & Planter Beds ─────────────────────────
+  if (options.showFrontGarden) {
+    const flowerColors = ['#f43f5e', '#ec4899', '#eab308', '#a855f7', '#ffffff'];
+    const numShrubs = Math.round(6 * densityMultiplier);
+
+    // Place flowering shrub borders flanking front paths and foundation walls
+    if (entrySide === 'south') {
+      const zOffset = buildingBox.maxZ + 2.5;
+      for (let si = 0; si < numShrubs; si++) {
+        const xPos = buildingBox.minX + 2.0 + (si * (buildingBox.width - 4.0)) / Math.max(1, numShrubs - 1);
+        const sBox = { minX: xPos - 1.0, maxX: xPos + 1.0, minZ: zOffset - 1.0, maxZ: zOffset + 1.0 };
+        if (driveway) {
+          const dwBox = {
+            minX: driveway.centerFt.x - driveway.dimensionsFt.width / 2,
+            maxX: driveway.centerFt.x + driveway.dimensionsFt.width / 2,
+            minZ: driveway.centerFt.z - driveway.dimensionsFt.length / 2,
+            maxZ: driveway.centerFt.z + driveway.dimensionsFt.length / 2,
+          };
+          if (doBoxesOverlap(sBox, dwBox, 1.0)) continue;
+        }
+
+        vegetation.push({
+          id: `shrub_front_${si + 1}`,
+          type: si % 2 === 0 ? 'flowering_shrub' : 'ornamental_bush',
+          positionFt: { x: xPos, y: 0, z: zOffset },
+          scale: { width: 1.2, height: 1.8, depth: 1.2 },
+          rotationDeg: si * 45,
+          color: '#166534',
+          flowerColor: flowerColors[si % flowerColors.length],
+        });
+      }
+    } else if (entrySide === 'north') {
+      const zOffset = buildingBox.minZ - 2.5;
+      for (let si = 0; si < numShrubs; si++) {
+        const xPos = buildingBox.minX + 2.0 + (si * (buildingBox.width - 4.0)) / Math.max(1, numShrubs - 1);
+        const sBox = { minX: xPos - 1.0, maxX: xPos + 1.0, minZ: zOffset - 1.0, maxZ: zOffset + 1.0 };
+        if (driveway) {
+          const dwBox = {
+            minX: driveway.centerFt.x - driveway.dimensionsFt.width / 2,
+            maxX: driveway.centerFt.x + driveway.dimensionsFt.width / 2,
+            minZ: driveway.centerFt.z - driveway.dimensionsFt.length / 2,
+            maxZ: driveway.centerFt.z + driveway.dimensionsFt.length / 2,
+          };
+          if (doBoxesOverlap(sBox, dwBox, 1.0)) continue;
+        }
+
+        vegetation.push({
+          id: `shrub_front_${si + 1}`,
+          type: si % 2 === 0 ? 'flowering_shrub' : 'ornamental_bush',
+          positionFt: { x: xPos, y: 0, z: zOffset },
+          scale: { width: 1.2, height: 1.8, depth: 1.2 },
+          rotationDeg: si * 45,
+          color: '#166534',
+          flowerColor: flowerColors[si % flowerColors.length],
+        });
+      }
+    }
+  }
+
+  // ── 8. Outdoor Lighting (Bollards along Walkway) ───────────────────────────
+  if (options.showOutdoorLights) {
+    const lightPositions: { x: number; z: number }[] = [];
+    if (pathways.length > 0) {
+      const mainPath = pathways[0];
+      const pLen = mainPath.dimensionsFt.length;
+      const pWid = mainPath.dimensionsFt.width;
+      const numLights = Math.max(3, Math.floor(pLen / 4.0));
+      for (let li = 0; li < numLights; li++) {
+        const frac = (li + 0.5) / numLights;
+        if (entrySide === 'south' || entrySide === 'north') {
+          const lz = mainPath.centerFt.z - pLen / 2 + frac * pLen;
+          lightPositions.push(
+            { x: mainPath.centerFt.x - pWid / 2 - 0.8, z: lz },
+            { x: mainPath.centerFt.x + pWid / 2 + 0.8, z: lz }
+          );
+        } else {
+          const lx = mainPath.centerFt.x - pWid / 2 + frac * pWid;
+          lightPositions.push(
+            { x: lx, z: mainPath.centerFt.z - pLen / 2 - 0.8 },
+            { x: lx, z: mainPath.centerFt.z + pLen / 2 + 0.8 }
+          );
+        }
+      }
+    }
+
+    lightPositions.forEach((pos, lIdx) => {
+      outdoorLights.push({
+        id: `bollard_light_${lIdx + 1}`,
+        positionFt: { x: pos.x, y: 0, z: pos.z },
+        heightFt: 2.2,
+        lightColor: '#fed7aa', // 2700K warm architectural amber
+      });
+    });
+  }
+
+  // ── 9. Garden Furniture (Benches & Planter Boxes) ──────────────────────────
+  if (options.showGardenFurniture) {
+    // Teak garden bench in the front yard
+    if (entrySide === 'south') {
+      const benchZ = (buildingBox.maxZ + plotBox.maxZ) / 2;
+      const benchX = plotBox.maxX - 6.0;
+      gardenFurniture.push({
+        id: 'bench_front_garden',
+        type: 'bench',
+        positionFt: { x: benchX, y: 0.8, z: benchZ },
+        rotationDeg: -90,
+        dimensionsFt: { width: 5.0, depth: 1.8, height: 1.6 },
+        materialColor: '#78350f',
+      });
+    } else if (entrySide === 'north') {
+      const benchZ = (plotBox.minZ + buildingBox.minZ) / 2;
+      const benchX = plotBox.maxX - 6.0;
+      gardenFurniture.push({
+        id: 'bench_front_garden',
+        type: 'bench',
+        positionFt: { x: benchX, y: 0.8, z: benchZ },
+        rotationDeg: -90,
+        dimensionsFt: { width: 5.0, depth: 1.8, height: 1.6 },
+        materialColor: '#78350f',
+      });
+    }
+
+    // Architectural Planter Boxes near front entrance
+    if (pathways.length > 0) {
+      const mainPath = pathways[0];
+      const pWid = mainPath.dimensionsFt.width;
+      if (entrySide === 'south' || entrySide === 'north') {
+        const nearBuildingZ = entrySide === 'south' ? buildingBox.maxZ + 1.5 : buildingBox.minZ - 1.5;
+        gardenFurniture.push(
+          {
+            id: 'planter_left',
+            type: 'planter_box',
+            positionFt: { x: mainPath.centerFt.x - pWid / 2 - 1.2, y: 0.8, z: nearBuildingZ },
+            rotationDeg: 0,
+            dimensionsFt: { width: 1.8, depth: 1.8, height: 1.6 },
+            materialColor: '#334155',
+          },
+          {
+            id: 'planter_right',
+            type: 'planter_box',
+            positionFt: { x: mainPath.centerFt.x + pWid / 2 + 1.2, y: 0.8, z: nearBuildingZ },
+            rotationDeg: 0,
+            dimensionsFt: { width: 1.8, depth: 1.8, height: 1.6 },
+            materialColor: '#334155',
+          }
+        );
+      }
+    }
+  }
+
+  // ── 10. Perimeter Boxwood Hedges ──────────────────────────────────────────
   if (options.showHedges) {
     const hedgeThick = 1.2;
     const hedgeH = 3.5;
 
-    // Helper to add hedge segments
     const addHedge = (id: string, x: number, z: number, w: number, d: number) => {
-      // Check collision
       const hBox = { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 };
       if (doBoxesOverlap(hBox, buildingBox, 1.5)) return;
+      if (driveway) {
+        const dwBox = {
+          minX: driveway.centerFt.x - driveway.dimensionsFt.width / 2,
+          maxX: driveway.centerFt.x + driveway.dimensionsFt.width / 2,
+          minZ: driveway.centerFt.z - driveway.dimensionsFt.length / 2,
+          maxZ: driveway.centerFt.z + driveway.dimensionsFt.length / 2,
+        };
+        if (doBoxesOverlap(hBox, dwBox, 1.0)) return;
+      }
       if (pool && pool.isValid) {
         const pBox = { minX: pool.boundsFt.x, maxX: pool.boundsFt.x + pool.boundsFt.width, minZ: pool.boundsFt.z, maxZ: pool.boundsFt.z + pool.boundsFt.length };
         if (doBoxesOverlap(hBox, pBox, 1.0)) return;
@@ -782,7 +1157,6 @@ export function generateSiteLandscaping(
       });
     };
 
-    // Add perimeter hedges lining the inner side of boundary walls where space permits
     const hedgeOffset = wallThickFt / 2 + hedgeThick / 2 + 0.3;
     if (entrySide !== 'north' && plotBox.width >= 16.0) {
       addHedge('hedge_north_1', plotBox.minX + plotBox.width * 0.25, plotBox.minZ + hedgeOffset, plotBox.width * 0.35, hedgeThick);
@@ -801,6 +1175,10 @@ export function generateSiteLandscaping(
     groundZones,
     boundaryWalls,
     pathways,
+    driveway,
+    steppingStones,
+    outdoorLights,
+    gardenFurniture,
     patio,
     deck,
     pool,

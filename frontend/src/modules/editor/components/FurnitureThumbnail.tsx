@@ -6,6 +6,7 @@ interface FurnitureThumbnailProps {
   width?: number;
   height?: number;
   accentColor?: string;
+  darkMode?: boolean;
 }
 
 /**
@@ -20,15 +21,16 @@ export const FurnitureThumbnail: React.FC<FurnitureThumbnailProps> = ({
   assetId,
   width = 54,
   height = 46,
-  accentColor = '#38BDF8',
+  accentColor = '#365FA8',
+  darkMode = false,
 }) => {
-  const ink = '#E2E8F0';
-  const mutedInk = '#94A3B8';
-  const fill = 'rgba(15, 23, 42, 0.85)';
-  const woodFill = 'rgba(180, 130, 80, 0.25)';
-  const fabricFill = 'rgba(56, 189, 248, 0.15)';
-  const sanitaryFill = 'rgba(240, 249, 255, 0.3)';
-  const lightGlow = '#FDE047';
+  const ink = darkMode ? '#E2E8F0' : '#252622';
+  const mutedInk = darkMode ? '#94A3B8' : '#777970';
+  const fill = darkMode ? 'rgba(15, 23, 42, 0.85)' : '#FBF9F5';
+  const woodFill = darkMode ? 'rgba(180, 130, 80, 0.25)' : 'rgba(196, 142, 88, 0.35)';
+  const fabricFill = darkMode ? 'rgba(56, 189, 248, 0.15)' : 'rgba(195, 185, 172, 0.35)';
+  const sanitaryFill = darkMode ? 'rgba(240, 249, 255, 0.3)' : 'rgba(235, 242, 248, 0.8)';
+  const lightGlow = '#EAB308';
 
   const renderSymbol = () => {
     switch (assetId) {
@@ -433,16 +435,16 @@ export const FurnitureThumbnail: React.FC<FurnitureThumbnailProps> = ({
       viewBox="0 0 56 46"
       style={{
         display: 'block',
-        background: '#0B0F19',
+        background: darkMode ? '#0B0F19' : '#FAF8F5',
         borderRadius: '6px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: 'inset 0 0 10px rgba(0, 0, 0, 0.5)',
+        border: darkMode ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #E8E2D6',
+        boxShadow: darkMode ? 'inset 0 0 10px rgba(0, 0, 0, 0.5)' : 'none',
       }}
     >
       {/* Blueprint grid subtle background */}
       <defs>
         <pattern id="cadGrid" width="6" height="6" patternUnits="userSpaceOnUse">
-          <path d="M 6 0 L 0 0 0 6" fill="none" stroke="rgba(255, 255, 255, 0.04)" strokeWidth="0.5" />
+          <path d="M 6 0 L 0 0 0 6" fill="none" stroke={darkMode ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.03)"} strokeWidth="0.5" />
         </pattern>
       </defs>
       <rect width="56" height="46" fill="url(#cadGrid)" />
