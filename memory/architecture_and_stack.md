@@ -1,49 +1,107 @@
-# Technology Stack & Architecture
+# Technology Stack & System Architecture (V2 Atelier)
 
-## Frontend Presentation Layer
-- **Framework:** React 19 + TypeScript
-- **Build Tooling:** Vite 8
-- **Styling:** Vanilla CSS, custom glassmorphism design system
-- **Theming:** Dual Light/Dark modes switched via CSS variables
-- **Rendering:** Native HTML/Browser SVG for the 2D layout editor (drag-overlay pattern for 60FPS)
+## 1. Frontend Presentation Layer
+- **Framework & Runtime:** React 19 + TypeScript (ES2022)
+- **Bundler & Dev Server:** Vite 8
+- **Architectural Design System:** Warm Architectural Paper aesthetic (`#FAF8F5`, `#FAF7F2`, `#252622`, `#E8E2D6`, `#C85A32`)
+- **Rendering Engines:**
+  - **2D Drafting Canvas:** HTML5 Browser SVG with 60FPS pointer event tracking, 8-handle CAD resizing, and live dimension HUD.
+  - **3D Cinematic Viewport:** `@react-three/fiber` & `@react-three/drei` (Three.js WebGL) supporting Stacked/Isolated/Exploded modes, Dollhouse cutaways, X-Ray wireframe, and dynamic solar shadow maps.
+- **State & Geometry Architecture:**
+  - `commandEngine.ts`: Command pattern orchestrator enforcing `(doc, command) -> (validated_doc, inverse_patch)`.
+  - `commands.ts`: Atomic actions (`SetRoomBoundsCommand`, `MoveOpeningCommand`, `AddFurnitureCommand`, etc.).
+  - `validators.ts`: Invariant checks (Plot boundary containment, non-overlap, minimum room dimensions).
+  - `migration.ts`: Pure schema version migrations ensuring backward compatibility.
+- **Modular Directory Structure (`frontend/src/`):**
+  - `modules/auth/`: Studio Enrollment, Login, AuthContext, Supabase Bridge.
+  - `modules/dashboard/`: Studio Header, Project Archive, Financial Strip, Hero Opening Sequence.
+  - `modules/editor/`: 5 Atelier workspace views, 2D drafting canvas, 3D WebGL viewport, Multi-Floor Wizard, Copilot Agent panel.
+  - `shared/api-client/`: Strict TypeScript API client (`api.ts`, `supabase.ts`).
 
-## Backend Processing Layer
-- **Framework:** Python + FastAPI
-- **Web Server:** Uvicorn (ASGI)
-- **Database:** **MongoDB Atlas** via Motor (Async PyMongo). MONGO_URI is configured in `backend/.env`.
-  - ⚠️ NOT SQLite — any docs/notes saying SQLite are incorrect.
-- **Authentication:** Python-Jose (JWT HS256, 7-day expiry), Bcrypt password hashing.
-- **Architecture & Structure:** Broken into distinct layers:
-  - `core/`: Application-level config (auth algorithms).
-  - `db/`: Pydantic models and the repository layer (`repositories.py`) for all Motor DB interactions.
-  - `engines/`: Deterministic architecture generation (`architectural_layout.py`), circulation mapping (`circulation.py`), window placement (`window_placer.py`), BOM estimation (`bom_engine.py`), and rule scoring (`vastu_engine.py`, `nbc_engine.py`).
-  - `exporters/`: Output generation (`pdf_report.py`, `dxf_exporter.py`, `floor_renderer.py`).
-  - `routers/`: API endpoints (`auth_routes.py`, `projects_routes.py`, `engine_routes.py`).
+---
 
-## AI Infrastructure
-- **Layout Engine:** **Deterministic Python** (`backend/engines/architectural_layout.py`) — all room geometry, corridor, door, window, and circulation path placement is handled in Python. The LLM is NOT used for spatial coordinates.
-- **Window Placement:** `backend/engines/window_placer.py` — places windows on exterior walls after layout generation.
-- **Circulation Paths:** `backend/engines/circulation.py` — BFS pathfinder on room adjacency graph, computes walking waypoints from entrance to every room.
-- **Furniture Placement:** `backend/engines/architectural_layout.py:inject_furniture()` — catalog-based, no LLM call. Door-swing exclusion zones respected.
-- **Vastu Scoring:** `backend/engines/vastu_engine.py` — rule-based scorer (10 rules, 3×3 compass grid) with centroid-based Brahmasthan calculation and architectural exemptions (staircases, corridors).
-- **LLM Provider:** **Google AI Studio** with **HuggingFace** and **Groq** fallback.
-- **LLM Models:** Fallback chain (Intelligence-first): `gemini-3.1-pro-preview` → `deepseek-ai/DeepSeek-V3-0324` → `gemini-3.8-flash` → `qwen/qwen3.8-27b` → `gemini-3.5-flash-lite`.
-- **API Keys:** `GEMINI_API_KEY`, `HF_API_KEY`, and `GROQ_API_KEY` in `backend/.env`
+## 2. Backend Processing Layer
+- **Framework & ASGI Server:** Python 3.10+ with FastAPI and Uvicorn.
+- **Core Architecture Modules (`backend/`):**
+  - `core/`:
+    - `auth.py`: JWT HS256 authentication, Bcrypt password hashing, token validation dependencies.
+    - `identity_bridge.py`: Translates Supabase Auth JWT claims into unified internal session models.
+  - `db/`:
+    - `supabase_client.py`: Asynchronous Supabase PostgreSQL client.
+    - `repositories.py`: Dual-persistence repository layer (Supabase PostgreSQL primary with automated fallback to MongoDB Atlas).
+    - `migrations/`: Milestone 3 SQL schema scripts and Row Level Security (RLS) policies.
+  - `engines/`:
+    - `canonical_model.py`: Formal Pydantic geometry schemas (`CanonicalBuildingDocument`, `CanonicalFloor`, `CanonicalRoom`, `CanonicalOpening`, `CanonicalWallSegment`, `CanonicalFurnitureItem`, `CanonicalStaircase`).
+    - `intelligent_generator.py`: Multi-candidate layout synthesis (Central Core, Lateral Spine, Garden Buffer).
+    - `architectural_layout.py`: Multi-floor deterministic drafter with vertical core shaft locking and setback offset clamping.
+    - `sunlight_engine.py`: Solar azimuth/elevation calculation, window daylight penetration depth, and lux distribution.
+    - `circulation.py`: BFS pathfinding on room adjacency graph, computing egress paths and detecting landlocked zones.
+    - `window_placer.py`: Deterministic exterior wall window placement with door clearance.
+    - `bom_engine.py` & `cost_rates.py`: Delhi Schedule of Rates (CPWD DSR 2026) financial calculator.
+    - `vastu_engine.py`: 10-rule geometric compass scoring engine using centroid math and transition exemptions.
+    - `nbc_engine.py`: Indian National Building Code (NBC 2016) setback, FAR, and room dimension validator.
+    - `inference.py`: Multi-model LLM inference router with fallback chain.
+  - `services/`:
+    - `agent_service.py`: Conversational Copilot agent service parsing natural language into architectural actions.
+    - `layout_modifier.py`: Non-destructive spatial modifier updating shared partitions and openings.
+  - `exporters/`:
+    - `pdf_dossier.py`: 4-page Executive Blueprint Dossier (ReportLab Platypus).
+    - `dxf_exporter.py`: Multi-floor layered AutoCAD DXF generator (`ezdxf`).
+    - `floor_renderer.py`: High-resolution Pillow PNG concept sketch compiler.
 
-## API Endpoints (key)
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/generate` | ✅ JWT | Generate floor plan (layout + Vastu score + images) |
-| POST | `/export/dxf` | ✅ JWT | Download DXF CAD file |
-| POST | `/export/report` | ✅ JWT | Download 4-page PDF report (BOM + Vastu + images) |
-| POST | `/vastu-fix` | ✅ JWT | AI-powered Vastu room repositioning |
-| POST | `/regenerate-room` | ✅ JWT | NL room editing via LLM |
-| GET/POST | `/projects` | ✅ JWT | CRUD for saved projects in MongoDB |
-| POST | `/auth/register` | ❌ | User registration |
-| POST | `/auth/login` | ❌ | User login (returns JWT) |
+---
 
-## Security Notes (as of Aug 2026)
-- `/generate`, `/export/dxf`, `/export/report` endpoints require valid JWT (`Depends(get_current_user)`).
-- JWT_SECRET raises `ValueError` on startup if missing (no insecure fallback).
-- Error responses are sanitized — no raw exceptions or API context leaked to frontend.
-- CORS origins are controlled by the CORS_ORIGINS env var (defaults to http://localhost:5173). Set CORS_ORIGINS for the production domain before deployment.
+## 3. Persistence & Cloud Infrastructure
+- **Primary Database:** **Supabase PostgreSQL**
+  - Tables: `profiles`, `projects`, `plans`, `revisions`.
+  - Security: Row Level Security (RLS) active on all tables (`auth.uid() = user_id`).
+- **Secondary / Fallback Database:** **MongoDB Atlas**
+  - Async driver: Motor (`AsyncIOMotorClient`).
+  - Collections: `users`, `projects`.
+- **Identity Bridge:** Ensures user accounts and projects sync seamlessly across both databases.
+
+---
+
+## 4. AI & Inference Infrastructure
+- **Topological Reasoning (The AI Architect):**
+  - Multi-provider fallback chain:
+    1. Google `gemini-3.1-pro-preview` (AI Studio)
+    2. DeepSeek `deepseek-ai/DeepSeek-V3-0324` (HuggingFace Inference Router)
+    3. Google `gemini-3.8-flash`
+    4. Google `gemini-3.7-flash`
+    5. Qwen `qwen/qwen3.8-27b` (Groq fallback)
+- **Deterministic Drafter:** Zero LLM hallucination on coordinates; all dimensions, setbacks, and wall graphs are solved mathematically in Python.
+
+---
+
+## 5. Complete API Endpoint Reference
+
+| Method | Endpoint | Auth | Layer / Service | Description |
+| :--- | :--- | :---: | :--- | :--- |
+| `POST` | `/auth/register` | Public | Auth | Register new studio user |
+| `POST` | `/auth/login` | Public | Auth | Authenticate user & return JWT token |
+| `GET` | `/projects` | JWT | Repositories | List all saved projects for current user |
+| `POST` | `/projects` | JWT | Repositories | Save or update building document |
+| `GET` | `/projects/{id}` | JWT | Repositories | Retrieve full project document by ID |
+| `DELETE` | `/projects/{id}` | JWT | Repositories | Delete project document |
+| `POST` | `/generate` | JWT | Drafter / Engine | Legacy single-floor generation endpoint |
+| `POST` | `/generate-candidates` | JWT | Intelligent Generator | Synthesize multi-candidate layouts (Core, Spine, Buffer) |
+| `POST` | `/evaluate-sunlight` | JWT | Sunlight Engine | Compute solar azimuth, shadow projection, and lux |
+| `POST` | `/vastu-fix` | JWT | Vastu / Inference | AI-driven topology correction for failing Vastu rules |
+| `POST` | `/regenerate-room` | JWT | Drafter / Inference | Regenerate single room topology via LLM |
+| `POST` | `/agent/chat` | JWT | Agent Service | Conversational Copilot assistant dialogue |
+| `POST` | `/agent/modify-layout` | JWT | Layout Modifier | Execute natural language spatial edit commands |
+| `POST` | `/export/dxf` | JWT | DXF Exporter | Download production-grade layered AutoCAD DXF |
+| `POST` | `/export/report` | JWT | PDF Report | Download standard 4-page architectural PDF report |
+| `POST` | `/export/dossier` | JWT | PDF Dossier | Download Executive Blueprint Dossier |
+| `POST` | `/export/svg` | JWT | Exporters | Export vector SVG floor plan |
+| `POST` | `/export/bom-csv` | JWT | BOM Engine | Download itemized CPWD BOM schedule as CSV |
+
+---
+
+## 6. Testing & Quality Verification Suite
+- **User Test Suite (`ai_architect_tests`):** 99/99 passed (100%)
+  - `test_auth.py` (11 tests), `test_circulation.py` (10 tests), `test_drafter.py` (59 tests), `test_engines.py` (11 tests), `test_nbc_setbacks.py` (8 tests).
+- **Canonical Backend Test Suite (`backend/tests/`):** 14/14 passed (100%)
+  - `test_canonical_geometry.py` (9 tests), `test_intelligent_generator.py` (5 tests).
+- **Frontend Production Build:** Vite build clean with 0 TypeScript/ESLint errors across 2,809 modules.

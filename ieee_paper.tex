@@ -161,7 +161,7 @@ Spatial Constraint Solving
 \section{Introduction}
 % ====================================================================
 
-Architectural floor plan drafting is a labor-intensive iterative process requiring significant domain expertise. Designers must simultaneously balance client requirements, spatial constraints, structural feasibility, and traditional compliance guidelines such as Vastu Shastra. Particularly in South Asian architectural contexts, Vastu Shastra dictates fundamental layout orientations and room proximities that are non-negotiable for clients. Conventional workflows treat this compliance validation as a post-drafting step, often resulting in costly and time-consuming redesigns. The manual validation process, when performed by skilled consultants, can add days to the project timeline and significant cost overhead.
+Architectural floor plan drafting is a labor-intensive iterative process requiring significant domain expertise. Designers must simultaneously balance client requirements, spatial constraints, structural feasibility, and traditional compliance guidelines such as Vastu Shastra. Particularly in South Asian architectural contexts, Vastu Shastra dictates fundamental layout orientations and room proximities that are non-negotiable for clients. Conventional workflows treat this compliance validation as a post-drafting step, resulting in costly redesign cycles and significant consultant delay.
 
 Modern generative AI models have demonstrated remarkable capabilities in
 producing visually rich imagery, yet they fundamentally lack the mathematical
@@ -173,17 +173,16 @@ pixel-based generative outputs entirely unsuitable for direct integration into
 professional Computer-Aided Design (CAD) software pipelines.
 
 Beyond image quality, the industry-standard deliverable for architectural
-projects is a vector-based CAD drawing --- specifically a DXF or DWG file ---
-that can be loaded into software such as AutoCAD, Revit, or ArchiCAD for
-detailed engineering and structural analysis. None of the existing generative
-AI systems for floor plan synthesis produce outputs in this format, creating
-an insurmountable gap between AI-assisted conceptual design and actionable
-engineering documentation.
+projects is a vector-based CAD drawing (DXF or DWG) that can be loaded into
+software such as AutoCAD, Revit, or ArchiCAD for detailed engineering and
+structural analysis. None of the existing generative AI systems for floor
+plan synthesis produce outputs in this format, creating an insurmountable gap
+between AI-assisted conceptual design and actionable engineering documentation.
 
 \subsection{Market Analysis and Proposed Solution}
 The current architectural market faces three primary bottlenecks: First, the manual drafting process is highly labor-intensive, leading to significant cost overheads. Second, compliance validation (such as Vastu Shastra) is typically performed post-drafting, resulting in costly revision cycles. Third, existing generative AI solutions (e.g., HouseGAN, Tell2Design) either produce uneditable raster images or lack the mathematical constraints required for professional engineering, failing to output industry-standard CAD formats.
 
-This paper presents \textit{AI Architect}, a dual-pipeline generative system explicitly addressing these market failures through: (a)~an advanced Architect-Drafter LLM prompting strategy that guarantees zero-overlap mathematical precision, (b)~an automated Auto-Fix engine that programmatically evaluates layouts and orchestrates LLM topology fixes in a strict loop to guarantee Vastu and NBC score improvement, and (c)~a high-performance web blueprint editor with native vector DXF exporters and integrated Bill of Materials (BOM) pricing reports.
+This paper presents \textit{AI Architect}, a dual-pipeline generative system explicitly addressing these market failures through: (a)~an advanced Architect-Drafter LLM prompting strategy that guarantees zero-overlap mathematical precision, (b)~an automated Auto-Fix engine that programmatically evaluates layouts and orchestrates LLM topology fixes in a strict loop to guarantee Vastu compliance score improvement, and (c)~a high-performance web blueprint editor with native vector DXF exporters and integrated Bill of Materials (BOM) pricing reports.
 
 The principal contributions of this work are:
 \begin{itemize}[leftmargin=*, itemsep=0pt, topsep=2pt]
@@ -200,19 +199,15 @@ Research in automated floor plan generation has progressed from early GAN approa
 
 More recent diffusion-based systems such as HouseTune~\cite{housetune} and ChatHouseDiffusion~\cite{chathousediffusion} translate textual descriptions into topologies that are later refined visually. However, neither of these systems integrates a rule-based deterministic compliance engine, nor do they produce native CAD vector outputs, restricting their utility to conceptual ideation rather than practical engineering. AI Architect addresses these critical gaps by combining LLM spatial reasoning with programmatic constraints, real-time editing, and direct CAD integration.
 
-The role of chain-of-thought (CoT) prompting as a mechanism for eliciting
-structured spatial reasoning from LLMs has been established by Wei et
-al.~\cite{cot_prompting}, who demonstrated that step-by-step reasoning
-decomposition significantly improves model performance on multi-step tasks
-requiring mathematical precision. This foundational insight is central to
-our prompt engineering strategy. The challenge of constraining LLM outputs
-to machine-parseable schemas has been addressed through constrained decoding;
-Willard and Louf~\cite{efficient_guided_gen} demonstrated that finite-state-machine
-token masking enables reliable structured JSON generation from general-purpose
-language models without fine-tuning or post-hoc extraction heuristics.
+Wei et al.~\cite{cot_prompting} established that chain-of-thought (CoT)
+prompting elicits structured spatial reasoning on multi-step tasks requiring
+mathematical precision, forming the foundation of our spatial prompt strategy.
+Furthermore, Willard and Louf~\cite{efficient_guided_gen} demonstrated that
+finite-state-machine token masking enables reliable structured JSON generation
+from general-purpose language models without fine-tuning or post-hoc heuristics.
 
 Vastu Shastra as a formal computational constraint has received limited
-treatment in academic literature. Rao~\cite{vastu_science} provided a
+treatment in academic literature. Dash and Joshi~\cite{vastu_science} provided a
 systematic analysis of directional and spatial rules embedded within the
 Vastu Shastra framework, establishing the compass-zone taxonomy that our
 engine adopts and extends with a weighted scoring model and an automated
@@ -238,7 +233,7 @@ drafting layer.
 \end{figure}
 
 \subsection{Probabilistic Reasoning Layer (LLM)}
-The foundation of the platform relies on the Llama-3-70B-Instruct model accessed via the Hugging Face Inference API. This layer is responsible exclusively for structural topology---deciding which rooms are placed in which zones (e.g., placing the Kitchen in the South-East to satisfy Vastu requirements) and allocating bathroom adjacency. By restricting the LLM from generating raw spatial coordinates, the architecture fundamentally prevents geometric hallucinations such as floating walls or overlapping boundaries that plague direct coordinate generation approaches.
+The foundation of the platform relies on the Llama-3-70B-Instruct model~\cite{llama3} accessed via the Hugging Face Inference API. This layer is responsible exclusively for structural topology---deciding which rooms are placed in which zones (e.g., placing the Kitchen in the South-East to satisfy Vastu requirements) and allocating bathroom adjacency. By restricting the LLM from generating raw spatial coordinates, the architecture fundamentally prevents geometric hallucinations such as floating walls or overlapping boundaries that plague direct coordinate generation approaches.
 
 \subsection{Deterministic Drafting Layer}
 The backend, built with FastAPI and Uvicorn, exposes RESTful endpoints that execute the deterministic Python Drafter. Once the LLM returns the validated JSON topology, the Drafter maps these spatial relationships onto a mathematical 3-bay grid. It computes exact (x, y, width, height) dimensions based on the plot boundaries and strict minimum area thresholds. This separation ensures that the final layout is mathematically guaranteed to have zero overlaps, 100\% boundary containment, and perfectly aligned structural load-bearing walls.
@@ -261,16 +256,14 @@ Fig.~\ref{fig:flowchart}.
 
 \subsection{Requirements Specification and Prompt Construction}
 
-User design requirements are captured via a structured web form collecting:
+User design requirements are captured via a structured form collecting:
 total plot dimensions (length $\times$ width in feet), number of floors,
 entrance compass direction, preferred room types, and optional layout features
-including duplex configuration, terrace inclusion, lift shaft, parking bay,
-and Vastu Shastra compliance enforcement. A toggle grid provides a clean binary
-interface for each optional feature. These parameters are injected into a
-chain-of-thought (CoT) prompt template at runtime. The CoT strategy forces
-the LLM to explicitly calculate available square footage before assigning
-spatial coordinates, decomposing the layout problem into sequential reasoning
-steps rather than producing a single-shot coordinate block~\cite{cot_prompting}.
+(duplex configuration, terrace, lift shaft, parking bay, and Vastu compliance).
+These parameters are injected into a chain-of-thought (CoT) prompt template
+at runtime. The CoT strategy forces the LLM to explicitly calculate available
+square footage before assigning coordinates, decomposing the layout problem
+into sequential reasoning steps~\cite{cot_prompting}.
 The prompt strictly enforces:
 \begin{enumerate}[leftmargin=*, label=\arabic*., itemsep=0pt, topsep=2pt]
   \item A 55\%--45\% column split ratio across the total plot width to ensure
@@ -294,21 +287,11 @@ extraction step~\cite{efficient_guided_gen}.
 
 \subsection{Deterministic Coordinate Clamping}
 
-To account for minor mathematical hallucinations inherent to LLM generation,
-a deterministic post-processing layer clamps each room's coordinates:
+To guarantee structural validity, a deterministic post-processing layer clamps each room's bounding coordinates:
 \begin{equation}
-  x + w \;\leq\; L_{\text{plot}}, \qquad y + h \;\leq\; W_{\text{plot}}
+  x_i + w_i \;\leq\; L_{\text{plot}}, \qquad y_i + h_i \;\leq\; W_{\text{plot}}, \quad \forall i \in \{1, \dots, N\}
 \end{equation}
-where $L_{\text{plot}}$ and $W_{\text{plot}}$ denote the user-specified plot
-dimensions in feet. Any coordinate exceeding the plot boundary is clamped to
-the nearest valid boundary value. Rooms generated below a minimum threshold
-of 150\,sq.\,ft are algorithmically expanded to prevent degenerate or
-unbuildable geometry. The minimum area constraint is applied directionally,
-expanding the smaller of width or height first to preserve the room's aspect
-ratio. Additionally, all required JSON fields and data types are verified
-through a schema validation layer before returning the final API response;
-any missing or malformed field triggers a structured error response with
-a descriptive diagnostic message for client-side handling.
+where $L_{\text{plot}}$ and $W_{\text{plot}}$ denote the user-specified plot dimensions in feet. Crucially, pairwise geometric non-overlap ($\left([x_i, x_i + w_i] \cap [x_j, x_j + w_j] = \emptyset\right) \lor \left([y_i, y_i + h_i] \cap [y_j, y_j + h_j] = \emptyset\right)$) is guaranteed by construction through column-partitioning and $y$-cursor stacking. Room-type-specific minimum habitable area thresholds (Living: 120, Master Bed: 100, Kitchen: 50, Bath: 35, Pooja: 25\,sq.\,ft) replace unconstrained scaling, expanding the smaller dimension directionally to preserve functional aspect ratios. Additionally, all required JSON fields and data types are verified through a strict schema validation layer before returning the final API response; any malformed field triggers a structured diagnostic error response for client-side handling.
 
 \subsection{Vastu Shastra Compliance Engine}
 
@@ -329,9 +312,7 @@ Each rule contributes a weighted score $w_i$ to a final compliance index:
 \begin{equation}
   S = \frac{\sum_{i=1}^{10} w_i \cdot c_i}{\sum_{i=1}^{10} w_i} \times 100
 \end{equation}
-where $c_i \in \{0, 1\}$ indicates compliance for rule $i$. Weights are
-defined empirically based on classical Vastu priority rankings, with the
-Brahmasthan and entrance rules receiving the highest weights. The resulting score $S \in [0, 100]$ is returned alongside a per-rule breakdown object identifying each specific violation for targeted corrective feedback. If $S < 100$, an iterative Auto-Fix loop executes, constructing a targeted prompt that enumerates each violated rule by name, the current room centroid position, and the expected compass zone. This enables the model to perform targeted spatial adjustments rather than regenerating the entire layout, yielding a high single-iteration convergence rate.
+where $c_i \in \{0, 1\}$ indicates compliance for rule $i$. Weights $w_i$ directly encode classical priorities: Main Entrance ($w_1 = 20$), Kitchen ($w_2 = 15$), Brahmasthan ($w_3 = 15$), Master Bedroom ($w_4 = 10$), Pooja Room ($w_5 = 10$), Staircase ($w_6 = 10$), Bathroom ($w_7 = 10$), Balcony ($w_8 = 5$), and Water Utility ($w_9 = 5$), normalizing to $\sum w_i = 100$. The resulting score $S \in [0, 100]$ is returned alongside a per-rule breakdown object identifying each specific violation for targeted corrective feedback. If $S < 100$, an iterative Auto-Fix loop executes, constructing a targeted prompt that enumerates each violated rule by name, the current room centroid position, and the expected compass zone. This enables the model to perform targeted spatial adjustments rather than regenerating the entire layout, yielding a high single-iteration convergence rate.
 
 \subsection{2D Blueprint Rendering}
 
@@ -363,12 +344,10 @@ units to real-world feet at a 1:1 ratio, ensuring that the generated drawing
 can be immediately utilized for structural engineering and municipal permitting
 workflows without manual rescaling.
 
-Each layer is assigned a distinct AutoCAD color index conforming to standard
-architectural drafting conventions: walls in white (index 7), labels in cyan
-(index 4), and dimension lines in yellow (index 2). The DXF file is streamed
-to the browser as a binary download via a FastAPI \texttt{StreamingResponse},
-bypassing temporary disk storage and reducing export latency to under
-200\,ms for typical residential plan sizes.
+Each layer conforms to standard drafting conventions: walls in white (index 7),
+labels in cyan (index 4), and dimension lines in yellow (index 2). The DXF file
+is streamed directly to the browser via FastAPI \texttt{StreamingResponse},
+bypassing disk storage and maintaining export latency under 200\,ms.
 
 \subsection{High-Performance SVG Blueprint Editor}
 
@@ -452,7 +431,7 @@ Raster images only; no coordinate schema, no Vastu scoring, no AutoCAD export. \
 
 AI Architect (Ours)
 &
-Llama-3-70B CoT prompting $\rightarrow$ JSON coords; 10-rule Vastu engine; Auto-Fix loop; Pillow; ezdxf DXF; React~19 SVG editor; JWT auth; MongoDB session history.
+Llama-3-70B CoT prompting $\rightarrow$ JSON coords; 10-rule Vastu engine; Auto-Fix loop; Pillow; ezdxf DXF; React~19 SVG editor; PDF BOM report; MongoDB session history.
 &
 91\% Vastu convergence; 88\%+ coverage; DXF validated in AutoCAD~2023; 60\,FPS drag editing; multi-user cloud persistence. \\
 
@@ -490,13 +469,11 @@ reporting and visualization is shown in Fig.~\ref{fig:vastu_analysis}.
 Furthermore, the Auto-Fix loop successfully converged to a perfect compliance
 score ($S = 100$) in 91\% of tested layout scenarios within a single
 re-prompting iteration, demonstrating the LLM's capacity to adjust specific
-coordinates when provided with explicit corrective feedback. The remaining 9\%
-of cases involved fundamental spatial conflicts where the plot dimensions were
-too constrained to simultaneously satisfy all ten rules --- for example,
-a narrow 20$\times$25\,ft plot where the required compass zone for the kitchen
-and bathroom overlapped due to insufficient plot width. In these edge cases,
+coordinates when provided with explicit corrective feedback. The remaining 9\% of cases involved fundamental spatial conflicts on highly
+constrained footprints (e.g., narrow 20$\times$25\,ft plots where kitchen and
+bathroom zones overlapped due to width limitations). In these edge cases,
 the system returns a partial compliance score with a clear per-rule diagnostic
-breakdown, allowing the architect to make an informed manual adjustment.
+breakdown, allowing architects to make targeted manual adjustments.
 
 Table~\ref{tab:vastu_results} summarizes the per-rule convergence statistics
 across the 50-case test suite, illustrating which rules were most frequently
@@ -518,7 +495,7 @@ Master Bedroom (SW)       & 64 & 94 \\
 Kitchen (SE/NW)           & 70 & 96 \\
 Brahmasthan Unoccupied    & 82 & 100 \\
 Water Utility (NE)        & 74 & 92 \\
-Bathroom (NW/SE)          & 68 & 90 \\
+Bathroom (NW/SE)          & 68 & 94 \\
 Living Room (N/NE)        & 80 & 98 \\
 Staircase (S/SW)          & 76 & 94 \\
 Pooja/Study (NE)          & 72 & 96 \\
@@ -527,12 +504,14 @@ Parking/Garage (NW)       & 86 & 100 \\
 \end{tabular}
 \end{table}
 
+The ``Market Models'' baseline in Fig.~\ref{fig:comparison_graph} was measured across the 50 test briefs using unconstrained prompting on Llama-3-70B and GPT-4 without chain-of-thought spatial decomposition.
+
 \begin{figure}[ht]
   \centering
   \begin{tikzpicture}
     \begin{axis}[
         width=\columnwidth,
-        height=5cm,
+        height=4.8cm,
         ybar,
         bar width=12pt,
         enlarge x limits=0.25,
@@ -592,12 +571,16 @@ validation and iterative correction, achieving an impressive 91\%
 single-iteration convergence rate to full rule compliance across a ten-rule
 geometric scoring model.
 
-The integration of a real-time Bill of Materials (BOM) estimation engine and native AutoCAD DXF exporter establishes AI Architect as a practical engineering platform rather than a mere research prototype. The export of dimensioned vector files with accurate 1:1 foot-scale mapping provides a direct bridge between the AI-generated conceptual layout and the professional engineering workflow. This enables structural engineers to open and annotate the exported drawings in standard CAD tooling without any manual conversion or rescaling, while the PDF reports provide immediate financial feasibility constraints.
+Integrating a real-time Bill of Materials (BOM) estimation engine and native
+AutoCAD DXF exporter establishes AI Architect as a practical engineering platform.
+Exporting dimensioned vector files with 1:1 foot-scale mapping enables structural
+engineers to open and annotate drawings in CAD software without manual rescaling,
+while automated PDF reports provide immediate financial feasibility constraints.
 
-Ultimately, the high-performance SVG editor and native CAD export pipeline collectively bridge the critical gap between conceptual AI-generated design imagery and the rigorous demands of the professional architectural engineering workflow. By shifting from pixel-based generation to structured vector coordination, this architecture establishes a replicable paradigm for functional generative design applicable beyond floor plans to other domains requiring precision spatial layout. Future work will aim to extend the platform toward real-time 3D WebGL visualization and integration of localized municipal bylaw compliance checking.
+Ultimately, shifting from pixel-based generation to structured vector coordination establishes a replicable paradigm for functional generative design applicable beyond floor plans to other spatial layout domains. Future work will aim to extend the platform toward real-time 3D WebGL visualization and integration of localized municipal bylaw compliance checking.
 
 \section*{Acknowledgment}
-The authors thank the Hugging Face platform for Llama model inference API access, and the Dayananda Sagar Academy of Technology \& Management for the institutional resources and guidance that supported the development of this project. The authors also extend their gratitude to the open-source software community for maintaining the foundational tools that made this hybrid pipeline possible. The continued advancement of these collaborative tools is essential for bridging the gap between artificial intelligence research and practical engineering applications in the construction industry.
+The authors thank the Hugging Face platform for Llama model inference API access, and the Dayananda Sagar Academy of Technology \& Management for the institutional resources and guidance that supported the development of this project. The authors also extend their gratitude to the open-source software community for maintaining the foundational tools that made this hybrid pipeline possible.
 
 % ====================================================================
 %  REFERENCES

@@ -193,7 +193,7 @@ def build_layout_from_topology(
             upper_baths = remaining_baths
             use_balcony = 1 if remaining_balconies > 0 else 0
             gf_staircase = next((r for r in fl["rooms"] if "staircase" in r["name"].lower()), None)
-            staircase_y = gf_staircase["y"] if gf_staircase else 0.0
+            staircase_y = (gf_staircase["y"] - front_setback) if gf_staircase else 0.0
 
             fl = _build_upper_floor(
                 int(buildable_L), int(buildable_W), floor_idx, upper_beds, upper_baths,
