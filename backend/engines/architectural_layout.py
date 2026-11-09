@@ -328,11 +328,11 @@ def build_layout_from_topology(
 
 # ── BSP Tree System (Upgrade 1) ───────────────────────────────────────────────
 WEIGHTS = {
-    "Living Room": 12,
+    "Living Room": 16,
     "Parking": 8,
     "Master Bedroom": 10,
     "Bedroom": 8,
-    "Kitchen": 6,
+    "Kitchen": 3,
     "Dining Room": 6,
     "Bathroom": 3,
     "Powder Room": 2,
