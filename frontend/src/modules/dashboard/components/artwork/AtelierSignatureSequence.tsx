@@ -79,21 +79,23 @@ export default function AtelierSignatureSequence() {
           <button
             onClick={handleReplay}
             style={{
-              padding: '6px 12px',
+              padding: '6px 14px',
               borderRadius: '6px',
-              border: '1px solid var(--paper-border)',
-              background: 'var(--paper-sheet)',
-              color: 'var(--ink-secondary)',
-              fontSize: '0.75rem',
-              fontWeight: 600,
+              border: '1px solid rgba(37, 38, 34, 0.22)',
+              background: '#FFFFFF',
+              color: 'var(--ink-primary)',
+              fontSize: '0.78rem',
+              fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
-              cursor: 'pointer'
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(37, 38, 34, 0.08)',
+              transition: 'all 0.15s ease'
             }}
             title="Replay Drawing Sequence"
           >
-            <RotateCcw size={12} /> Redraw
+            <RotateCcw size={13} /> Redraw
           </button>
         </div>
       </div>

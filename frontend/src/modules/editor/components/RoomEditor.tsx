@@ -180,18 +180,18 @@ const RoomEditor: React.FC<Props> = ({ room, index, allRooms, plotContext, onRoo
       {/* Openings (Doors & Windows) Schedule for this Room */}
       {((room.doors && room.doors.length > 0) || (room.windows && room.windows.length > 0)) && (
         <div className="neu-panel-inset" style={{ padding: '0.85rem 1rem' }}>
-          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+          <p style={{ margin: '0 0 0.6rem 0', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
             ROOM OPENINGS SCHEDULE
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {room.doors?.map((d: any, idx: number) => (
-              <div key={`d-${idx}`} style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div key={`d-${idx}`} style={{ fontSize: '0.82rem', lineHeight: 1.45, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ color: '#D85740', fontWeight: 700 }}>🚪 Door:</span>
                 <span>{d.wall || 'wall'} wall @ {d.position || 0}ft (width: {d.width || 3}ft{d.is_garage ? ' • Garage' : ''})</span>
               </div>
             ))}
             {room.windows?.map((w: any, idx: number) => (
-              <div key={`w-${idx}`} style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div key={`w-${idx}`} style={{ fontSize: '0.82rem', lineHeight: 1.45, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ color: '#38BDF8', fontWeight: 700 }}>🪟 Window:</span>
                 <span>{w.wall || 'wall'} wall @ {w.position || 0}ft (width: {w.width || 4}ft)</span>
               </div>

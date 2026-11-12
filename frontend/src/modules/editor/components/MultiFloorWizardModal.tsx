@@ -745,17 +745,17 @@ export const MultiFloorWizardModal: React.FC<MultiFloorWizardModalProps> = ({
                               justifyContent: 'space-between',
                               padding: '0.55rem 0.85rem',
                               borderRadius: '8px',
-                              border: isDuplex ? '1px solid #D85740' : '1px solid #E7E1D5',
-                              background: isDuplex ? 'rgba(216, 87, 64, 0.08)' : '#FAF8F2',
+                              border: isDuplex ? '1.5px solid #365FA8' : '1px solid rgba(37, 38, 34, 0.16)',
+                              background: isDuplex ? 'rgba(54, 95, 168, 0.08)' : '#FAF8F2',
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
                             }}
                           >
                             <div>
-                              <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: isDuplex ? '#D85740' : '#474943' }}>
+                              <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: isDuplex ? '#365FA8' : '#252622' }}>
                                 {isDuplex ? 'Duplex Void Enabled' : 'Standard Stacking'}
                               </span>
-                              <span style={{ fontSize: '0.7rem', color: '#777970' }}>
+                              <span style={{ fontSize: '0.7rem', color: '#474943' }}>
                                 {isDuplex ? 'Double-height volume over Living Room' : 'Continuous ceiling per floor'}
                               </span>
                             </div>
@@ -966,34 +966,35 @@ export const MultiFloorWizardModal: React.FC<MultiFloorWizardModalProps> = ({
                           style={{
                             padding: '0.65rem 0.85rem',
                             borderRadius: '8px',
-                            border: isSelected ? '1px solid #365FA8' : '1px solid #E7E1D5',
-                            background: isSelected ? 'rgba(54, 95, 168, 0.06)' : '#FAF8F2',
+                            border: isSelected ? '1.5px solid #365FA8' : '1px solid rgba(37, 38, 34, 0.20)',
+                            background: isSelected ? 'rgba(54, 95, 168, 0.06)' : '#FFFFFF',
                             cursor: 'pointer',
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '0.35rem',
                             transition: 'all 0.15s ease',
+                            boxShadow: isSelected ? 'none' : '0 1px 3px rgba(37, 38, 34, 0.04)',
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                               <span>{item.icon}</span>
-                              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isSelected ? '#252622' : '#474943' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: isSelected ? 700 : 600, color: '#252622' }}>
                                 {item.name}
                               </span>
                             </div>
                             <span
                               style={{
-                                width: '16px',
-                                height: '16px',
+                                width: '18px',
+                                height: '18px',
                                 borderRadius: '4px',
-                                border: isSelected ? '1px solid #365FA8' : '1px solid #E7E1D5',
+                                border: isSelected ? '1px solid #365FA8' : '1.5px solid rgba(37, 38, 34, 0.3)',
                                 background: isSelected ? '#365FA8' : 'transparent',
                                 color: '#FFFFFF',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '0.65rem',
+                                fontSize: '0.7rem',
                                 fontWeight: 800,
                               }}
                             >

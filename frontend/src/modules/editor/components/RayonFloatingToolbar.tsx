@@ -118,9 +118,9 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
         background: '#FAF8F2',
         border: '1px solid #E7E1D5',
         borderRadius: '28px',
-        padding: '4px 6px',
+        padding: '5px 8px',
         boxShadow: '0 8px 24px rgba(37, 38, 34, 0.10)',
-        gap: '4px',
+        gap: '6px',
       }}>
         {/* Pointer / Select Tool */}
         <button
@@ -129,8 +129,8 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '32px',
-            height: '32px',
+            width: '36px',
+            height: '36px',
             borderRadius: '50%',
             border: 'none',
             background: activeTool === 'select' ? '#252622' : 'transparent',
@@ -140,7 +140,7 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
           }}
           title="Pointer / Selection Tool (V)"
         >
-          <MousePointer2 size={15} />
+          <MousePointer2 size={16} />
         </button>
 
         {/* Pan Tool */}
@@ -150,8 +150,8 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '32px',
-            height: '32px',
+            width: '36px',
+            height: '36px',
             borderRadius: '50%',
             border: 'none',
             background: activeTool === 'pan' ? '#252622' : 'transparent',
@@ -161,10 +161,10 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
           }}
           title="Pan Workspace (H)"
         >
-          <Hand size={15} />
+          <Hand size={16} />
         </button>
 
-        <div style={{ width: '1px', height: '18px', background: '#E7E1D5', margin: '0 2px' }} />
+        <div style={{ width: '1px', height: '20px', background: '#E7E1D5', margin: '0 2px' }} />
 
         {/* Dimension Lines Toggle */}
         <button
@@ -172,21 +172,21 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
-            padding: '5px 9px',
+            gap: '5px',
+            padding: '6px 11px',
             borderRadius: '16px',
             border: 'none',
             background: showDimensions ? 'rgba(54, 95, 168, 0.12)' : 'transparent',
-            color: showDimensions ? '#365FA8' : '#777970',
-            fontSize: '0.72rem',
-            fontWeight: 600,
+            color: showDimensions ? '#365FA8' : '#474943',
+            fontSize: '0.76rem',
+            fontWeight: 700,
             fontFamily: "'JetBrains Mono', monospace",
             cursor: 'pointer',
             transition: 'all 0.15s ease',
           }}
           title="Toggle CAD Dimension Strings (D)"
         >
-          <Ruler size={13} />
+          <Ruler size={14} />
           <span>DIMS</span>
         </button>
 
@@ -196,21 +196,21 @@ export const RayonFloatingToolbar: React.FC<RayonFloatingToolbarProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
-            padding: '5px 9px',
+            gap: '5px',
+            padding: '6px 11px',
             borderRadius: '16px',
             border: 'none',
             background: showFurniture ? '#252622' : 'transparent',
-            color: showFurniture ? '#FAF8F2' : '#777970',
-            fontSize: '0.72rem',
-            fontWeight: 600,
+            color: showFurniture ? '#FAF8F2' : '#474943',
+            fontSize: '0.76rem',
+            fontWeight: 700,
             fontFamily: "'JetBrains Mono', monospace",
             cursor: 'pointer',
             transition: 'all 0.15s ease',
           }}
           title="Toggle Furniture & Lighting Layer (F)"
         >
-          <Armchair size={13} />
+          <Armchair size={14} />
           <span>FURNITURE</span>
         </button>
 

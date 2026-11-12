@@ -2765,6 +2765,7 @@ function BuildingScene({
                         position={[room.centerFt.x, isCutaway ? 0.8 : 1.2, room.centerFt.z]}
                         center
                         distanceFactor={32}
+                        occlude
                         style={{
                           pointerEvents: 'none',
                           userSelect: 'none',

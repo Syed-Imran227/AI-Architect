@@ -5,6 +5,20 @@ import { isSupabaseAuth, getSupabase } from '../../../shared/api-client/supabase
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
+const parseErrorMessage = (err: unknown, defaultMsg: string): string => {
+  if (!err) return defaultMsg;
+  const raw = err instanceof Error ? err.message : String(err);
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.detail === 'string') return parsed.detail;
+    if (Array.isArray(parsed.detail) && parsed.detail[0]?.msg) return parsed.detail[0].msg;
+    if (parsed.message) return parsed.message;
+  } catch {
+    // Not JSON
+  }
+  return raw || defaultMsg;
+};
+
 export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -67,9 +81,9 @@ export default function Register() {
         navigate('/dashboard');
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(msg || 'Registration failed');
-      setError(msg || 'Failed to register');
+      const msg = parseErrorMessage(e, 'Registration failed');
+      toast.error(msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -113,9 +127,9 @@ export default function Register() {
                 required 
                 value={name} 
                 onChange={e => setName(e.target.value)} 
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: '6px', border: '1px solid #E7E1D5', background: '#FFFFFF', color: '#252622', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: '6px', border: '1px solid rgba(37, 38, 34, 0.22)', background: '#FFFFFF', color: '#252622', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 onFocus={e => e.target.style.borderColor = '#365FA8'}
-                onBlur={e => e.target.style.borderColor = '#E7E1D5'}
+                onBlur={e => e.target.style.borderColor = 'rgba(37, 38, 34, 0.22)'}
               />
             </div>
             <div>
@@ -128,9 +142,9 @@ export default function Register() {
                 required 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: '6px', border: '1px solid #E7E1D5', background: '#FFFFFF', color: '#252622', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: '6px', border: '1px solid rgba(37, 38, 34, 0.22)', background: '#FFFFFF', color: '#252622', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 onFocus={e => e.target.style.borderColor = '#365FA8'}
-                onBlur={e => e.target.style.borderColor = '#E7E1D5'}
+                onBlur={e => e.target.style.borderColor = 'rgba(37, 38, 34, 0.22)'}
               />
             </div>
             <div>
@@ -144,9 +158,9 @@ export default function Register() {
                 minLength={8}
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: '6px', border: '1px solid #E7E1D5', background: '#FFFFFF', color: '#252622', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: '6px', border: '1px solid rgba(37, 38, 34, 0.22)', background: '#FFFFFF', color: '#252622', fontSize: '0.95rem', outline: 'none', transition: 'border-color 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 onFocus={e => e.target.style.borderColor = '#365FA8'}
-                onBlur={e => e.target.style.borderColor = '#E7E1D5'}
+                onBlur={e => e.target.style.borderColor = 'rgba(37, 38, 34, 0.22)'}
               />
               <div style={{ fontSize: '0.72rem', color: '#777970', marginTop: '4px', fontFamily: "'JetBrains Mono', monospace" }}>Min 8 chars, 1 letter, 1 number</div>
             </div>

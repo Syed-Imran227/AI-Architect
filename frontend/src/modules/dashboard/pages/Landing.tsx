@@ -132,7 +132,8 @@ export default function Landing() {
 
                 <p style={{
                   fontSize: '1.15rem',
-                  color: 'var(--ink-secondary)',
+                  color: 'var(--ink-primary)',
+                  fontWeight: 500,
                   lineHeight: 1.7,
                   marginBottom: '2.5rem',
                   maxWidth: '520px'

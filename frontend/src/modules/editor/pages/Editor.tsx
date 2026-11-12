@@ -1341,8 +1341,19 @@ export default function Editor() {
             <span style={{ fontWeight: 600, color: '#F1F5F9' }}>
               {previewPlan.title || 'Candidate Variant'}
             </span>
-            <span style={{ color: '#94A3B8' }}>
-              Rank: <strong style={{ color: '#F8FAFC' }}>#{previewPlan.rank || 1}</strong> · Score: <strong style={{ color: '#38BDF8' }}>{previewPlan.compositeScore ?? previewPlan.vastuScore}/100</strong>
+            <span style={{ color: '#E2E8F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>Rank: <strong style={{ color: '#FFFFFF' }}>#{previewPlan.rank || 1}</strong></span>
+              <span>·</span>
+              <span style={{
+                background: 'rgba(56, 189, 248, 0.18)',
+                border: '1px solid #38BDF8',
+                color: '#FFFFFF',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontWeight: 700,
+              }}>
+                Score: {previewPlan.compositeScore ?? previewPlan.vastuScore}/100
+              </span>
             </span>
             <span style={{
               padding: '2px 7px',
